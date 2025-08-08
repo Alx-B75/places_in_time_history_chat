@@ -13,7 +13,7 @@ from app.database import get_db_chat
 from app.figures_database import FigureSessionLocal
 from app.vector.context_retriever import search_figure_context
 from app.templating import templates
-from app.security import get_current_user
+from app.utils.security import get_current_user
 
 router = APIRouter(
     prefix="/figures",

@@ -16,7 +16,7 @@ from app import crud, models, schemas
 from app.database import get_db_chat
 from app.templating import templates
 from app.figures_database import FigureSessionLocal
-from app.security import (
+from app.utils.security import (
     verify_password,
     hash_password,
     create_access_token,
@@ -149,7 +149,7 @@ def view_thread(
 # === Include Routers ===
 
 app.include_router(auth.router)
-app.include_router(ask.router)
+app.include_router(ask.router, prefix="/ask")
 app.include_router(chat.router)
 app.include_router(figures.router)
 

@@ -7,13 +7,22 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from openai import OpenAI
 
-from app.database import get_db_chat, get_chroma_retriever, get_db_figure
+from app.database import get_db_chat
+from app.figures_database import FigureSessionLocal
 from app.models import Chat, HistoricalFigure
 from app.schemas import AskRequest, AskResponse
+from app.vector.context_retriever import search_figure_context
 
 router = APIRouter()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+def get_db_figure():
+    db = FigureSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 @router.post("/", response_model=AskResponse)
@@ -21,7 +30,6 @@ def ask_question(
     request: AskRequest,
     db_chat: Session = Depends(get_db_chat),
     db_figure: Session = Depends(get_db_figure),
-    retriever=Depends(get_chroma_retriever),
 ):
     """
     Handles a user question for a specific historical figure.
@@ -38,16 +46,17 @@ def ask_question(
     )
 
     # Retrieve vector-based context chunks
-    results = retriever.get_relevant_documents(
-        request.message,
-        filter={"figure_slug": request.figure_slug},
+    results = search_figure_context(
+        query=request.message,
+        figure_slug=request.figure_slug
     )
+
     sources_used = []
     context_chunks = []
     for doc in results:
-        context_chunks.append(doc.page_content)
-        if doc.metadata.get("source"):
-            sources_used.append(doc.metadata["source"])
+        context_chunks.append(doc["content"])
+        if doc["metadata"].get("source"):
+            sources_used.append(doc["metadata"]["source"])
 
     # Construct GPT prompt
     messages = [{"role": "system", "content": persona_prompt}]
@@ -90,4 +99,5 @@ def ask_question(
         source_page=request.source_page,
         thread_id=request.thread_id,
         timestamp=datetime.utcnow(),
+        sources=sources_used,
     )
