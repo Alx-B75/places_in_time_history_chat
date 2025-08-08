@@ -1,0 +1,32 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pkl
+
+# === VS Code ===
+.vscode/
+
+# === Environment Variables ===
+.env
+
+# === SQLite Databases ===
+/data/*.db
+/data/*.sqlite
+
+# === ChromaDB Vector Store ===
+/data/chroma_db/
+
+# === Python Dependency Caches ===
+*.egg-info/
+dist/
+build/
+
+# === Logs ===
+*.log
+
+# === OS / Editor Junk ===
+.DS_Store
+Thumbs.db
