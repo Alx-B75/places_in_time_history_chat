@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ thread.title or "Thread" }} – Places in Time</title>
+    <link rel="stylesheet" href="/style.css" />
+</head>
+<body class="threads-page">
+<div class="threads-container">
+    <img src="/logo.png" alt="Places in Time Logo" class="logo" />
+
+    <main class="form-box">
+        {% if figure %}
+            <div class="figure-header">
+                {% if figure.image_url %}
+                <div class="figure-image-container">
+                    <img src="{{ figure.image_url }}" alt="Portrait of {{ figure.name }}" class="figure-image">
+                </div>
+                {% endif %}
+                <div class="figure-text-container">
+                    <h1>{{ thread.title }}</h1>
+                    <p>{{ figure.short_summary | default('No summary available.') }}</p>
+                </div>
+            </div>
+        {% else %}
+            <h1>{{ thread.title or "Chat Thread" }}</h1>
+        {% endif %}
+
+        <div class="messages-container" id="messages-container">
+            {% if messages %}
+                {% for msg in messages %}
+                    <div class="message-wrapper {{ 'user-message' if msg.role == 'user' else 'assistant-message' }}">
+                        <div class="message-bubble">
+                            <span class="message-role">{% if msg.role == 'user' %}Your Question{% else %}{{ figure.name or 'Historical Guide' }}{% endif %}</span>
+                            <p class="message-content">{{ msg.message }}</p>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p>No messages yet. Ask a question to get started!</p>
+            {% endif %}
+        </div>
+
+        <form id="chat-form" class="chat-form">
+            <input type="hidden" id="user_id" value="{{ user_id }}">
+            <input type="hidden" id="figure_slug" value="{{ figure.slug if figure else '' }}" />
+            <input type="hidden" id="thread_id" value="{{ thread_id }}">
+            <textarea name="message" id="message-input" placeholder="Ask a follow-up question..." rows="3" required></textarea>
+            <button type="submit" id="submit-button">Send</button>
+        </form>
+
+        <div id="thinking-indicator" style="display: none;"></div>
+
+        <div class="thread-actions">
+            <a href="https://places-in-time-chatbot.onrender.com/user/{{ user_id }}/threads" class="secondary-button">← Back to All Threads</a>
+            <form action="{{ backend_url }}/thread/{{ thread_id }}/delete" method="post" onsubmit="return confirm('Are you sure you want to permanently delete this thread?');">
+                <button type="submit" class="delete-button">Delete Thread</button>
+            </form>
+        </div>
+    </main>
+</div>
+<script src="/main.js"></script>
+</body>
+</html>

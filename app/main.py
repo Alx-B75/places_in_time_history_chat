@@ -2,37 +2,38 @@
 
 import os
 from datetime import timedelta
-from typing import List, Optional
+from typing import List
 
+import uvicorn
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-import uvicorn
 
 from app import crud, models, schemas
 from app.database import get_db_chat
-from app.templating import templates
 from app.figures_database import FigureSessionLocal
+from app.templating import templates
 from app.utils.security import (
-    verify_password,
-    hash_password,
-    create_access_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    create_access_token,
     get_current_user,
+    hash_password,
+    verify_password,
 )
-
-# Routers
 from app.routers import auth, ask, chat, figures
 
-# Load environment variables
+
 load_dotenv()
 
-app = FastAPI()
+app = FastAPI(redirect_slashes=True)
 
-# === CORS Setup ===
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STATIC_DIR = os.path.join(BASE_DIR, "static_frontend")
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -44,7 +45,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# === Auth Endpoints (Login + Register) ===
+
+@app.get("/health")
+def health() -> JSONResponse:
+    """
+    Simple health check endpoint.
+    """
+    return JSONResponse({"ok": True})
+
 
 @app.post("/login")
 async def login_for_access_token(
@@ -52,10 +60,13 @@ async def login_for_access_token(
     password: str = Form(...),
     db: Session = Depends(get_db_chat),
 ):
+    """
+    Authenticate a user and return a JWT access token.
+    """
     user = crud.get_user_by_username(db, username=username)
     if not user or not verify_password(password, user.hashed_password):
         raise HTTPException(
-            status_code=401,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
@@ -78,17 +89,17 @@ async def register_user(
     password: str = Form(...),
     db: Session = Depends(get_db_chat),
 ):
+    """
+    Register a new user account.
+    """
     if crud.get_user_by_username(db, username=username):
         raise HTTPException(status_code=400, detail="Username already registered")
 
     hashed_pw = hash_password(password)
     user_schema = schemas.UserCreate(username=username, hashed_password=hashed_pw)
     user = crud.create_user(db, user_schema)
-
     return {"message": f"User '{user.username}' created successfully"}
 
-
-# === Protected Threads Endpoint (API) ===
 
 @app.get("/threads/user/{user_id}", response_model=List[schemas.ThreadRead])
 def list_user_threads(
@@ -96,21 +107,28 @@ def list_user_threads(
     db: Session = Depends(get_db_chat),
     current_user: models.User = Depends(get_current_user),
 ):
+    """
+    Return all threads for the authenticated user.
+    """
     if current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to access these threads")
     return crud.get_threads_by_user(db, user_id)
 
 
-# === HTML Page Endpoints ===
-
 @app.get("/", response_class=FileResponse)
-def index():
-    return FileResponse(os.path.join("static_frontend", "index.html"))
+def index() -> FileResponse:
+    """
+    Serve the landing page.
+    """
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 @app.get("/user/{user_id}/threads", response_class=FileResponse)
-def get_user_threads_page(user_id: int):
-    return FileResponse(os.path.join("static_frontend", "threads.html"))
+def get_user_threads_page(user_id: int) -> FileResponse:
+    """
+    Serve the threads page for a user.
+    """
+    return FileResponse(os.path.join(STATIC_DIR, "threads.html"), media_type="text/html")
 
 
 @app.get("/thread/{thread_id}", response_class=HTMLResponse)
@@ -118,7 +136,10 @@ def view_thread(
     thread_id: int,
     request: Request,
     db: Session = Depends(get_db_chat),
-):
+) -> HTMLResponse:
+    """
+    Render a thread detail page with messages and optional figure context.
+    """
     thread = crud.get_thread_by_id(db, thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
@@ -146,20 +167,14 @@ def view_thread(
     )
 
 
-# === Include Routers ===
-
 app.include_router(auth.router)
-app.include_router(ask.router, prefix="/ask")
+app.include_router(ask.router)
 app.include_router(chat.router)
 app.include_router(figures.router)
 
 
-# === Static Frontend Mount ===
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-app.mount("/", StaticFiles(directory="static_frontend"), name="static")
-
-
-# === Local Dev Entry Point ===
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

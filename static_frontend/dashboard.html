@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Places in Time – Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Welcome to Places in Time</h1>
+    <p id="user-greeting"></p>
+
+    <div id="actions">
+      <a href="threads.html">View Your Threads</a>
+      <a href="figures.html">Ask a Historical Figure</a>
+      <button id="logout-button">Log Out</button>
+    </div>
+  </div>
+
+  <script>
+    const userId = localStorage.getItem("user_id");
+    if (!userId) {
+      window.location.href = "index.html";
+    } else {
+      document.getElementById("user-greeting").innerText = `User ID: ${userId}`;
+    }
+
+    document.getElementById("logout-button").addEventListener("click", () => {
+      localStorage.removeItem("user_id");
+      window.location.href = "index.html";
+    });
+  </script>
+</body>
+</html>

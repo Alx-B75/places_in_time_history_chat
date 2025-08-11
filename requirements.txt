@@ -1,0 +1,11 @@
+uvicorn[standard]
+fastapi
+sqlalchemy
+python-dotenv
+jinja2
+passlib[bcrypt]
+python-jose[cryptography]
+pydantic>=2,<3
+openai
+chromadb
+python-multipart

@@ -1,49 +1,44 @@
 """Pydantic schemas for request and response validation."""
 
 from datetime import datetime
-from typing import Optional, List
-from pydantic import BaseModel
+from typing import List, Optional
 
+from pydantic import BaseModel, Field
 
-# === User Schemas ===
 
 class UserCreate(BaseModel):
-    """Accepts user input for registration."""
+    """Input schema for registering a new user."""
     username: str
     hashed_password: str
 
 
 class UserRead(BaseModel):
-    """Returns user data after registration – excludes password."""
+    """Response schema representing a user (password excluded)."""
     id: int
     username: str
 
     model_config = {"from_attributes": True}
 
 
-# === Thread Schemas ===
-
 class ThreadCreate(BaseModel):
-    """Schema for creating a new conversation thread."""
+    """Input schema for creating a new conversation thread."""
     user_id: int
     title: Optional[str] = None
     figure_slug: Optional[str] = None
 
 
 class ThreadRead(ThreadCreate):
-    """Schema for reading an existing thread with metadata."""
+    """Response schema for an existing thread."""
     id: int
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-# === Chat Message Schemas ===
-
 class ChatMessageCreate(BaseModel):
-    """Schema for creating a single message in a conversation."""
-    user_id: Optional[int]
-    role: str  # 'user', 'assistant', 'system', or 'summary'
+    """Input schema for creating a single message in a conversation."""
+    user_id: Optional[int] = None
+    role: str
     message: str
     model_used: Optional[str] = None
     source_page: Optional[str] = None
@@ -52,7 +47,7 @@ class ChatMessageCreate(BaseModel):
 
 
 class ChatMessageRead(ChatMessageCreate):
-    """Schema for reading a stored chat message."""
+    """Response schema for a stored chat message."""
     id: int
     timestamp: datetime
 
@@ -60,7 +55,7 @@ class ChatMessageRead(ChatMessageCreate):
 
 
 class ChatCreateRequest(BaseModel):
-    """Input schema for /ask endpoint – client sends only these fields."""
+    """Input schema for client-submitted chat creation."""
     message: str
     user_id: int
     model_used: Optional[str] = None
@@ -69,7 +64,7 @@ class ChatCreateRequest(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
-    """Schema for submitting a new user message for LLM completion."""
+    """Input schema for requesting an assistant completion."""
     user_id: int
     message: str
     model_used: Optional[str] = "gpt-4o-mini"
@@ -77,10 +72,8 @@ class ChatCompletionRequest(BaseModel):
     thread_id: Optional[int] = None
 
 
-# === Ask Flow ===
-
 class AskRequest(BaseModel):
-    """Schema for incoming questions to the chatbot."""
+    """Input schema for 'ask a historical figure' endpoint."""
     user_id: int
     message: str
     figure_slug: Optional[str] = None
@@ -90,7 +83,7 @@ class AskRequest(BaseModel):
 
 
 class AskResponse(BaseModel):
-    """Schema for chatbot responses returned by the /ask endpoint."""
+    """Response schema returned by the /ask endpoint."""
     id: int
     user_id: int
     role: str
@@ -103,15 +96,13 @@ class AskResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# === Historical Figure Schemas ===
-
 class FigureContextRead(BaseModel):
-    """Schema to return context entries tied to a historical figure."""
+    """Schema for context entries tied to a historical figure."""
     id: int
     figure_slug: str
-    source_name: Optional[str]
-    source_url: Optional[str]
-    content_type: Optional[str]
+    source_name: Optional[str] = None
+    source_url: Optional[str] = None
+    content_type: Optional[str] = None
     content: str
     is_manual: int
 
@@ -123,24 +114,26 @@ class HistoricalFigureRead(BaseModel):
     id: int
     name: str
     slug: str
-    era: Optional[str]
-    roles: Optional[str]
-    image_url: Optional[str]
-    short_summary: Optional[str]
+    era: Optional[str] = None
+    roles: Optional[str] = None
+    image_url: Optional[str] = None
+    short_summary: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
 
 class HistoricalFigureDetail(HistoricalFigureRead):
-    """Detailed schema for a single historical figure with full data and context entries."""
-    long_bio: Optional[str]
-    echo_story: Optional[str]
-    quote: Optional[str]
-    birth_year: Optional[int]
-    death_year: Optional[int]
-    main_site: Optional[str]
-    related_sites: Optional[str]
-    sources: Optional[str]
-    wiki_links: Optional[str]
-    verified: Optional[int]
-    contexts: List[FigureContextRead] = []
+    """Detailed schema for a single historical figure."""
+    long_bio: Optional[str] = None
+    echo_story: Optional[str] = None
+    quote: Optional[str] = None
+    birth_year: Optional[int] = None
+    death_year: Optional[int] = None
+    main_site: Optional[str] = None
+    related_sites: Optional[str] = None
+    sources: Optional[str] = None
+    wiki_links: Optional[str] = None
+    verified: Optional[int] = None
+    contexts: List[FigureContextRead] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome – Places in Time</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f2f2;
+            padding: 2rem;
+            max-width: 600px;
+            margin: auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        h2 {
+            margin-top: 2rem;
+            color: #555;
+        }
+
+        form {
+            background: #fff;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-top: 1rem;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="password"] {
+            width: 100%;
+            padding: 0.75rem;
+            margin-top: 0.5rem;
+            margin-bottom: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 0.75rem 1.5rem;
+            background-color: #0077cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #005fa3;
+        }
+
+        .note {
+            font-size: 0.9rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to Places in Time</h1>
+
+    <h2>Log in with Existing User ID</h2>
+    <form action="/select_user" method="post">
+        <label for="user_id">Enter your numeric user ID:</label>
+        <input type="number" id="user_id" name="user_id" placeholder="e.g. 1" required>
+        <button type="submit">Go to Your Threads</button>
+    </form>
+
+    <h2>Or Create a New Account</h2>
+    <form action="/register_user" method="post">
+        <label for="username">Choose a username:</label>
+        <input type="text" id="username" name="username" placeholder="e.g. historybuff42" required>
+
+        <label for="password">Choose a password:</label>
+        <input type="password" id="password" name="password" placeholder="At least 6 characters" required>
+
+        <button type="submit">Register & Continue</button>
+        <p class="note">Passwords are required for future features but currently not used to log in.</p>
+    </form>
+</body>
+</html>
