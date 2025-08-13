@@ -1,6 +1,7 @@
 """CRUD operations for users, chats, threads, and historical figures."""
 
 from sqlalchemy.orm import Session, selectinload
+
 from app import models, schemas
 
 
@@ -40,7 +41,8 @@ def get_all_chats(db: Session, limit: int = 100) -> list[models.Chat]:
     )
 
 
-def get_messages_by_user(db: Session, user_id: int, limit: int = 50) -> list[models.Chat]:
+def get_messages_by_user(db: Session, user_id: int, limit: int = 50) -> list[
+    models.Chat]:
     """Retrieve all messages for a user, ordered by timestamp ascending."""
     return (
         db.query(models.Chat)
@@ -51,7 +53,8 @@ def get_messages_by_user(db: Session, user_id: int, limit: int = 50) -> list[mod
     )
 
 
-def get_messages_by_thread(db: Session, thread_id: int, limit: int = 50) -> list[models.Chat]:
+def get_messages_by_thread(db: Session, thread_id: int, limit: int = 50) -> list[
+    models.Chat]:
     """Retrieve all messages in a specific thread."""
     return (
         db.query(models.Chat)
@@ -111,7 +114,8 @@ def create_thread(db: Session, thread: schemas.ThreadCreate) -> models.Thread:
 
 # === Historical Figure Functions ===
 
-def get_all_figures(db: Session, skip: int = 0, limit: int = 100) -> list[models.HistoricalFigure]:
+def get_all_figures(db: Session, skip: int = 0, limit: int = 100) -> list[
+    models.HistoricalFigure]:
     """Retrieve all historical figures (with optional pagination)."""
     return (
         db.query(models.HistoricalFigure)

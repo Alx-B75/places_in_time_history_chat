@@ -1,30 +1,20 @@
 """Main FastAPI application entry point for Places in Time History Chat."""
 
 import os
-from datetime import timedelta
 from typing import List
 
-import uvicorn
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
 from app.database import get_db_chat
 from app.figures_database import FigureSessionLocal
-from app.templating import templates
-from app.utils.security import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    create_access_token,
-    get_current_user,
-    hash_password,
-    verify_password,
-)
 from app.routers import auth, ask, chat, figures
-
+from app.routers import data as data_router
+from app.utils.security import get_current_user
 
 load_dotenv()
 
@@ -32,7 +22,6 @@ app = FastAPI(redirect_slashes=True)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_DIR = os.path.join(BASE_DIR, "static_frontend")
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,6 +34,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
+app.include_router(ask.router)
+app.include_router(chat.router)
+app.include_router(figures.router)
+app.include_router(data_router.router)
+
 
 @app.get("/health")
 def health() -> JSONResponse:
@@ -52,53 +47,6 @@ def health() -> JSONResponse:
     Simple health check endpoint.
     """
     return JSONResponse({"ok": True})
-
-
-@app.post("/login")
-async def login_for_access_token(
-    username: str = Form(...),
-    password: str = Form(...),
-    db: Session = Depends(get_db_chat),
-):
-    """
-    Authenticate a user and return a JWT access token.
-    """
-    user = crud.get_user_by_username(db, username=username)
-    if not user or not verify_password(password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.username},
-        expires_delta=access_token_expires,
-    )
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user_id": user.id,
-    }
-
-
-@app.post("/register")
-async def register_user(
-    username: str = Form(...),
-    password: str = Form(...),
-    db: Session = Depends(get_db_chat),
-):
-    """
-    Register a new user account.
-    """
-    if crud.get_user_by_username(db, username=username):
-        raise HTTPException(status_code=400, detail="Username already registered")
-
-    hashed_pw = hash_password(password)
-    user_schema = schemas.UserCreate(username=username, hashed_password=hashed_pw)
-    user = crud.create_user(db, user_schema)
-    return {"message": f"User '{user.username}' created successfully"}
 
 
 @app.get("/threads/user/{user_id}", response_model=List[schemas.ThreadRead])
@@ -138,43 +86,10 @@ def view_thread(
     db: Session = Depends(get_db_chat),
 ) -> HTMLResponse:
     """
-    Render a thread detail page with messages and optional figure context.
+    Serve a simple HTML representation of a thread and its messages.
     """
     thread = crud.get_thread_by_id(db, thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
-
-    figure = None
-    if thread.figure_slug:
-        fig_db = FigureSessionLocal()
-        try:
-            figure = crud.get_figure_by_slug(fig_db, slug=thread.figure_slug)
-        finally:
-            fig_db.close()
-
     messages = crud.get_messages_by_thread(db, thread_id)
-
-    return templates.TemplateResponse(
-        "thread.html",
-        {
-            "request": request,
-            "thread": thread,
-            "messages": messages,
-            "user_id": thread.user_id,
-            "thread_id": thread.id,
-            "figure": figure,
-        },
-    )
-
-
-app.include_router(auth.router)
-app.include_router(ask.router)
-app.include_router(chat.router)
-app.include_router(figures.router)
-
-
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-
-if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    return HTMLResponse(f"<h1>Thread {thread_id}</h1><pre>{messages}</pre>")

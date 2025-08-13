@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF-8"/>
     <title>Select a Historical Figure – Places in Time</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/style.css" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <link href="/style.css" rel="stylesheet"/>
 </head>
 <body class="login-page">
 <div class="centered-form">
-    <img src="/logo.png" alt="Places in Time Logo" class="logo" />
+    <img alt="Places in Time Logo" class="logo" src="/logo.png"/>
 
     <main class="form-box">
         <h1>Select a Figure</h1>
@@ -16,14 +16,14 @@
         <form id="figureForm">
             <label for="figureSlug">Figure:</label>
             <select id="figureSlug" name="figure_slug" required>
-                <option value="" disabled selected>--Please choose an option--</option>
+                <option disabled selected value="">--Please choose an option--</option>
                 {% for figure in figures %}
-                    <option value="{{ figure.slug }}">{{ figure.name }}</option>
+                <option value="{{ figure.slug }}">{{ figure.name }}</option>
                 {% endfor %}
             </select>
-            <button type="submit" id="submit-button">Start Chat</button>
+            <button id="submit-button" type="submit">Start Chat</button>
         </form>
-        <a href="/user/{{ user_id_value }}/threads" class="secondary-button">← Back to All Threads</a>
+        <a class="secondary-button" href="/user/{{ user_id_value }}/threads">← Back to All Threads</a>
     </main>
 </div>
 

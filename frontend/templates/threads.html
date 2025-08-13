@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>Your Threads – Places in Time</title>
     <style>
         * {
@@ -162,35 +162,36 @@
 
     <section class="thread-section">
         {% if threads %}
-            <ul class="thread-list">
-                {% for thread in threads %}
-                    <li class="thread-item">
-                        <a href="/thread/{{ thread.id }}">{{ thread.title or "Untitled Thread" }}</a>
-                        <div class="thread-date">Created: {{ thread.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
-                        <div class="thread-actions">
-                            <form method="post" action="/thread/{{ thread.id }}/delete" onsubmit="return confirm('Delete this thread?');">
-                                <button type="submit">Delete</button>
-                            </form>
-                        </div>
-                    </li>
-                {% endfor %}
-            </ul>
+        <ul class="thread-list">
+            {% for thread in threads %}
+            <li class="thread-item">
+                <a href="/thread/{{ thread.id }}">{{ thread.title or "Untitled Thread" }}</a>
+                <div class="thread-date">Created: {{ thread.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+                <div class="thread-actions">
+                    <form action="/thread/{{ thread.id }}/delete" method="post"
+                          onsubmit="return confirm('Delete this thread?');">
+                        <button type="submit">Delete</button>
+                    </form>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
         {% else %}
-            <p>You haven’t started any threads yet. Create one below to begin exploring history!</p>
+        <p>You haven’t started any threads yet. Create one below to begin exploring history!</p>
         {% endif %}
 
-        <form method="get" action="/figures/ask">
-            <input type="hidden" name="user_id" value="{{ user.id }}">
+        <form action="/figures/ask" method="get">
+            <input name="user_id" type="hidden" value="{{ user.id }}">
             <button type="submit">Ask a Historical Figure</button>
         </form>
     </section>
 
     <form action="/user/{{ user.id }}/create_thread" method="post">
-        <input type="text" name="title" placeholder="Enter a title for your new thread" required>
+        <input name="title" placeholder="Enter a title for your new thread" required type="text">
         <button type="submit">Start New Thread</button>
     </form>
 
-    <a href="/" class="back-link">← Return to Homepage</a>
+    <a class="back-link" href="/">← Return to Homepage</a>
 </div>
 </body>
 </html>

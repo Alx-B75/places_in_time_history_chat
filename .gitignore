@@ -9,8 +9,15 @@ __pycache__/
 # === VS Code ===
 .vscode/
 
+# === PyCharm / IntelliJ IDEA ===
+.idea/
+
 # === Environment Variables ===
 .env
+
+# === Virtual Environments ===
+.venv/
+venv/
 
 # === SQLite Databases ===
 /data/*.db
@@ -30,3 +37,9 @@ build/
 # === OS / Editor Junk ===
 .DS_Store
 Thumbs.db
+*~
+*.bak
+*.tmp
+
+# === Jupyter Notebook Checkpoints ===
+.ipynb_checkpoints/

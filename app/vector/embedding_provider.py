@@ -2,6 +2,7 @@
 
 import os
 from typing import List
+
 from openai import OpenAI
 from sentence_transformers import SentenceTransformer
 

@@ -30,5 +30,6 @@ def search_figure_context(query: str, figure_slug: str, top_k: int = 5) -> list[
             "content": doc,
             "metadata": meta
         }
-        for doc, meta in zip(results.get("documents", [[]])[0], results.get("metadatas", [[]])[0])
+        for doc, meta in
+        zip(results.get("documents", [[]])[0], results.get("metadatas", [[]])[0])
     ]

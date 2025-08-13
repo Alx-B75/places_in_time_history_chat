@@ -1,7 +1,7 @@
 """SQLAlchemy models for users, chats, threads, and historical figures."""
 
 import json
-from datetime import datetime
+
 from sqlalchemy import (
     Column,
     Integer,
@@ -113,7 +113,8 @@ class HistoricalFigure(FigureBase):
             "name": self.name,
             "slug": self.slug,
             "main_site": self.main_site,
-            "related_sites": json.loads(self.related_sites) if self.related_sites else [],
+            "related_sites": json.loads(
+                self.related_sites) if self.related_sites else [],
             "era": self.era,
             "roles": json.loads(self.roles) if self.roles else [],
             "short_summary": self.short_summary,

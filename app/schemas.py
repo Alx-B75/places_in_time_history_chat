@@ -1,4 +1,6 @@
-"""Pydantic schemas for request and response validation."""
+"""
+Pydantic schemas for request and response validation.
+"""
 
 from datetime import datetime
 from typing import List, Optional
@@ -7,13 +9,25 @@ from pydantic import BaseModel, Field
 
 
 class UserCreate(BaseModel):
-    """Input schema for registering a new user."""
+    """
+    Input schema for registering a new user.
+    """
     username: str
     hashed_password: str
 
 
+class Credentials(BaseModel):
+    """
+    Login or registration credentials payload.
+    """
+    username: str = Field(...)
+    password: str = Field(...)
+
+
 class UserRead(BaseModel):
-    """Response schema representing a user (password excluded)."""
+    """
+    Response schema representing a user.
+    """
     id: int
     username: str
 
@@ -21,14 +35,18 @@ class UserRead(BaseModel):
 
 
 class ThreadCreate(BaseModel):
-    """Input schema for creating a new conversation thread."""
+    """
+    Input schema for creating a new conversation thread.
+    """
     user_id: int
     title: Optional[str] = None
     figure_slug: Optional[str] = None
 
 
 class ThreadRead(ThreadCreate):
-    """Response schema for an existing thread."""
+    """
+    Response schema for an existing thread.
+    """
     id: int
     created_at: datetime
 
@@ -36,7 +54,9 @@ class ThreadRead(ThreadCreate):
 
 
 class ChatMessageCreate(BaseModel):
-    """Input schema for creating a single message in a conversation."""
+    """
+    Input schema for creating a single message in a conversation.
+    """
     user_id: Optional[int] = None
     role: str
     message: str
@@ -47,7 +67,9 @@ class ChatMessageCreate(BaseModel):
 
 
 class ChatMessageRead(ChatMessageCreate):
-    """Response schema for a stored chat message."""
+    """
+    Response schema for a stored chat message.
+    """
     id: int
     timestamp: datetime
 
@@ -55,7 +77,9 @@ class ChatMessageRead(ChatMessageCreate):
 
 
 class ChatCreateRequest(BaseModel):
-    """Input schema for client-submitted chat creation."""
+    """
+    Input schema for client-submitted chat creation.
+    """
     message: str
     user_id: int
     model_used: Optional[str] = None
@@ -64,7 +88,9 @@ class ChatCreateRequest(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
-    """Input schema for requesting an assistant completion."""
+    """
+    Input schema for requesting an assistant completion.
+    """
     user_id: int
     message: str
     model_used: Optional[str] = "gpt-4o-mini"
@@ -73,7 +99,9 @@ class ChatCompletionRequest(BaseModel):
 
 
 class AskRequest(BaseModel):
-    """Input schema for 'ask a historical figure' endpoint."""
+    """
+    Input schema for the ask-a-historical-figure endpoint.
+    """
     user_id: int
     message: str
     figure_slug: Optional[str] = None
@@ -83,7 +111,9 @@ class AskRequest(BaseModel):
 
 
 class AskResponse(BaseModel):
-    """Response schema returned by the /ask endpoint."""
+    """
+    Response schema returned by the /ask endpoint.
+    """
     id: int
     user_id: int
     role: str
@@ -97,7 +127,9 @@ class AskResponse(BaseModel):
 
 
 class FigureContextRead(BaseModel):
-    """Schema for context entries tied to a historical figure."""
+    """
+    Schema for context entries tied to a historical figure.
+    """
     id: int
     figure_slug: str
     source_name: Optional[str] = None
@@ -110,7 +142,9 @@ class FigureContextRead(BaseModel):
 
 
 class HistoricalFigureRead(BaseModel):
-    """Summary schema for listing historical figures."""
+    """
+    Summary schema for listing historical figures.
+    """
     id: int
     name: str
     slug: str
@@ -123,7 +157,9 @@ class HistoricalFigureRead(BaseModel):
 
 
 class HistoricalFigureDetail(HistoricalFigureRead):
-    """Detailed schema for a single historical figure."""
+    """
+    Detailed schema for a single historical figure.
+    """
     long_bio: Optional[str] = None
     echo_story: Optional[str] = None
     quote: Optional[str] = None

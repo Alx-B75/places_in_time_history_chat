@@ -78,5 +78,6 @@ def get_figure_by_slug(
     """
     figure = crud.get_figure_by_slug(db, slug=slug)
     if not figure:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Figure not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Figure not found")
     return figure

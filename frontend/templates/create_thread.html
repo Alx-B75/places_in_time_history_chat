@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Create a New Thread</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <style>
         body { font-family: Arial, sans-serif; padding: 2rem; max-width: 600px; margin: auto; }
         form { display: flex; flex-direction: column; gap: 1rem; }
@@ -12,11 +12,11 @@
     </style>
 </head>
 <body>
-    <h1>Start a New Thread</h1>
-    <form method="post">
-        <input type="text" name="title" placeholder="Thread title" required>
-        <button type="submit">Create Thread</button>
-    </form>
-    <a href="/user/{{ user_id }}/threads">Back to Threads</a>
+<h1>Start a New Thread</h1>
+<form method="post">
+    <input name="title" placeholder="Thread title" required type="text">
+    <button type="submit">Create Thread</button>
+</form>
+<a href="/user/{{ user_id }}/threads">Back to Threads</a>
 </body>
 </html>

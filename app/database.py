@@ -1,6 +1,7 @@
 """Database setup for the main chat history and user authentication system."""
 
 import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -26,6 +27,7 @@ SessionLocal = sessionmaker(
 )
 
 Base = declarative_base()
+
 
 # --- FastAPI Dependency for Database Session ---
 def get_db_chat():

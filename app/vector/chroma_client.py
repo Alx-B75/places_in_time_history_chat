@@ -1,6 +1,7 @@
 """ChromaDB client setup for persistent storage of historical figure context vectors."""
 
 import os
+
 import chromadb
 
 # --- Determine environment: local vs Render ---

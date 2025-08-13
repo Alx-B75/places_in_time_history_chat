@@ -1,5 +1,6 @@
-from fastapi.templating import Jinja2Templates
 import os
+
+from fastapi.templating import Jinja2Templates
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

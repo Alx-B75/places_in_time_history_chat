@@ -1,20 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF-8"/>
     <title>Ask {{ figure.name }} – Places in Time</title>
-    <link rel="stylesheet" href="/style.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="/style.css" rel="stylesheet"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
 </head>
 <body class="threads-page">
 <div class="threads-container">
-    <img src="/logo.png" alt="Places in Time Logo" class="logo" />
+    <img alt="Places in Time Logo" class="logo" src="/logo.png"/>
 
     <main class="form-box">
         <div class="figure-header">
             {% if figure.image_url %}
             <div class="figure-image-container">
-                <img src="{{ figure.image_url }}" alt="Portrait of {{ figure.name }}" class="figure-image">
+                <img alt="Portrait of {{ figure.name }}" class="figure-image" src="{{ figure.image_url }}">
             </div>
             {% endif %}
             <div class="figure-text-container">
@@ -25,28 +25,29 @@
 
         <div class="messages-container" id="messages-container">
             {% if messages %}
-                {% for msg in messages %}
-                    <div class="message-wrapper {{ 'user-message' if msg.role == 'user' else 'assistant-message' }}">
-                        <div class="message-bubble">
-                            <span class="message-role">{% if msg.role == 'user' %}Your Question{% else %}{{ figure.name }}{% endif %}</span>
-                            <p class="message-content">{{ msg.message }}</p>
-                        </div>
-                    </div>
-                {% endfor %}
+            {% for msg in messages %}
+            <div class="message-wrapper {{ 'user-message' if msg.role == 'user' else 'assistant-message' }}">
+                <div class="message-bubble">
+                    <span class="message-role">{% if msg.role == 'user' %}Your Question{% else %}{{ figure.name }}{% endif %}</span>
+                    <p class="message-content">{{ msg.message }}</p>
+                </div>
+            </div>
+            {% endfor %}
             {% endif %}
         </div>
 
-        <form id="chat-form" class="chat-form">
-            <input type="hidden" id="user_id" value="{{ user_id_value }}" />
-            <input type="hidden" id="figure_slug" value="{{ figure.slug }}" />
-            <input type="hidden" id="thread_id" value="{{ thread.id if thread else '' }}" />
-            <textarea name="message" id="message-input" placeholder="Ask your question..." rows="3" required></textarea>
-            <button type="submit" id="submit-button">Send</button>
+        <form class="chat-form" id="chat-form">
+            <input id="user_id" type="hidden" value="{{ user_id_value }}"/>
+            <input id="figure_slug" type="hidden" value="{{ figure.slug }}"/>
+            <input id="thread_id" type="hidden" value="{{ thread.id if thread else '' }}"/>
+            <textarea id="message-input" name="message" placeholder="Ask your question..." required rows="3"></textarea>
+            <button id="submit-button" type="submit">Send</button>
         </form>
 
         <div id="thinking-indicator" style="display: none;"></div>
 
-        <a href="https://places-in-time-chatbot.onrender.com/user/{{ user_id_value }}/threads" class="secondary-button">← Back to All Threads</a>
+        <a class="secondary-button" href="https://places-in-time-chatbot.onrender.com/user/{{ user_id_value }}/threads">←
+            Back to All Threads</a>
     </main>
 </div>
 <script src="/main.js"></script>

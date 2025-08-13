@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Chat with a Historical Figure</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <style>
         body { font-family: Arial, sans-serif; padding: 2rem; max-width: 700px; margin: auto; background: #f9fbff; }
         form { display: flex; flex-direction: column; gap: 1rem; }
@@ -12,24 +12,24 @@
     </style>
 </head>
 <body>
-    <h1>Ask a Historical Figure</h1>
-    <form method="post" action="/ask">
-        <label for="user_id">User ID:</label>
-        <input type="number" name="user_id" required>
+<h1>Ask a Historical Figure</h1>
+<form action="/ask" method="post">
+    <label for="user_id">User ID:</label>
+    <input name="user_id" required type="number">
 
-        <label for="figure_slug">Choose a Historical Figure:</label>
-        <select name="figure_slug" required>
-            <option value="emperor-hadrian">Emperor Hadrian</option>
-            <option value="anne-boleyn">Anne Boleyn</option>
-            <option value="flavius-cerialis">Flavius Cerialis</option>
-            <!-- Add more as needed -->
-        </select>
+    <label for="figure_slug">Choose a Historical Figure:</label>
+    <select name="figure_slug" required>
+        <option value="emperor-hadrian">Emperor Hadrian</option>
+        <option value="anne-boleyn">Anne Boleyn</option>
+        <option value="flavius-cerialis">Flavius Cerialis</option>
+        <!-- Add more as needed -->
+    </select>
 
-        <label for="message">Your Question:</label>
-        <textarea name="message" required></textarea>
+    <label for="message">Your Question:</label>
+    <textarea name="message" required></textarea>
 
-        <input type="hidden" name="source_page" value="figure_chat">
-        <button type="submit">Ask</button>
-    </form>
+    <input name="source_page" type="hidden" value="figure_chat">
+    <button type="submit">Ask</button>
+</form>
 </body>
 </html>
