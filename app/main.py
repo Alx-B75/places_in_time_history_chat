@@ -28,6 +28,8 @@ app.add_middleware(
     allow_origins=[
         "https://places-in-time-chatbot.onrender.com",
         "http://localhost:8001",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
     ],
     allow_credentials=True,
     allow_methods=["*"],
