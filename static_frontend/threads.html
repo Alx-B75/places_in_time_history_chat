@@ -1,35 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>Your Threads – Places in Time</title>
-    <link href="/style.css" rel="stylesheet"/>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Your Threads • Places in Time</title>
+    <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body class="threads-page">
-<div class="threads-container">
-    <img alt="Places in Time Logo" class="logo" src="/logo.png"/>
+<header class="threads-header">
+    <img src="/static/logo.png" alt="Places in Time" class="logo small" />
+    <h1>Your Threads</h1>
+    <nav>
+        <a class="button" href="/ui/figures">Ask</a>
+    </nav>
+</header>
 
-    <main class="form-box">
-        <div class="threads-header">
-            <div class="threads-header-text">
-                <h1>Your Chat Threads</h1>
-                <p>
-                    Threads are ongoing conversations with our historical guides. You can view past threads or start a
-                    new one. Each thread keeps its own context so you can return to it at any time.
-                </p>
-            </div>
-            <img alt="Historical illustration" class="threads-image" src="/threads_visual.png"/>
-        </div>
+<main class="threads-body">
+    <section class="threads-hero">
+        <img src="/static/threads_visual.png" alt="Threads illustration" class="hero-illustration" />
+    </section>
 
-        <div id="threads-list">
-            <p>You have no chat threads. Start a new one!</p>
-        </div>
+    <section>
+        <p>This page is served by the backend at <code>/user/{id}/threads</code>. Use the Ask button to start a new conversation with a historical figure.</p>
+    </section>
+</main>
 
-        <button class="primary-button" id="new-thread-button">Ask a Historical Figure</button>
-    </main>
-</div>
-
-<script defer src="/main.js"></script>
+<script src="/static/main.js" defer></script>
 </body>
 </html>

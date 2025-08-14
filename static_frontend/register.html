@@ -1,25 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Register</title>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <link href="style.css" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Places in Time – Register</title>
+    <link rel="stylesheet" href="/static/style.css" />
 </head>
-<body>
-<h1>Register</h1>
-<form id="register-form">
-    <label for="username">Username:</label><br>
-    <input id="username" name="username" required type="text"><br><br>
+<body class="register-page">
+<div class="centered-form">
+    <img src="/static/logo.png" alt="Places in Time Logo" class="logo" />
 
-    <label for="password">Password:</label><br>
-    <input id="password" name="password" required type="password"><br><br>
+    <main class="form-box">
+        <h1>Register</h1>
+        <form id="register-form" method="post" action="#" novalidate>
+            <label for="username">Username:</label>
+            <input id="username" name="username" type="text" required />
 
-    <button type="submit">Register</button>
-</form>
+            <label for="password">Password:</label>
+            <input id="password" name="password" type="password" required />
 
-<p><a href="#" id="login-link">Already have an account? Login</a></p>
+            <button type="submit">Register</button>
+        </form>
 
-<script src="main.js"></script>
+        <p>
+            <a href="/">Already have an account? Login</a>
+        </p>
+        <div class="error-message" id="message"></div>
+    </main>
+</div>
+
+<script src="/static/main.js" defer></script>
 </body>
 </html>
