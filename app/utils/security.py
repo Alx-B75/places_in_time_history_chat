@@ -11,49 +11,51 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from app import models, crud, database
+from app import crud, models, database
 
 load_dotenv()
 
-# --- Password Hashing ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:
-    """Hash a plain text password using bcrypt."""
+    """Return a bcrypt hash for the given plain-text password."""
     return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plain password against a given hashed password."""
+    """Return True if the plain-text password matches the stored hash."""
     return pwd_context.verify(plain_password, hashed_password)
 
 
-# --- JWT Token Setup ---
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY is not set in environment variables")
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+try:
+    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+except ValueError:
+    ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a new JWT access token."""
+    """Create and sign a JWT access token with an expiration claim."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=15))
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def verify_token(token: str, credentials_exception) -> str:
-    """Decode and verify a JWT token, returning the username."""
+    """Decode and validate a JWT, returning the username subject."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        username: Optional[str] = payload.get("sub")
+        if not username:
             raise credentials_exception
         return username
     except JWTError:
@@ -64,10 +66,7 @@ def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(database.get_db_chat),
 ) -> models.User:
-    """
-    FastAPI dependency to get the current user from a JWT token.
-    Used for protecting routes.
-    """
+    """Return the authenticated user derived from the bearer token."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",

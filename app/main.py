@@ -5,12 +5,11 @@ user threads pages, plus compatibility routes for legacy asset paths.
 """
 
 import os
-from datetime import timedelta
 from typing import List
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Form, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,13 +18,7 @@ from sqlalchemy.orm import Session
 from app import crud, models, schemas
 from app.database import get_db_chat
 from app.routers import auth, ask, chat, figures
-from app.utils.security import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    create_access_token,
-    get_current_user,
-    hash_password,
-    verify_password,
-)
+from app.utils.security import get_current_user, oauth2_scheme, ALGORITHM, SECRET_KEY
 
 load_dotenv()
 
@@ -53,50 +46,8 @@ app.include_router(ask.router)
 
 @app.get("/health")
 def health() -> JSONResponse:
-    """Simple health check endpoint."""
+    """Return a simple health check payload."""
     return JSONResponse({"ok": True})
-
-
-@app.post("/login")
-async def login_for_access_token(
-    username: str = Form(...),
-    password: str = Form(...),
-    db: Session = Depends(get_db_chat),
-):
-    """Authenticate a user and return a JWT access token and identity."""
-    user = crud.get_user_by_username(db, username=username)
-    if not user or not verify_password(password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.username},
-        expires_delta=access_token_expires,
-    )
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user_id": user.id,
-        "username": user.username,
-    }
-
-
-@app.post("/register")
-async def register_user(
-    username: str = Form(...),
-    password: str = Form(...),
-    db: Session = Depends(get_db_chat),
-):
-    """Register a new user."""
-    if crud.get_user_by_username(db, username=username):
-        raise HTTPException(status_code=400, detail="Username already registered")
-    hashed_pw = hash_password(password)
-    user_schema = schemas.UserCreate(username=username, hashed_password=hashed_pw)
-    user = crud.create_user(db, user_schema)
-    return {"message": f"User '{user.username}' created successfully", "user_id": user.id}
 
 
 @app.get("/threads/user/{user_id}", response_model=List[schemas.ThreadRead])
@@ -129,7 +80,6 @@ def serve_figures_ui() -> FileResponse:
     return FileResponse(os.path.join(STATIC_DIR, "figures.html"), media_type="text/html")
 
 
-# Compatibility routes for legacy asset paths referenced by cached pages
 @app.get("/main.js", response_class=FileResponse)
 def serve_main_js() -> FileResponse:
     """Serve main.js from static_frontend for legacy paths."""
@@ -154,7 +104,25 @@ def serve_threads_visual() -> FileResponse:
     return FileResponse(os.path.join(STATIC_DIR, "threads_visual.png"), media_type="image/png")
 
 
-# Serve all other static assets under /static
+@app.get("/debug/token")
+def debug_token(token: str = Depends(oauth2_scheme)) -> dict:
+    """Debug endpoint to inspect the raw token and decoded payload."""
+    from jose import jwt
+
+    decoded = None
+    error = None
+    try:
+        decoded = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except Exception as exc:
+        error = str(exc)
+
+    return {
+        "raw_token": token,
+        "decoded_payload": decoded,
+        "error": error,
+    }
+
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 

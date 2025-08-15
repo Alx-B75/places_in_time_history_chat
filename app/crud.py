@@ -1,38 +1,34 @@
 """CRUD operations for users, chats, threads, and historical figures."""
 
+from typing import List, Optional
+
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
 from app import models, schemas
 
 
-# === User Functions ===
-
-def get_user_by_username(db: Session, username: str) -> models.User | None:
-    """Look up and return a user by username."""
+def get_user_by_username(db: Session, username: str) -> Optional[models.User]:
+    """Return the user with the given username, or None."""
     return db.query(models.User).filter(models.User.username == username).first()
 
 
-def get_user_by_id(db: Session, user_id: int) -> models.User | None:
-    """Look up and return a user by ID."""
+def get_user_by_id(db: Session, user_id: int) -> Optional[models.User]:
+    """Return the user with the given id, or None."""
     return db.query(models.User).filter(models.User.id == user_id).first()
 
 
 def create_user(db: Session, user: schemas.UserCreate) -> models.User:
-    """Create a new user in the database."""
-    db_user = models.User(
-        username=user.username,
-        hashed_password=user.hashed_password,
-    )
+    """Create and return a new user."""
+    db_user = models.User(username=user.username, hashed_password=user.hashed_password)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
     return db_user
 
 
-# === Chat Functions ===
-
-def get_all_chats(db: Session, limit: int = 100) -> list[models.Chat]:
-    """Return the most recent chat messages."""
+def get_all_chats(db: Session, limit: int = 100) -> List[models.Chat]:
+    """Return the most recent chat records, newest first."""
     return (
         db.query(models.Chat)
         .order_by(models.Chat.timestamp.desc())
@@ -41,9 +37,8 @@ def get_all_chats(db: Session, limit: int = 100) -> list[models.Chat]:
     )
 
 
-def get_messages_by_user(db: Session, user_id: int, limit: int = 50) -> list[
-    models.Chat]:
-    """Retrieve all messages for a user, ordered by timestamp ascending."""
+def get_messages_by_user(db: Session, user_id: int, limit: int = 50) -> List[models.Chat]:
+    """Return messages for a user, oldest first."""
     return (
         db.query(models.Chat)
         .filter(models.Chat.user_id == user_id)
@@ -53,9 +48,8 @@ def get_messages_by_user(db: Session, user_id: int, limit: int = 50) -> list[
     )
 
 
-def get_messages_by_thread(db: Session, thread_id: int, limit: int = 50) -> list[
-    models.Chat]:
-    """Retrieve all messages in a specific thread."""
+def get_messages_by_thread(db: Session, thread_id: int, limit: int = 50) -> List[models.Chat]:
+    """Return messages for a thread, oldest first."""
     return (
         db.query(models.Chat)
         .filter(models.Chat.thread_id == thread_id)
@@ -66,7 +60,7 @@ def get_messages_by_thread(db: Session, thread_id: int, limit: int = 50) -> list
 
 
 def create_chat_message(db: Session, chat: schemas.ChatMessageCreate) -> models.Chat:
-    """Create a new message entry in the conversation."""
+    """Create and return a new chat message."""
     db_chat = models.Chat(
         user_id=chat.user_id,
         role=chat.role,
@@ -82,15 +76,13 @@ def create_chat_message(db: Session, chat: schemas.ChatMessageCreate) -> models.
     return db_chat
 
 
-# === Thread Functions ===
-
-def get_thread_by_id(db: Session, thread_id: int) -> models.Thread | None:
-    """Retrieve a thread by ID."""
+def get_thread_by_id(db: Session, thread_id: int) -> Optional[models.Thread]:
+    """Return the thread with the given id, or None."""
     return db.query(models.Thread).filter(models.Thread.id == thread_id).first()
 
 
-def get_threads_by_user(db: Session, user_id: int) -> list[models.Thread]:
-    """Retrieve all threads belonging to a user, ordered by newest first."""
+def get_threads_by_user(db: Session, user_id: int) -> List[models.Thread]:
+    """Return all threads for a user, newest first."""
     return (
         db.query(models.Thread)
         .filter(models.Thread.user_id == user_id)
@@ -100,7 +92,7 @@ def get_threads_by_user(db: Session, user_id: int) -> list[models.Thread]:
 
 
 def create_thread(db: Session, thread: schemas.ThreadCreate) -> models.Thread:
-    """Create a new thread for a user."""
+    """Create and return a new thread."""
     db_thread = models.Thread(
         user_id=thread.user_id,
         title=thread.title,
@@ -112,24 +104,28 @@ def create_thread(db: Session, thread: schemas.ThreadCreate) -> models.Thread:
     return db_thread
 
 
-# === Historical Figure Functions ===
-
-def get_all_figures(db: Session, skip: int = 0, limit: int = 100) -> list[
-    models.HistoricalFigure]:
-    """Retrieve all historical figures (with optional pagination)."""
-    return (
-        db.query(models.HistoricalFigure)
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+def get_all_figures(db: Session, skip: int = 0, limit: int = 100) -> List[models.HistoricalFigure]:
+    """Return historical figures with optional pagination."""
+    return db.query(models.HistoricalFigure).offset(skip).limit(limit).all()
 
 
-def get_figure_by_slug(db: Session, slug: str) -> models.HistoricalFigure | None:
-    """Retrieve a figure by slug, including related context entries."""
+def get_figure_by_slug(db: Session, slug: str) -> Optional[models.HistoricalFigure]:
+    """Return a figure by slug, with contexts preloaded."""
     return (
         db.query(models.HistoricalFigure)
         .filter(models.HistoricalFigure.slug == slug)
         .options(selectinload(models.HistoricalFigure.contexts))
         .first()
+    )
+
+
+def search_figures(db: Session, query: str, limit: int = 20) -> List[models.HistoricalFigure]:
+    """Return up to `limit` figures matching the query by name or slug."""
+    q = f"%{query.strip()}%"
+    return (
+        db.query(models.HistoricalFigure)
+        .filter(or_(models.HistoricalFigure.name.ilike(q), models.HistoricalFigure.slug.ilike(q)))
+        .order_by(models.HistoricalFigure.name.asc())
+        .limit(limit)
+        .all()
     )
