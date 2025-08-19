@@ -1,30 +1,296 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Your Threads • Places in Time</title>
-    <link rel="stylesheet" href="/static/style.css" />
+  <meta charset="utf-8">
+  <title>Your Threads — Places in Time</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="/style.css" rel="stylesheet">
+  <script defer src="/main.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 1.5rem; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .stack { display: grid; grid-template-columns: 300px 1fr; gap: 1rem; }
+    .panel { border: 1px solid #ddd; border-radius: 12px; padding: 0.75rem; }
+    .thread { padding: 0.5rem; border-radius: 8px; cursor: pointer; }
+    .thread:hover { background: #f5f5f5; }
+    .thread.active { background: #eef2ff; }
+    .muted { color: #666; font-size: 0.85rem; }
+    .row { display: flex; gap: 0.5rem; align-items: center; }
+    input, textarea, select { padding: 0.55rem 0.7rem; border: 1px solid #ccc; border-radius: 8px; }
+    button { padding: 0.55rem 0.9rem; border-radius: 10px; border: none; background: #111827; color: #fff; cursor: pointer; }
+    .msg-user { background: #f9fafb; border: 1px solid #e5e7eb; padding: 0.6rem 0.8rem; border-radius: 10px; margin-bottom: 0.6rem; }
+    .msg-assistant { background: #eef2ff; border: 1px solid #c7d2fe; padding: 0.6rem 0.8rem; border-radius: 10px; margin-bottom: 0.6rem; }
+    .title-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; }
+    .controls-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; align-items: center; }
+  </style>
 </head>
-<body class="threads-page">
-<header class="threads-header">
-    <img src="/static/logo.png" alt="Places in Time" class="logo small" />
-    <h1>Your Threads</h1>
-    <nav>
-        <a class="button" href="/ui/figures">Ask</a>
-    </nav>
-</header>
+<body>
+  <header>
+    <div>
+      <strong>Places in Time</strong>
+      <span class="muted" id="user-label"></span>
+    </div>
+    <div class="row">
+      <button id="logout-btn" style="background:#b91c1c">Log out</button>
+    </div>
+  </header>
 
-<main class="threads-body">
-    <section class="threads-hero">
-        <img src="/static/threads_visual.png" alt="Threads illustration" class="hero-illustration" />
-    </section>
+  <div class="stack">
+    <aside class="panel">
+      <div class="row" style="margin-bottom:0.75rem">
+        <button id="new-thread-btn" style="background:#2563eb">New Thread</button>
+      </div>
+      <div id="threads"></div>
+    </aside>
 
-    <section>
-        <p>This page is served by the backend at <code>/user/{id}/threads</code>. Use the Ask button to start a new conversation with a historical figure.</p>
-    </section>
-</main>
+    <main class="panel">
+      <div class="title-row" style="margin-bottom:0.5rem">
+        <input id="thread-title" placeholder="Thread title">
+        <button id="save-title-btn">Save Title</button>
+      </div>
 
-<script src="/static/main.js" defer></script>
+      <div class="controls-row" style="margin-bottom:0.75rem">
+        <div class="row">
+          <label for="figure-select" class="muted" style="min-width: 90px;">Figure</label>
+          <select id="figure-select">
+            <option value="">None (generic historian)</option>
+          </select>
+        </div>
+        <div id="current-figure" class="muted">Figure: none</div>
+      </div>
+
+      <div id="messages"></div>
+
+      <form id="message-form" class="row" style="margin-top:0.75rem">
+        <textarea id="message-input" rows="3" placeholder="Type a message…"></textarea>
+        <button type="submit">Send</button>
+      </form>
+    </main>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('access_token');
+    const userId = Number(localStorage.getItem('user_id'));
+    const username = localStorage.getItem('username') || '';
+    const urlParams = new URLSearchParams(location.search);
+    const figureFromQuery = urlParams.get('figure');
+
+    const userLabel = document.getElementById('user-label');
+    const threadsEl = document.getElementById('threads');
+    const messagesEl = document.getElementById('messages');
+    const newThreadBtn = document.getElementById('new-thread-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+    const titleInput = document.getElementById('thread-title');
+    const saveTitleBtn = document.getElementById('save-title-btn');
+    const figureSelect = document.getElementById('figure-select');
+    const currentFigure = document.getElementById('current-figure');
+
+    if (!token || !userId) {
+      window.location.href = '/';
+    }
+
+    userLabel.textContent = `— signed in as ${username || 'user ' + userId}`;
+
+    let currentThreadId = null;
+    let appliedQueryFigure = false;
+
+    function authHeaders() {
+      return { 'Authorization': `Bearer ${token}` };
+    }
+
+    async function jsonGET(url) {
+      const resp = await fetch(url, { headers: authHeaders() });
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    }
+
+    async function jsonPATCH(url, body) {
+      const resp = await fetch(url, {
+        method: 'PATCH',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    }
+
+    async function jsonPOSTAuth(url, body) {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    }
+
+    async function jsonPOST(url, body) {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    }
+
+    async function populateFigureDropdown() {
+      try {
+        const res = await fetch(`/figures?limit=500`);
+        if (!res.ok) throw new Error('Failed to load figures');
+        const list = await res.json();
+
+        figureSelect.innerHTML = '';
+        const none = document.createElement('option');
+        none.value = '';
+        none.textContent = 'None (generic historian)';
+        figureSelect.appendChild(none);
+
+        list.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = f.slug;
+          opt.textContent = f.name || f.slug;
+          figureSelect.appendChild(opt);
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function listThreads() {
+      const data = await jsonGET(`/threads/user/${userId}`);
+      threadsEl.innerHTML = '';
+      data.forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'thread' + (t.id === currentThreadId ? ' active' : '');
+        const figure = t.figure_slug ? ` · ${t.figure_slug}` : '';
+        item.textContent = `${t.title || 'Untitled'} · #${t.id}${figure}`;
+        item.addEventListener('click', () => selectThread(t.id));
+        threadsEl.appendChild(item);
+      });
+      if (!currentThreadId && data.length) {
+        await selectThread(data[0].id);
+      }
+    }
+
+    async function loadThreadMeta(threadId) {
+      const meta = await jsonGET(`/threads/${threadId}`);
+      titleInput.value = meta.title || '';
+      currentFigure.textContent = meta.figure_slug ? `Figure: ${meta.figure_slug}` : 'Figure: none';
+      figureSelect.value = meta.figure_slug || '';
+    }
+
+    async function selectThread(threadId) {
+      currentThreadId = threadId;
+      await loadThreadMeta(threadId);
+
+      if (figureFromQuery && !appliedQueryFigure) {
+        try {
+          await jsonPATCH(`/threads/${currentThreadId}/figure`, { figure_slug: figureFromQuery });
+          await loadThreadMeta(currentThreadId);
+          history.replaceState({}, '', window.location.pathname);
+        } catch (e) {
+          console.warn('Could not set figure from query:', e);
+        } finally {
+          appliedQueryFigure = true;
+        }
+      }
+
+      await renderMessages();
+      Array.from(threadsEl.children).forEach(el => {
+        const active = el.textContent.includes(`#${threadId}`);
+        el.classList.toggle('active', active);
+      });
+    }
+
+    function renderMessage(m) {
+      const div = document.createElement('div');
+      div.className = m.role === 'user' ? 'msg-user' : 'msg-assistant';
+      div.textContent = m.message;
+      messagesEl.appendChild(div);
+    }
+
+    async function renderMessages() {
+      if (!currentThreadId) return;
+      messagesEl.innerHTML = '';
+      const msgs = await jsonGET(`/threads/${currentThreadId}/messages`);
+      msgs.forEach(renderMessage);
+    }
+
+    newThreadBtn.addEventListener('click', async () => {
+      try {
+        const created = await jsonPOSTAuth('/threads', { user_id: userId, title: 'New thread' });
+        const newId = created.thread_id;
+        await listThreads();
+        if (newId) {
+          await selectThread(newId);
+        }
+      } catch (e) {
+        alert('Could not create thread');
+        console.error(e);
+      }
+    });
+
+    messageForm.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const text = messageInput.value.trim();
+      if (!text || !currentThreadId) return;
+      const form = new URLSearchParams();
+      form.set('user_id', String(userId));
+      form.set('message', text);
+      form.set('thread_id', String(currentThreadId));
+      const resp = await fetch('/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: form.toString()
+      });
+      if (resp.status !== 303 && resp.status !== 200) {
+        alert('Send failed');
+        return;
+      }
+      messageInput.value = '';
+      await renderMessages();
+    });
+
+    saveTitleBtn.addEventListener('click', async () => {
+      if (!currentThreadId) return;
+      const newTitle = titleInput.value.trim();
+      if (!newTitle) return;
+      try {
+        await jsonPATCH(`/threads/${currentThreadId}/title`, { title: newTitle });
+        await listThreads();
+      } catch (e) {
+        alert('Rename failed');
+        console.error(e);
+      }
+    });
+
+    figureSelect.addEventListener('change', async () => {
+      if (!currentThreadId) return;
+      const slug = figureSelect.value || null;
+      try {
+        await jsonPATCH(`/threads/${currentThreadId}/figure`, { figure_slug: slug });
+        await loadThreadMeta(currentThreadId);
+        await listThreads();
+      } catch (e) {
+        alert('Failed to update figure');
+        console.error(e);
+      }
+    });
+
+    logoutBtn.addEventListener('click', () => {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user_id');
+      localStorage.removeItem('username');
+      window.location.href = '/';
+    });
+
+    (async function init() {
+      await populateFigureDropdown();
+      await listThreads();
+    })();
+  </script>
 </body>
 </html>

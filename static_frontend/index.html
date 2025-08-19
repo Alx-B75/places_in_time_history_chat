@@ -1,34 +1,90 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Places in Time – Login</title>
-    <link rel="stylesheet" href="/static/style.css" />
+  <meta charset="utf-8">
+  <title>Places in Time — Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="/style.css" rel="stylesheet">
+  <script defer src="/main.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; }
+    .card { max-width: 420px; margin: 5vh auto; padding: 1.25rem; border: 1px solid #ddd; border-radius: 12px; }
+    .row { margin-bottom: 0.75rem; display: flex; flex-direction: column; }
+    label { font-size: 0.9rem; margin-bottom: 0.25rem; }
+    input { padding: 0.6rem 0.7rem; border: 1px solid #ccc; border-radius: 8px; }
+    button { padding: 0.65rem 0.9rem; border-radius: 10px; border: none; background: #111827; color: #fff; cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .muted { color: #666; font-size: 0.9rem; margin-top: 0.5rem; }
+    .error { color: #b91c1c; margin-top: 0.5rem; }
+  </style>
 </head>
-<body class="login-page">
-<div class="centered-form">
-    <img src="/static/logo.png" alt="Places in Time Logo" class="logo" />
+<body>
+  <div class="card">
+    <h1>Places in Time</h1>
+    <p class="muted">Sign in to view your threads.</p>
+    <form id="login-form">
+      <div class="row">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required>
+      </div>
+      <div class="row">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button id="login-btn" type="submit">Log in</button>
+      <div id="login-error" class="error" hidden></div>
+    </form>
 
-    <main class="form-box">
-        <h1 id="form-title">Login</h1>
-        <form id="login-form" method="post" action="#" novalidate>
-            <label for="username">Username:</label>
-            <input id="username" name="username" type="text" autocomplete="username" required />
+    <p class="muted" style="margin-top:1rem">
+      No account? Use the same form and press “Register”:
+    </p>
+    <button id="register-btn" type="button" style="background:#2563eb">Register</button>
+  </div>
 
-            <label for="password">Password:</label>
-            <input id="password" name="password" type="password" autocomplete="current-password" required />
+  <script>
+    const form = document.getElementById('login-form');
+    const btn = document.getElementById('login-btn');
+    const reg = document.getElementById('register-btn');
+    const err = document.getElementById('login-error');
 
-            <button id="submit-button" type="submit">Login</button>
-        </form>
+    async function auth(path) {
+      err.hidden = true;
+      btn.disabled = true;
+      reg.disabled = true;
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      try {
+        const resp = await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        if (!resp.ok) {
+          const msg = await resp.text();
+          throw new Error(msg || 'Authentication failed');
+        }
+        const data = await resp.json();
+        localStorage.setItem('access_token', data.access_token);
+        localStorage.setItem('user_id', String(data.user_id));
+        localStorage.setItem('username', data.username);
+        window.location.href = `/user/${data.user_id}/threads`;
+      } catch (e) {
+        err.textContent = e.message.replace(/["{}]/g, '') || 'Authentication failed';
+        err.hidden = false;
+      } finally {
+        btn.disabled = false;
+        reg.disabled = false;
+      }
+    }
 
-        <p>
-            <a href="/static/register.html">Don't have an account? Register</a>
-        </p>
-        <div class="error-message" id="message"></div>
-    </main>
-</div>
+    form.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      auth('/auth/login');
+    });
 
-<script src="/static/main.js" defer></script>
+    reg.addEventListener('click', () => {
+      auth('/auth/register');
+    });
+  </script>
 </body>
 </html>

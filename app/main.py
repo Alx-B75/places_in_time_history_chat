@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app import crud, models, schemas
 from app.database import get_db_chat
 from app.routers import auth, ask, chat, figures
-from app.utils.security import get_current_user, oauth2_scheme, ALGORITHM, SECRET_KEY
+from app.utils.security import get_current_user
 
 load_dotenv()
 
@@ -102,25 +102,6 @@ def serve_logo_png() -> FileResponse:
 def serve_threads_visual() -> FileResponse:
     """Serve threads_visual.png from static_frontend for legacy paths."""
     return FileResponse(os.path.join(STATIC_DIR, "threads_visual.png"), media_type="image/png")
-
-
-@app.get("/debug/token")
-def debug_token(token: str = Depends(oauth2_scheme)) -> dict:
-    """Debug endpoint to inspect the raw token and decoded payload."""
-    from jose import jwt
-
-    decoded = None
-    error = None
-    try:
-        decoded = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except Exception as exc:
-        error = str(exc)
-
-    return {
-        "raw_token": token,
-        "decoded_payload": decoded,
-        "error": error,
-    }
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
