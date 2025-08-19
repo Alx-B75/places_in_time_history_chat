@@ -27,8 +27,11 @@ class UserRead(BaseModel):
 
 
 class ThreadCreate(BaseModel):
-    """Input schema for creating a new conversation thread."""
-    user_id: int
+    """Input schema for creating a new conversation thread.
+
+    `user_id` is optional to allow guest-owned threads during trial usage.
+    """
+    user_id: Optional[int] = None
     title: Optional[str] = None
     figure_slug: Optional[str] = None
 
@@ -79,8 +82,13 @@ class ChatCompletionRequest(BaseModel):
 
 
 class AskRequest(BaseModel):
-    """Input schema for 'ask a historical figure' endpoint."""
-    user_id: int
+    """Input schema for 'ask a historical figure' endpoint.
+
+    `user_id` is optional to support guest trial usage. When omitted, the
+    backend enforces guest limits and links the thread to the active
+    GuestSession.
+    """
+    user_id: Optional[int] = None
     message: str
     figure_slug: Optional[str] = None
     source_page: Optional[str] = None
