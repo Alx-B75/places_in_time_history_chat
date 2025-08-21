@@ -1,58 +1,36 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   <title>Your Threads — Places in Time</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="/style.css" rel="stylesheet">
-  <script defer src="/main.js"></script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; }
-    :root { --card: #0f172a; --accent: #22d3ee; --muted: #94a3b8; --bg: #0b1020; }
-    body { margin: 0; background: var(--bg); color: #e5e7eb; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
-    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-    .brand { display: flex; align-items: center; gap: 10px; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 16px var(--accent); }
-    h1 { margin: 0; font-size: 1.25rem; }
-    .muted { color: var(--muted); font-size: 0.95rem; }
-    .grid { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
-    .card { background: var(--card); border-radius: 14px; border: 1px solid rgba(255,255,255,.06); box-shadow: 0 12px 24px rgba(0,0,0,.35); }
-    .panel { padding: 12px; }
-    .row { display: flex; gap: 10px; align-items: center; }
-    .stack { display: flex; flex-direction: column; gap: 10px; }
-    .btn { padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(34,211,238,.35); background: rgba(34,211,238,.2); color: #e6feff; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
-    .btn-danger { background: rgba(239, 68, 68, .18); border-color: rgba(239, 68, 68, .4); color: #fecaca; }
-    input, textarea, select { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: #0a1228; color: #e5e7eb; }
-    .thread-item { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.08); background: rgba(148,163,184,.08); cursor: pointer; }
-    .thread-item.active { border-color: rgba(34,211,238,.45); background: rgba(34,211,238,.10); }
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    /* Chat card = full-width flex column */
-    .chat-card { display: flex; flex-direction: column; min-height: 420px; }
-    .chat-header { padding: 12px 16px 0 16px; }
-    .controls { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
-    .subgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-    .status { color: var(--muted); font-size: .92rem; margin-top: 6px; min-height: 1.2em; }
+  <!-- Icons / manifest -->
+  <link rel="icon" href="/static/pit-favicon-mark.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png" />
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+  <link rel="manifest" href="/static/site.webmanifest" />
+  <meta name="theme-color" content="#0b1020" />
 
-    .messages { padding: 16px; display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow: auto; }
-    .msg-user { background: rgba(34, 211, 238, .12); border: 1px solid rgba(34, 211, 238, .35); padding: 12px 14px; border-radius: 12px; align-self: flex-end; white-space: pre-wrap; }
-    .msg-assistant { background: rgba(148, 163, 184, .12); border: 1px solid rgba(148, 163, 184, .35); padding: 12px 14px; border-radius: 12px; align-self: flex-start; white-space: pre-wrap; }
-
-    /* Compose row: full width, cannot overlap, matches guest layout */
-    .compose { display: flex; gap: 10px; align-items: flex-end; padding: 12px 16px 16px 16px; border-top: 1px solid rgba(255,255,255,.06); width: 100%; }
-    #message-input { flex: 1 1 auto; min-width: 0; width: 100%; min-height: 56px; max-height: 240px; resize: vertical; }
-    #send-btn { flex: 0 0 auto; min-width: 96px; }
-  </style>
+  <link href="/static/style.css?v=brand-3" rel="stylesheet" />
+  <script defer src="/static/main.js?v=brand-3"></script>
 </head>
 <body>
   <div class="wrap">
-    <div class="header">
-      <div class="brand">
-        <div class="dot"></div>
-        <h1>Your Threads</h1>
-        <span id="user-label" class="muted"></span>
+    <!-- Landscape banner -->
+    <div class="banner">
+      <div class="brand-side">
+        <div class="brand-mark">
+          <!-- Use icon-192.png which you already have -->
+          <img src="/static/icon-192.png" alt="Places in Time" />
+        </div>
+        <div class="brand-title">
+          <h1>Places in Time</h1>
+          <div class="muted" id="user-label">—</div>
+        </div>
       </div>
-      <div class="row">
+      <div class="banner-actions">
         <button id="logout-btn" class="btn btn-danger">Log out</button>
       </div>
     </div>
@@ -60,7 +38,7 @@
     <div class="grid">
       <aside class="card panel">
         <div class="row" style="margin-bottom:8px;">
-          <button id="new-thread-btn" class="btn">New Thread</button>
+          <button id="new-thread-btn" class="btn btn-primary">New Thread</button>
         </div>
         <div id="threads" class="stack"></div>
       </aside>
@@ -68,18 +46,21 @@
       <main class="card chat-card">
         <div class="chat-header">
           <div class="controls">
-            <input id="thread-title" placeholder="Thread title" />
+            <input id="thread-title" placeholder="New thread" />
             <button id="save-title-btn" class="btn">Save Title</button>
           </div>
 
-          <div class="subgrid">
-            <div class="row">
-              <label for="figure-select" class="muted" style="min-width: 90px;">Figure</label>
+          <!-- Figure row (image + name + selector) -->
+          <div class="figure-row">
+            <img id="figure-avatar" class="figure-avatar" alt="" src="/static/icon-192.png"
+                 onerror="this.onerror=null;this.src='/static/logo.png';" />
+            <div class="figure-name" id="current-figure">Figure: none</div>
+            <div class="figure-select">
+              <label class="muted" for="figure-select" style="margin-right:8px;">Change</label>
               <select id="figure-select">
                 <option value="">None (generic historian)</option>
               </select>
             </div>
-            <div id="current-figure" class="muted">Figure: none</div>
           </div>
 
           <div id="status" class="status"></div>
@@ -114,6 +95,7 @@
     const saveTitleBtn = document.getElementById('save-title-btn');
     const figureSelect = document.getElementById('figure-select');
     const currentFigure = document.getElementById('current-figure');
+    const figureAvatar = document.getElementById('figure-avatar');
     const statusEl = document.getElementById('status');
 
     if (!token || !userId) window.location.href = '/';
@@ -121,253 +103,213 @@
 
     let currentThreadId = null;
     let appliedQueryFigure = false;
-    const figureNameCache = Object.create(null);
+    const figureCache = Object.create(null); // slug -> { name, image_url }
     let sending = false;
 
     function authHeaders() { return { 'Authorization': `Bearer ${token}` }; }
-    function setStatus(msg, cls) {
-      statusEl.className = 'status' + (cls ? ' ' + cls : '');
-      statusEl.textContent = msg || '';
-    }
-    function titleCaseSlug(slug) {
+    function setStatus(msg, cls){ statusEl.className = 'status' + (cls ? ' ' + cls : ''); statusEl.textContent = msg || ''; }
+
+    function titleCaseSlug(slug){
       if (!slug) return null;
       const romans = new Set(["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI","XVII","XVIII","XIX","XX"]);
-      return slug
-        .split("-")
-        .map(part => {
-          const bare = part.replace(/[^a-z0-9]/gi, "");
-          const upper = bare.toUpperCase();
-          if (romans.has(upper)) return upper + part.slice(bare.length);
-          return part.charAt(0).toUpperCase() + part.slice(1);
-        })
-        .join(" ")
-        .replace(/\s+,/g, ",");
+      return slug.split("-").map(part=>{
+        const bare = part.replace(/[^a-z0-9]/gi,"");
+        const upper = bare.toUpperCase();
+        if (romans.has(upper)) return upper + part.slice(bare.length);
+        return part.charAt(0).toUpperCase()+part.slice(1);
+      }).join(" ").replace(/\s+,/g,",");
     }
-    async function getFigureName(slug) {
+
+    async function getFigure(slug){
       if (!slug) return null;
-      if (figureNameCache[slug]) return figureNameCache[slug];
-      try {
+      if (figureCache[slug]) return figureCache[slug];
+      try{
         const res = await fetch(`/figures/${encodeURIComponent(slug)}`);
-        if (res.ok) {
+        if (res.ok){
           const fig = await res.json();
-          if (fig && fig.name) {
-            figureNameCache[slug] = fig.name;
-            return fig.name;
-          }
+          const payload = { name: fig.name || titleCaseSlug(slug), image_url: fig.image_url || "" };
+          figureCache[slug] = payload;
+          return payload;
         }
-      } catch (_) {}
-      const fallback = titleCaseSlug(slug);
-      figureNameCache[slug] = fallback;
+      }catch(_){}
+      const fallback = { name: titleCaseSlug(slug), image_url: "" };
+      figureCache[slug] = fallback;
       return fallback;
     }
 
-    async function jsonGET(url) {
-      const resp = await fetch(url, { headers: authHeaders() });
-      if (!resp.ok) throw new Error(await resp.text());
-      return resp.json();
+    async function jsonGET(url){ const r=await fetch(url,{headers:authHeaders()}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
+    async function jsonPATCH(url,body){
+      const r=await fetch(url,{method:'PATCH',headers:{...authHeaders(),'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(!r.ok) throw new Error(await r.text()); return r.json();
     }
-    async function jsonPATCH(url, body) {
-      const resp = await fetch(url, {
-        method: 'PATCH',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+    async function jsonPOSTAuth(url,body){
+      const r=await fetch(url,{method:'POST',headers:{...authHeaders(),'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(!r.ok) throw new Error(await r.text()); return r.json();
+    }
+
+    async function populateFigureDropdown(){
+      const res = await fetch(`/figures?limit=500`);
+      const list = await res.json();
+      figureSelect.innerHTML='';
+      const none=document.createElement('option'); none.value=''; none.textContent='None (generic historian)'; figureSelect.appendChild(none);
+      list.forEach(f=>{
+        if(f.slug) figureCache[f.slug] = { name: f.name || f.slug, image_url: f.image_url || "" };
+        const opt=document.createElement('option'); opt.value=f.slug; opt.textContent=f.name || f.slug; figureSelect.appendChild(opt);
       });
-      if (!resp.ok) throw new Error(await resp.text());
-      return resp.json();
-    }
-    async function jsonPOSTAuth(url, body) {
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-      return resp.json();
     }
 
-    async function populateFigureDropdown() {
-      try {
-        const res = await fetch(`/figures?limit=500`);
-        if (!res.ok) throw new Error('Failed to load figures');
-        const list = await res.json();
+    function upsertThreadItem(t){
+      const existing = [...threadsEl.children].find(x => x.dataset.tid === String(t.id));
+      const el = existing || document.createElement('div');
+      el.className = 'thread-item' + (t.id === currentThreadId ? ' active' : '');
+      el.dataset.tid = String(t.id);
 
-        figureSelect.innerHTML = '';
-        const none = document.createElement('option');
-        none.value = '';
-        none.textContent = 'None (generic historian)';
-        figureSelect.appendChild(none);
+      const thumb = existing ? el.querySelector('img') : document.createElement('img');
+      thumb.className = 'thread-thumb';
+      const meta = existing ? el.querySelector('.thread-text') : document.createElement('div');
+      meta.className = 'thread-text';
+      const title = existing ? el.querySelector('.thread-title') : document.createElement('div');
+      title.className = 'thread-title';
+      const sub = existing ? el.querySelector('.thread-meta') : document.createElement('div');
+      sub.className = 'thread-meta';
 
-        list.forEach(f => {
-          if (f.slug && f.name) figureNameCache[f.slug] = f.name;
-          const opt = document.createElement('option');
-          opt.value = f.slug;
-          opt.textContent = f.name || f.slug;
-          figureSelect.appendChild(opt);
-        });
-      } catch (e) {
-        console.error(e);
+      title.textContent = t.title || 'Untitled';
+      sub.textContent = `#${t.id}${t.figure_slug ? ' · ' + titleCaseSlug(t.figure_slug) : ''}`;
+
+      const fallback = '/static/icon-192.png';
+      const fallback2 = '/static/logo.png';
+      const imgUrl = (t.figure_slug && figureCache[t.figure_slug]?.image_url) ? figureCache[t.figure_slug].image_url : fallback;
+      thumb.src = imgUrl;
+      thumb.onerror = function(){ this.onerror=null; this.src=fallback; this.onerror=()=>{ this.src=fallback2; }; };
+
+      if (!existing){
+        meta.appendChild(title); meta.appendChild(sub);
+        el.appendChild(thumb); el.appendChild(meta);
+        el.addEventListener('click', () => selectThread(t.id));
+        threadsEl.appendChild(el);
       }
     }
 
-    async function listThreads() {
-      const data = await jsonGET(`/threads/user/${userId}`);
-      threadsEl.innerHTML = '';
-      data.forEach(t => {
-        const item = document.createElement('div');
-        item.className = 'thread-item' + (t.id === currentThreadId ? ' active' : '');
-        const suffix = t.figure_slug ? ` · ${titleCaseSlug(t.figure_slug)}` : '';
-        item.textContent = `${t.title || 'Untitled'} · #${t.id}${suffix}`;
-        item.addEventListener('click', () => selectThread(t.id));
-        threadsEl.appendChild(item);
-      });
-      if (!currentThreadId && data.length) await selectThread(data[0].id);
+    async function listThreads(){
+      const data=await jsonGET(`/threads/user/${userId}`);
+      threadsEl.innerHTML='';
+      data.forEach(upsertThreadItem);
+      if(!currentThreadId && data.length) await selectThread(data[0].id);
     }
 
-    async function loadThreadMeta(threadId) {
-      const meta = await jsonGET(`/threads/${threadId}`);
-      titleInput.value = meta.title || '';
-      const figName = meta.figure_slug ? (await getFigureName(meta.figure_slug)) : null;
-      currentFigure.textContent = figName ? `Figure: ${figName}` : 'Figure: none';
-      figureSelect.value = meta.figure_slug || '';
+    async function applyFigureUI(slug){
+      const fallback = '/static/icon-192.png';
+      const fallback2 = '/static/logo.png';
+      if (!slug){
+        currentFigure.textContent = 'Figure: none';
+        figureAvatar.src = fallback;
+        return;
+      }
+      const info = await getFigure(slug);
+      currentFigure.textContent = `Figure: ${info.name}`;
+      figureAvatar.src = info.image_url || fallback;
+      figureAvatar.onerror = function(){ this.onerror=null; this.src=fallback; this.onerror=()=>{ this.src=fallback2; }; };
+    }
+
+    async function loadThreadMeta(threadId){
+      const meta=await jsonGET(`/threads/${threadId}`);
+      titleInput.value=meta.title || 'New thread';
+      await applyFigureUI(meta.figure_slug || null);
+      figureSelect.value=meta.figure_slug || '';
       return meta;
     }
 
-    async function selectThread(threadId) {
-      currentThreadId = threadId;
-      const meta = await loadThreadMeta(threadId);
+    async function selectThread(threadId){
+      currentThreadId=threadId;
+      await loadThreadMeta(threadId);
 
-      if (figureFromQuery && !appliedQueryFigure) {
-        try {
-          await jsonPATCH(`/threads/${currentThreadId}/figure`, { figure_slug: figureFromQuery });
+      if(figureFromQuery && !appliedQueryFigure){
+        try{
+          await jsonPATCH(`/threads/${currentThreadId}/figure`,{figure_slug:figureFromQuery});
           await loadThreadMeta(currentThreadId);
-          history.replaceState({}, '', window.location.pathname);
-        } catch (e) {
-          console.warn('Could not set figure from query:', e);
-        } finally {
-          appliedQueryFigure = true;
-        }
+          history.replaceState({},'',window.location.pathname);
+        }catch(e){ console.warn('Could not set figure from query:', e); }
+        finally{ appliedQueryFigure=true; }
       }
 
       await renderMessages();
-      Array.from(threadsEl.children).forEach(el => {
-        const active = el.textContent.includes(`#${threadId}`);
-        el.classList.toggle('active', active);
+      Array.from(threadsEl.children).forEach(el=>{
+        const active=el.dataset.tid === String(threadId);
+        el.classList.toggle('active',active);
       });
     }
 
-    function renderMessage(m) {
-      const div = document.createElement('div');
-      div.className = m.role === 'user' ? 'msg-user' : 'msg-assistant';
-      div.textContent = m.message;
+    function renderMessage(m){
+      const div=document.createElement('div');
+      div.className=m.role==='user'?'msg-user':'msg-assistant';
+      div.textContent=m.message;
       messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      messagesEl.scrollTop=messagesEl.scrollHeight;
     }
 
-    async function renderMessages() {
-      if (!currentThreadId) return;
-      messagesEl.innerHTML = '';
-      const msgs = await jsonGET(`/threads/${currentThreadId}/messages`);
+    async function renderMessages(){
+      if(!currentThreadId) return;
+      messagesEl.innerHTML='';
+      const msgs=await jsonGET(`/threads/${currentThreadId}/messages`);
       msgs.forEach(renderMessage);
     }
 
-    async function sendMessage() {
-      const text = messageInput.value.trim();
-      if (!text || !currentThreadId || sending) return;
-
-      try {
-        sending = true;
-        sendBtn.disabled = true;
-
-        const meta = await jsonGET(`/threads/${currentThreadId}`);
-        const figName = meta.figure_slug ? (await getFigureName(meta.figure_slug)) : null;
-        const thinker = figName || 'The historian';
+    async function sendMessage(){
+      const text=messageInput.value.trim();
+      if(!text || !currentThreadId || sending) return;
+      try{
+        sending=true; sendBtn.disabled=true;
+        const meta=await jsonGET(`/threads/${currentThreadId}`);
+        const info = meta.figure_slug ? await getFigure(meta.figure_slug) : null;
+        const thinker=(info && info.name) || 'The historian';
         setStatus(`${thinker} is thinking…`);
 
-        const form = new URLSearchParams();
+        const form=new URLSearchParams();
         form.set('user_id', String(userId));
         form.set('message', text);
         form.set('thread_id', String(currentThreadId));
 
-        const resp = await fetch('/complete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: form.toString()
-        });
+        const resp=await fetch('/complete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:form.toString()});
+        if(resp.status!==303 && resp.status!==200) throw new Error('Send failed');
 
-        if (resp.status !== 303 && resp.status !== 200) throw new Error('Send failed');
-
-        messageInput.value = '';
-        await renderMessages();
-        setStatus('');
-      } catch (err) {
-        setStatus('Send failed. Please try again.', 'err');
-      } finally {
-        sending = false;
-        sendBtn.disabled = false;
-        messageInput.focus();
-      }
+        messageInput.value=''; await renderMessages(); setStatus('');
+      }catch(err){ console.error(err); setStatus('Send failed. Please try again.','err'); }
+      finally{ sending=false; sendBtn.disabled=false; messageInput.focus(); }
     }
 
-    newThreadBtn.addEventListener('click', async () => {
-      try {
-        const created = await jsonPOSTAuth('/threads', { user_id: userId, title: 'New thread' });
-        const newId = created.thread_id;
+    newThreadBtn.addEventListener('click', async ()=>{
+      try{
+        const created=await jsonPOSTAuth('/threads',{user_id:userId,title:'New thread'});
+        const newId=created.thread_id; await listThreads(); if(newId) await selectThread(newId);
+      }catch(e){ alert('Could not create thread'); console.error(e); }
+    });
+
+    messageForm.addEventListener('submit',(e)=>{ e.preventDefault(); sendMessage(); });
+    messageInput.addEventListener('keydown',(e)=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } });
+
+    saveTitleBtn.addEventListener('click', async ()=>{
+      if(!currentThreadId) return;
+      const newTitle=titleInput.value.trim(); if(!newTitle) return;
+      try{ await jsonPATCH(`/threads/${currentThreadId}/title`,{title:newTitle}); await listThreads(); }
+      catch(e){ alert('Rename failed'); console.error(e); }
+    });
+
+    figureSelect.addEventListener('change', async ()=>{
+      if(!currentThreadId) return;
+      const slug=figureSelect.value || null;
+      try{
+        await jsonPATCH(`/threads/${currentThreadId}/figure`,{figure_slug:slug});
+        await applyFigureUI(slug);
         await listThreads();
-        if (newId) await selectThread(newId);
-      } catch (e) {
-        alert('Could not create thread');
-        console.error(e);
-      }
+      }catch(e){ alert('Failed to update figure'); console.error(e); }
     });
 
-    messageForm.addEventListener('submit', (ev) => {
-      ev.preventDefault();
-      sendMessage();
-    });
-    messageInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
+    logoutBtn.addEventListener('click', ()=>{
+      localStorage.removeItem('access_token'); localStorage.removeItem('user_id'); localStorage.removeItem('username');
+      window.location.href='/';
     });
 
-    saveTitleBtn.addEventListener('click', async () => {
-      if (!currentThreadId) return;
-      const newTitle = titleInput.value.trim();
-      if (!newTitle) return;
-      try {
-        await jsonPATCH(`/threads/${currentThreadId}/title`, { title: newTitle });
-        await listThreads();
-      } catch (e) {
-        alert('Rename failed');
-        console.error(e);
-      }
-    });
-
-    figureSelect.addEventListener('change', async () => {
-      if (!currentThreadId) return;
-      const slug = figureSelect.value || null;
-      try {
-        await jsonPATCH(`/threads/${currentThreadId}/figure`, { figure_slug: slug });
-        await loadThreadMeta(currentThreadId);
-        await listThreads();
-      } catch (e) {
-        alert('Failed to update figure');
-        console.error(e);
-      }
-    });
-
-    logoutBtn.addEventListener('click', () => {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user_id');
-      localStorage.removeItem('username');
-      window.location.href = '/';
-    });
-
-    (async function init() {
-      await populateFigureDropdown();
-      await listThreads();
-    })();
+    (async function init(){ await populateFigureDropdown(); await listThreads(); })();
   </script>
 </body>
 </html>

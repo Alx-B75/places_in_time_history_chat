@@ -1,9 +1,7 @@
 """Main FastAPI application entry point for Places in Time History Chat.
 
-This module serves the API and static frontend with explicit routes for the
-index and user threads pages, plus compatibility routes for legacy asset
-paths. On startup, the application initializes both databases and performs a
-lightweight, non-destructive migration for guest tables as needed.
+Serves the API and static frontend with explicit routes for index and
+user threads pages, plus compatibility routes for legacy asset paths.
 """
 
 import os
@@ -11,17 +9,15 @@ from typing import List
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
-from app.database import Base, engine, get_db_chat
-from app.figures_database import FigureBase, engine as figures_engine
+from app.database import get_db_chat
 from app.routers import ask, auth, chat, figures, guest
-from app.utils.migrations import migrate_guest_tables
 from app.utils.security import get_current_user
 
 load_dotenv()
@@ -30,15 +26,6 @@ app = FastAPI(redirect_slashes=True)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_DIR = os.path.join(BASE_DIR, "static_frontend")
-
-
-@app.on_event("startup")
-def init_db() -> None:
-    """Create tables and run a minimal guest-table migration on startup."""
-    migrate_guest_tables(engine)
-    Base.metadata.create_all(bind=engine)
-    FigureBase.metadata.create_all(bind=figures_engine)
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -94,15 +81,7 @@ def serve_figures_ui() -> FileResponse:
     return FileResponse(os.path.join(STATIC_DIR, "figures.html"), media_type="text/html")
 
 
-@app.get("/guest/{figure_slug}")
-def serve_guest_ui(figure_slug: str) -> RedirectResponse:
-    """Redirect pretty guest routes to the static guest page with a slug query.
-
-    Using a redirect ensures the client always receives the slug via the query
-    string, avoiding any ambiguity in client-side path parsing.
-    """
-    return RedirectResponse(url=f"/static/guest.html?slug={figure_slug}", status_code=307)
-
+# --- Static asset convenience routes (legacy/pretty paths) ---
 
 @app.get("/main.js", response_class=FileResponse)
 def serve_main_js() -> FileResponse:
@@ -128,6 +107,25 @@ def serve_threads_visual() -> FileResponse:
     return FileResponse(os.path.join(STATIC_DIR, "threads_visual.png"), media_type="image/png")
 
 
+# --- Favicons (add your .ico/.svg to static_frontend) ---
+
+@app.get("/favicon.ico", response_class=FileResponse)
+def serve_favicon_ico() -> FileResponse:
+    """Serve favicon.ico if present; falls back to SVG if ICO is missing."""
+    ico_path = os.path.join(STATIC_DIR, "favicon.ico")
+    if os.path.exists(ico_path):
+        return FileResponse(ico_path, media_type="image/x-icon")
+    # Fall back to the SVG if no ICO on disk
+    return FileResponse(os.path.join(STATIC_DIR, "favicon.svg"), media_type="image/svg+xml")
+
+
+@app.get("/favicon.svg", response_class=FileResponse)
+def serve_favicon_svg() -> FileResponse:
+    """Serve the SVG favicon."""
+    return FileResponse(os.path.join(STATIC_DIR, "favicon.svg"), media_type="image/svg+xml")
+
+
+# Mount /static for anything else in static_frontend
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 

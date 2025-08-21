@@ -1,445 +1,134 @@
-body {
-  font-family: system-ui, sans-serif;
-  background-color: #f2f2f2;
-  margin: 0;
-  padding: 0;
+*,*::before,*::after{box-sizing:border-box}
+
+:root{
+  --bg:#0b1f26;
+  --bg-2:#0a1820;
+  --brand:#1f6b75;
+  --brand-strong:#195861;
+  --accent:#22d3ee;
+  --text:#eaf6f4;
+  --muted:#9cc3c8;
+  --card:#0f172a;
+  --card-2:#102036;
+  --ring:rgba(34,211,238,.45);
+  --border:rgba(255,255,255,.06);
+  --shadow:0 12px 24px rgba(0,0,0,.35);
 }
 
-body.login-page {
-  background-color: #f5f7f8;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
+html,body{height:100%}
+body{
+  margin:0;
+  color:var(--text);
+  font:16px/1.45 Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  background:
+    radial-gradient(1200px 600px at 10% -20%, rgba(34,211,238,.10), transparent 60%),
+    radial-gradient(900px 480px at 110% 0%, rgba(31,107,117,.18), transparent 60%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
 }
 
-/* Main wrapper */
-.centered-form {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  width: 100%;
-  max-width: 400px;
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+
+.wrap{max-width:1160px;margin:18px auto;padding:0 16px}
+
+/* Banner */
+.banner{
+  display:flex;align-items:center;justify-content:space-between;
+  background:linear-gradient(180deg, rgba(31,107,117,.45), rgba(31,107,117,.25));
+  border:1px solid var(--border);border-radius:14px;padding:10px 14px;box-shadow:var(--shadow);
+}
+.brand-side{display:flex;align-items:center;gap:12px}
+.brand-mark{
+  display:flex;align-items:center;justify-content:center;
+  width:44px;height:44px;border-radius:10px;overflow:hidden;
+  background:#0a1228;border:1px solid rgba(255,255,255,.12);
+}
+.brand-mark img{width:100%;height:100%;object-fit:cover}
+.brand-title{display:flex;flex-direction:column}
+.brand-title h1{font-size:1.25rem;line-height:1.2;margin:0}
+.brand-title .muted{font-size:.9rem}
+
+.banner-actions .btn{margin-left:8px}
+
+/* Buttons */
+.btn{
+  padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.12);
+  color:var(--text);
+  background:
+    linear-gradient(180deg, rgba(31,107,117,.35), rgba(31,107,117,.18)),
+    linear-gradient(180deg, rgba(34,211,238,.18), rgba(34,211,238,.10));
+  backdrop-filter:blur(2px);
+  cursor:pointer;display:inline-flex;align-items:center;gap:8px;
+  transition:transform .06s, box-shadow .12s, border-color .12s
+}
+.btn:hover{border-color:var(--ring);box-shadow:0 0 0 3px rgba(34,211,238,.08), var(--shadow)}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:linear-gradient(180deg, var(--brand), var(--brand-strong));border-color:rgba(255,255,255,.18);color:#e6feff}
+.btn-danger{background:linear-gradient(180deg, rgba(239,68,68,.28), rgba(239,68,68,.18));border-color:rgba(239,68,68,.4);color:#fecaca}
+
+/* Grid layout */
+.grid{display:grid;grid-template-columns:340px 1fr;gap:18px;margin-top:14px}
+@media (max-width:980px){.grid{grid-template-columns:1fr}}
+
+.card{background:var(--card);border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow)}
+.panel{padding:12px}
+.row{display:flex;gap:10px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:10px}
+
+/* Threads list */
+.thread-item{
+  display:flex;align-items:center;gap:12px;
+  padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.08);
+  background:rgba(148,163,184,.08);cursor:pointer;
+  transition:border-color .12s, background .12s, transform .06s
+}
+.thread-item:hover{border-color:var(--ring);background:rgba(34,211,238,.08)}
+.thread-item.active{border-color:var(--ring);background:rgba(34,211,238,.12)}
+.thread-thumb{
+  width:44px;height:44px;border-radius:10px;flex:0 0 44px;
+  background:#0a1228;border:1px solid rgba(255,255,255,.12);object-fit:cover
+}
+.thread-text{display:flex;flex-direction:column}
+.thread-title{font-size:1rem}
+.thread-meta{font-size:.82rem;color:var(--muted)}
+
+/* Chat */
+.chat-card{display:flex;flex-direction:column;min-height:520px;position:relative}
+.chat-header{padding:14px 16px 6px;border-bottom:1px solid var(--border)}
+.controls{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+
+/* Figure row with image */
+.figure-row{display:flex;align-items:center;gap:12px;margin-top:12px}
+.figure-avatar{
+  width:52px;height:52px;border-radius:12px;background:#0a1228;
+  border:1px solid rgba(255,255,255,.12);object-fit:cover;flex:0 0 52px
+}
+.figure-name{font-size:1rem}
+.figure-select{margin-left:auto}
+
+.status{color:var(--muted);font-size:.92rem;margin-top:8px;min-height:1.2em}
+
+.messages{
+  padding:16px;display:flex;flex-direction:column;gap:10px;
+  max-height:60vh;overflow:auto
+}
+.msg-user{
+  background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.35);
+  padding:12px 14px;border-radius:12px;align-self:flex-end;white-space:pre-wrap
+}
+.msg-assistant{
+  background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.35);
+  padding:12px 14px;border-radius:12px;align-self:flex-start;white-space:pre-wrap
 }
 
-/* Logo image */
-.logo {
-  max-width: 120px;
-  margin-bottom: 1.5rem;
+/* Compose bar */
+.compose{
+  display:flex;gap:10px;align-items:flex-end;padding:14px 16px 16px;border-top:1px solid var(--border);width:100%
 }
+.compose textarea{
+  flex:1 1 auto;min-width:0;width:100%;min-height:72px;max-height:260px;resize:vertical
+}
+.compose .btn{min-width:110px}
 
-/* Form card */
-.form-box {
-  background: #ffffff;
-  padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 0 20px rgba(0,0,0,0.08);
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* Header */
-h1 {
-  text-align: center;
-  font-size: 1.8rem;
-  margin-bottom: 1.5rem;
-}
-
-/* Form structure */
-form {
-  display: flex;
-  flex-direction: column;
-}
-
-form label {
-  text-align: left;
-  font-weight: bold;
-  margin-bottom: 0.3rem;
-  margin-top: 1rem;
-}
-
-form input[type="text"],
-form input[type="password"] {
-  padding: 0.75rem;
-  font-size: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* Submit button */
-#submit-button {
-  margin-top: 1.5rem;
-  background-color: #005a71;
-  color: white;
-  font-size: 1rem;
-  font-weight: bold;
-  padding: 0.75rem;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-#submit-button:hover {
-  background-color: #003f52;
-}
-
-/* Register link */
-#toggle-auth {
-  display: block;
-  margin-top: 1rem;
-  text-align: center;
-  color: #005a71;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-/* Error message */
-.error-message {
-  color: #b00020;
-  margin-top: 1rem;
-  font-size: 0.95rem;
-  text-align: center;
-}
-.threads-page {
-  font-family: Arial, sans-serif;
-  background-color: #f5f7f8;
-  margin: 0;
-  padding: 2rem;
-  text-align: center;
-}
-
-.threads-container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 0 15px rgba(0,0,0,0.1);
-}
-
-.thread-description {
-  margin-bottom: 2rem;
-  color: #444;
-}
-
-.thread-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.thread-box {
-  padding: 1rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background-color: #fafafa;
-  text-align: left;
-}
-
-.thread-box a {
-  font-weight: bold;
-  color: #005a71;
-  text-decoration: none;
-  }
-  .thread-box {
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-}
-/* --- Threads Page Enhancements --- */
-
-.threads-container .form-box {
-  text-align: left;
-}
-
-.threads-header {
-  display: flex;
-  align-items: center;
-  gap: 2rem;
-  margin-bottom: 2.5rem;
-  flex-wrap: wrap;
-}
-
-.threads-header-text {
-  flex: 1;
-  min-width: 300px;
-}
-
-.threads-header-text h1 {
-  text-align: left;
-  margin-top: 0;
-}
-
-.threads-image {
-  flex-basis: 300px; /* Give the image a base size */
-  max-width: 40%;    /* Ensure it doesn't get too large */
-  border-radius: 8px;
-  object-fit: cover;
-}
-
-#threads-list {
-  margin-top: 1.5rem;
-  margin-bottom: 2rem;
-  border-top: 1px solid #eee;
-  padding-top: 1.5rem;
-}
-
-.primary-button {
-  display: inline-block;
-  background-color: #005a71;
-  color: white;
-  font-size: 1.1rem;
-  font-weight: bold;
-  padding: 0.8rem 1.5rem;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  text-decoration: none;
-  text-align: center;
-  transition: background-color 0.2s;
-}
-
-.primary-button:hover {
-  background-color: #003f52;
-}
-/* --- Chat Interface Styles --- */
-
-.messages-container {
-  margin-top: 2rem;
-  margin-bottom: 1.5rem;
-  background-color: #f5f7f8;
-  padding: 1rem;
-  border-radius: 8px;
-  max-height: 40vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.message-wrapper {
-  display: flex;
-}
-
-.message-bubble {
-  padding: 0.6rem 1rem;
-  border-radius: 18px;
-  max-width: 80%;
-}
-
-.message-role {
-  font-weight: bold;
-  font-size: 0.8rem;
-  display: block;
-  margin-bottom: 0.25rem;
-}
-
-.message-content {
-  margin: 0;
-  white-space: pre-wrap; /* preserves line breaks */
-  word-wrap: break-word; /* breaks long words */
-}
-
-/* User messages align right */
-.user-message {
-  align-self: flex-end;
-  background-color: #005a71;
-  color: white;
-}
-.user-message .message-role {
-  color: #cce4ea;
-}
-
-
-/* Assistant messages align left */
-.assistant-message {
-  align-self: flex-start;
-  background-color: #e9ecef;
-  color: #212529;
-}
-.assistant-message .message-role {
-  color: #495057;
-}
-
-.chat-form {
-    display: flex;
-    gap: 0.5rem;
-    align-items: flex-start;
-}
-.chat-form textarea {
-    flex-grow: 1;
-    margin-top: 0;
-}
-.chat-form button {
-    margin-top: 0;
-    height: 56px; /* Match textarea height for 3 rows */
-}
-
-/* Secondary button for "Back" links */
-.secondary-button {
-    display: block;
-    margin-top: 1.5rem;
-    text-align: center;
-    padding: 0.5rem 1rem;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    color: #333;
-    text-decoration: none;
-    font-weight: 500;
-}
-.secondary-button:hover {
-    background-color: #f5f7f8;
-}
-/* --- Figure Header Styles --- */
-
-.figure-header {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid #eee;
-}
-
-.figure-image-container {
-  flex-shrink: 0;
-}
-
-.figure-image {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%; /* Makes the image circular */
-  object-fit: cover; /* Prevents the image from being stretched */
-  border: 3px solid #e9ecef;
-}
-
-.figure-text-container {
-  flex-grow: 1;
-}
-
-.figure-text-container h1,
-.figure-text-container p {
-  margin: 0;
-  text-align: left;
-}
-
-.figure-text-container h1 {
-  margin-bottom: 0.5rem;
-}
-/* --- Thread Actions & Delete Button --- */
-
-.thread-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 1.5rem;
-  border-top: 1px solid #eee;
-  padding-top: 1.5rem;
-}
-
-.delete-button {
-  background-color: #c82333;
-  color: white;
-  padding: 0.5rem 1rem;
-  border: 1px solid #c82333;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.delete-button:hover {
-  background-color: #a81c29;
-}
-/* --- UI Polish and Enhancements --- */
-
-/* 1. Change image from circle to a rounded square */
-.figure-image {
-  border-radius: 12px; /* Was 50% */
-}
-
-/* 2. Improve the chat input box style */
-.chat-form {
-  display: block; /* Change from flex to block for centering */
-  text-align: center; /* Center the contents */
-}
-
-.chat-form textarea {
-  width: 100%;
-  margin-bottom: 0.75rem;
-  border-radius: 8px;
-  background-color: #f5f7f8;
-  border: 1px solid #dddfe2;
-  font-family: inherit; /* Use the same font as the rest of the page */
-  font-size: 1rem;
-  padding: 0.8rem 1rem;
-  min-height: 60px; /* Make the box a bit larger */
-}
-
-/* 3. Center the Send button (by making it part of the block layout) */
-.chat-form button {
-  height: auto; /* Reset height */
-  width: auto;
-  padding: 0.75rem 2rem; /* Add more horizontal padding */
-}
-
-/* 4. Style the Back to Threads button */
-.secondary-button {
-  border: 1px solid #d1d5db; /* Lighter grey border */
-  color: #374151; /* Darker grey text */
-  background-color: #eb9534; /* Orange background */
-}
-
-.secondary-button:hover {
-  background-color: #f9fafb; /* Slightly off-white on hover */
-}
-/* --- Custom Select Dropdown Styling --- */
-
-.form-box select {
-  /* Sizing & Spacing */
-  width: 100%;
-  padding: 0.8rem 1rem;
-  margin-top: 0.5rem; /* Space below the label */
-
-  /* Font & Appearance */
-  font-size: 1rem;
-  font-family: inherit;
-  color: #1c1e21;
-  background-color: #f5f7f8;
-  border: 1px solid #dddfe2;
-  border-radius: 8px;
-
-  /* Remove default OS appearance */
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-
-  /* Add a custom dropdown arrow using an embedded SVG */
-  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23606770"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>');
-  background-repeat: no-repeat;
-  background-position: right 0.75rem center;
-  background-size: 1.25em 1.25em;
-}
-/* --- Final UI Polish --- */
-
-/* New style for the "Back to Threads" button */
-.secondary-button {
-  background-color: #e9ecef; /* Light grey background */
-  color: #495057; /* Dark grey text */
-  border: 1px solid #dee2e6; /* Matching border */
-}
-
-.secondary-button:hover {
-  background-color: #f8f9fa; /* Even lighter on hover */
-}
-
-/* Style for the "is thinking..." indicator */
-#thinking-indicator {
-    text-align: center;
-    padding: 1rem;
-    color: #606770;
-    font-style: italic;
-}
+/* Helpers */
+.muted{color:var(--muted)}
