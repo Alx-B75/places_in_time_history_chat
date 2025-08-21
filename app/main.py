@@ -1,7 +1,9 @@
 """Main FastAPI application entry point for Places in Time History Chat.
 
-Serves the API and static frontend with explicit routes for index and
-user threads pages, plus compatibility routes for legacy asset paths.
+This module serves the API and static frontend with explicit routes for the
+index and user threads pages, plus compatibility routes for legacy asset
+paths. On startup, the application initializes both databases and performs a
+lightweight, non-destructive migration for guest tables as needed.
 """
 
 import os
@@ -9,15 +11,17 @@ from typing import List
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
-from app.database import get_db_chat
-from app.routers import auth, ask, chat, figures
+from app.database import Base, engine, get_db_chat
+from app.figures_database import FigureBase, engine as figures_engine
+from app.routers import ask, auth, chat, figures, guest
+from app.utils.migrations import migrate_guest_tables
 from app.utils.security import get_current_user
 
 load_dotenv()
@@ -26,6 +30,15 @@ app = FastAPI(redirect_slashes=True)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_DIR = os.path.join(BASE_DIR, "static_frontend")
+
+
+@app.on_event("startup")
+def init_db() -> None:
+    """Create tables and run a minimal guest-table migration on startup."""
+    migrate_guest_tables(engine)
+    Base.metadata.create_all(bind=engine)
+    FigureBase.metadata.create_all(bind=figures_engine)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,6 +55,7 @@ app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(figures.router)
 app.include_router(ask.router)
+app.include_router(guest.router)
 
 
 @app.get("/health")
@@ -78,6 +92,16 @@ def serve_threads_page(user_id: int) -> FileResponse:
 def serve_figures_ui() -> FileResponse:
     """Serve the UI page that lists figures and links to Ask."""
     return FileResponse(os.path.join(STATIC_DIR, "figures.html"), media_type="text/html")
+
+
+@app.get("/guest/{figure_slug}")
+def serve_guest_ui(figure_slug: str) -> RedirectResponse:
+    """Redirect pretty guest routes to the static guest page with a slug query.
+
+    Using a redirect ensures the client always receives the slug via the query
+    string, avoiding any ambiguity in client-side path parsing.
+    """
+    return RedirectResponse(url=f"/static/guest.html?slug={figure_slug}", status_code=307)
 
 
 @app.get("/main.js", response_class=FileResponse)

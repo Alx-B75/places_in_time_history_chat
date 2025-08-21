@@ -1,27 +1,36 @@
-"""SQLAlchemy models for users, chats, threads, and historical figures."""
+"""SQLAlchemy models for users, chats, threads, historical figures, and guest chat.
+
+This module defines the core ORM models used by the application. The existing
+authenticated-user models are preserved as-is. Two additional models are
+introduced to enable a limited guest chat flow without touching the current
+authenticated-chat tables or behavior:
+
+1) GuestSession
+   Represents an ephemeral, anonymous trial session scoped to a single
+   historical figure. Contains a random opaque session token, a server-side
+   counter for the number of guest questions asked, and timestamps.
+
+2) GuestMessage
+   Stores individual messages exchanged in a guest session. This mirrors the
+   structure of Chat but remains isolated so that guest data handling cannot
+   impact the authenticated flow.
+
+These guest models allow enforcing a strict question limit server-side while
+keeping the existing user/thread/chat logic unchanged.
+"""
 
 import json
-
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Text,
-    DateTime,
-    ForeignKey,
-    func,
-)
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import relationship
 
 from app.database import Base
 from app.figures_database import FigureBase
 
 
-# === Main App Models ===
-
 class Chat(Base):
     """
-    Represents a single message in a chat conversation between a user and the chatbot.
+    Represents a single message in a chat conversation between a user and the
+    chatbot.
     """
     __tablename__ = "chats"
 
@@ -67,16 +76,19 @@ class Thread(Base):
     figure_slug = Column(String, nullable=True)
 
     user = relationship("User", back_populates="threads")
-    chats = relationship("Chat", back_populates="thread", cascade="all, delete-orphan")
+    chats = relationship(
+        "Chat",
+        back_populates="thread",
+        cascade="all, delete-orphan",
+    )
 
-
-# === Figures DB Models ===
 
 class HistoricalFigure(FigureBase):
     """
     Represents a historical figure relevant to the Places in Time project.
 
-    JSON fields (e.g., roles, wiki_links) are stored as TEXT in SQLite and decoded manually.
+    JSON fields (e.g., roles, wiki_links) are stored as TEXT in SQLite and
+    decoded manually.
     """
     __tablename__ = "historical_figures"
 
@@ -107,14 +119,17 @@ class HistoricalFigure(FigureBase):
     )
 
     def to_dict(self) -> dict:
-        """Converts this figure to a Python dictionary with decoded JSON fields."""
+        """
+        Convert this figure to a plain dictionary with decoded JSON fields.
+        """
         return {
             "id": self.id,
             "name": self.name,
             "slug": self.slug,
             "main_site": self.main_site,
-            "related_sites": json.loads(
-                self.related_sites) if self.related_sites else [],
+            "related_sites": json.loads(self.related_sites)
+            if self.related_sites
+            else [],
             "era": self.era,
             "roles": json.loads(self.roles) if self.roles else [],
             "short_summary": self.short_summary,
@@ -129,8 +144,10 @@ class HistoricalFigure(FigureBase):
             "verified": bool(self.verified),
         }
 
-    def from_dict(self, data: dict):
-        """Populates fields from a dictionary, encoding JSON fields as strings."""
+    def from_dict(self, data: dict) -> None:
+        """
+        Populate fields from a dictionary, encoding JSON fields as strings.
+        """
         self.name = data.get("name")
         self.slug = data.get("slug")
         self.main_site = data.get("main_site")
@@ -151,7 +168,8 @@ class HistoricalFigure(FigureBase):
 
 class FigureContext(FigureBase):
     """
-    Stores original source context for a historical figure, used in the chatbot for grounding.
+    Stores original source context for a historical figure, used in the chatbot
+    for grounding.
     """
     __tablename__ = "figure_contexts"
 
@@ -162,3 +180,49 @@ class FigureContext(FigureBase):
     content_type = Column(String)
     content = Column(Text)
     is_manual = Column(Integer, default=0)
+
+
+class GuestSession(Base):
+    """
+    Represents a short-lived anonymous session for a specific historical figure.
+
+    A GuestSession is identified by an opaque, random token that is stored in an
+    HttpOnly cookie on the client. The server enforces a maximum number of
+    questions for the session and can set an optional expiry. This model is
+    intentionally separate from the authenticated thread models to prevent any
+    coupling or regression risk in existing flows.
+    """
+    __tablename__ = "guest_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_token = Column(String, unique=True, index=True, nullable=False)
+    figure_slug = Column(String, nullable=True)
+    question_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+
+    messages = relationship(
+        "GuestMessage",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+class GuestMessage(Base):
+    """
+    Represents a single message within a guest session.
+
+    This mirrors the structure of Chat for the authenticated flow but remains
+    isolated so that guest data is fully sandboxed.
+    """
+    __tablename__ = "guest_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("guest_sessions.id"), nullable=False)
+    role = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    model_used = Column(String, nullable=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+    session = relationship("GuestSession", back_populates="messages")

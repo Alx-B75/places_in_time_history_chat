@@ -7,65 +7,92 @@
   <link href="/style.css" rel="stylesheet">
   <script defer src="/main.js"></script>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 1.5rem; }
-    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-    .stack { display: grid; grid-template-columns: 300px 1fr; gap: 1rem; }
-    .panel { border: 1px solid #ddd; border-radius: 12px; padding: 0.75rem; }
-    .thread { padding: 0.5rem; border-radius: 8px; cursor: pointer; }
-    .thread:hover { background: #f5f5f5; }
-    .thread.active { background: #eef2ff; }
-    .muted { color: #666; font-size: 0.85rem; }
-    .row { display: flex; gap: 0.5rem; align-items: center; }
-    input, textarea, select { padding: 0.55rem 0.7rem; border: 1px solid #ccc; border-radius: 8px; }
-    button { padding: 0.55rem 0.9rem; border-radius: 10px; border: none; background: #111827; color: #fff; cursor: pointer; }
-    .msg-user { background: #f9fafb; border: 1px solid #e5e7eb; padding: 0.6rem 0.8rem; border-radius: 10px; margin-bottom: 0.6rem; }
-    .msg-assistant { background: #eef2ff; border: 1px solid #c7d2fe; padding: 0.6rem 0.8rem; border-radius: 10px; margin-bottom: 0.6rem; }
-    .title-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; }
-    .controls-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; align-items: center; }
+    *, *::before, *::after { box-sizing: border-box; }
+    :root { --card: #0f172a; --accent: #22d3ee; --muted: #94a3b8; --bg: #0b1020; }
+    body { margin: 0; background: var(--bg); color: #e5e7eb; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 16px var(--accent); }
+    h1 { margin: 0; font-size: 1.25rem; }
+    .muted { color: var(--muted); font-size: 0.95rem; }
+    .grid { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
+    .card { background: var(--card); border-radius: 14px; border: 1px solid rgba(255,255,255,.06); box-shadow: 0 12px 24px rgba(0,0,0,.35); }
+    .panel { padding: 12px; }
+    .row { display: flex; gap: 10px; align-items: center; }
+    .stack { display: flex; flex-direction: column; gap: 10px; }
+    .btn { padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(34,211,238,.35); background: rgba(34,211,238,.2); color: #e6feff; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+    .btn-danger { background: rgba(239, 68, 68, .18); border-color: rgba(239, 68, 68, .4); color: #fecaca; }
+    input, textarea, select { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: #0a1228; color: #e5e7eb; }
+    .thread-item { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.08); background: rgba(148,163,184,.08); cursor: pointer; }
+    .thread-item.active { border-color: rgba(34,211,238,.45); background: rgba(34,211,238,.10); }
+
+    /* Chat card = full-width flex column */
+    .chat-card { display: flex; flex-direction: column; min-height: 420px; }
+    .chat-header { padding: 12px 16px 0 16px; }
+    .controls { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+    .subgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    .status { color: var(--muted); font-size: .92rem; margin-top: 6px; min-height: 1.2em; }
+
+    .messages { padding: 16px; display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow: auto; }
+    .msg-user { background: rgba(34, 211, 238, .12); border: 1px solid rgba(34, 211, 238, .35); padding: 12px 14px; border-radius: 12px; align-self: flex-end; white-space: pre-wrap; }
+    .msg-assistant { background: rgba(148, 163, 184, .12); border: 1px solid rgba(148, 163, 184, .35); padding: 12px 14px; border-radius: 12px; align-self: flex-start; white-space: pre-wrap; }
+
+    /* Compose row: full width, cannot overlap, matches guest layout */
+    .compose { display: flex; gap: 10px; align-items: flex-end; padding: 12px 16px 16px 16px; border-top: 1px solid rgba(255,255,255,.06); width: 100%; }
+    #message-input { flex: 1 1 auto; min-width: 0; width: 100%; min-height: 56px; max-height: 240px; resize: vertical; }
+    #send-btn { flex: 0 0 auto; min-width: 96px; }
   </style>
 </head>
 <body>
-  <header>
-    <div>
-      <strong>Places in Time</strong>
-      <span class="muted" id="user-label"></span>
-    </div>
-    <div class="row">
-      <button id="logout-btn" style="background:#b91c1c">Log out</button>
-    </div>
-  </header>
-
-  <div class="stack">
-    <aside class="panel">
-      <div class="row" style="margin-bottom:0.75rem">
-        <button id="new-thread-btn" style="background:#2563eb">New Thread</button>
+  <div class="wrap">
+    <div class="header">
+      <div class="brand">
+        <div class="dot"></div>
+        <h1>Your Threads</h1>
+        <span id="user-label" class="muted"></span>
       </div>
-      <div id="threads"></div>
-    </aside>
-
-    <main class="panel">
-      <div class="title-row" style="margin-bottom:0.5rem">
-        <input id="thread-title" placeholder="Thread title">
-        <button id="save-title-btn">Save Title</button>
+      <div class="row">
+        <button id="logout-btn" class="btn btn-danger">Log out</button>
       </div>
+    </div>
 
-      <div class="controls-row" style="margin-bottom:0.75rem">
-        <div class="row">
-          <label for="figure-select" class="muted" style="min-width: 90px;">Figure</label>
-          <select id="figure-select">
-            <option value="">None (generic historian)</option>
-          </select>
+    <div class="grid">
+      <aside class="card panel">
+        <div class="row" style="margin-bottom:8px;">
+          <button id="new-thread-btn" class="btn">New Thread</button>
         </div>
-        <div id="current-figure" class="muted">Figure: none</div>
-      </div>
+        <div id="threads" class="stack"></div>
+      </aside>
 
-      <div id="messages"></div>
+      <main class="card chat-card">
+        <div class="chat-header">
+          <div class="controls">
+            <input id="thread-title" placeholder="Thread title" />
+            <button id="save-title-btn" class="btn">Save Title</button>
+          </div>
 
-      <form id="message-form" class="row" style="margin-top:0.75rem">
-        <textarea id="message-input" rows="3" placeholder="Type a message…"></textarea>
-        <button type="submit">Send</button>
-      </form>
-    </main>
+          <div class="subgrid">
+            <div class="row">
+              <label for="figure-select" class="muted" style="min-width: 90px;">Figure</label>
+              <select id="figure-select">
+                <option value="">None (generic historian)</option>
+              </select>
+            </div>
+            <div id="current-figure" class="muted">Figure: none</div>
+          </div>
+
+          <div id="status" class="status"></div>
+        </div>
+
+        <div id="messages" class="messages" aria-live="polite" aria-atomic="false"></div>
+
+        <form id="message-form" class="compose">
+          <textarea id="message-input" rows="3" placeholder="Type a message… (Enter to send, Shift+Enter for a new line)"></textarea>
+          <button id="send-btn" type="submit" class="btn">Send</button>
+        </form>
+      </main>
+    </div>
   </div>
 
   <script>
@@ -82,22 +109,56 @@
     const logoutBtn = document.getElementById('logout-btn');
     const messageForm = document.getElementById('message-form');
     const messageInput = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
     const titleInput = document.getElementById('thread-title');
     const saveTitleBtn = document.getElementById('save-title-btn');
     const figureSelect = document.getElementById('figure-select');
     const currentFigure = document.getElementById('current-figure');
+    const statusEl = document.getElementById('status');
 
-    if (!token || !userId) {
-      window.location.href = '/';
-    }
-
+    if (!token || !userId) window.location.href = '/';
     userLabel.textContent = `— signed in as ${username || 'user ' + userId}`;
 
     let currentThreadId = null;
     let appliedQueryFigure = false;
+    const figureNameCache = Object.create(null);
+    let sending = false;
 
-    function authHeaders() {
-      return { 'Authorization': `Bearer ${token}` };
+    function authHeaders() { return { 'Authorization': `Bearer ${token}` }; }
+    function setStatus(msg, cls) {
+      statusEl.className = 'status' + (cls ? ' ' + cls : '');
+      statusEl.textContent = msg || '';
+    }
+    function titleCaseSlug(slug) {
+      if (!slug) return null;
+      const romans = new Set(["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI","XVII","XVIII","XIX","XX"]);
+      return slug
+        .split("-")
+        .map(part => {
+          const bare = part.replace(/[^a-z0-9]/gi, "");
+          const upper = bare.toUpperCase();
+          if (romans.has(upper)) return upper + part.slice(bare.length);
+          return part.charAt(0).toUpperCase() + part.slice(1);
+        })
+        .join(" ")
+        .replace(/\s+,/g, ",");
+    }
+    async function getFigureName(slug) {
+      if (!slug) return null;
+      if (figureNameCache[slug]) return figureNameCache[slug];
+      try {
+        const res = await fetch(`/figures/${encodeURIComponent(slug)}`);
+        if (res.ok) {
+          const fig = await res.json();
+          if (fig && fig.name) {
+            figureNameCache[slug] = fig.name;
+            return fig.name;
+          }
+        }
+      } catch (_) {}
+      const fallback = titleCaseSlug(slug);
+      figureNameCache[slug] = fallback;
+      return fallback;
     }
 
     async function jsonGET(url) {
@@ -105,7 +166,6 @@
       if (!resp.ok) throw new Error(await resp.text());
       return resp.json();
     }
-
     async function jsonPATCH(url, body) {
       const resp = await fetch(url, {
         method: 'PATCH',
@@ -115,21 +175,10 @@
       if (!resp.ok) throw new Error(await resp.text());
       return resp.json();
     }
-
     async function jsonPOSTAuth(url, body) {
       const resp = await fetch(url, {
         method: 'POST',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-      return resp.json();
-    }
-
-    async function jsonPOST(url, body) {
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
       if (!resp.ok) throw new Error(await resp.text());
@@ -149,6 +198,7 @@
         figureSelect.appendChild(none);
 
         list.forEach(f => {
+          if (f.slug && f.name) figureNameCache[f.slug] = f.name;
           const opt = document.createElement('option');
           opt.value = f.slug;
           opt.textContent = f.name || f.slug;
@@ -164,27 +214,27 @@
       threadsEl.innerHTML = '';
       data.forEach(t => {
         const item = document.createElement('div');
-        item.className = 'thread' + (t.id === currentThreadId ? ' active' : '');
-        const figure = t.figure_slug ? ` · ${t.figure_slug}` : '';
-        item.textContent = `${t.title || 'Untitled'} · #${t.id}${figure}`;
+        item.className = 'thread-item' + (t.id === currentThreadId ? ' active' : '');
+        const suffix = t.figure_slug ? ` · ${titleCaseSlug(t.figure_slug)}` : '';
+        item.textContent = `${t.title || 'Untitled'} · #${t.id}${suffix}`;
         item.addEventListener('click', () => selectThread(t.id));
         threadsEl.appendChild(item);
       });
-      if (!currentThreadId && data.length) {
-        await selectThread(data[0].id);
-      }
+      if (!currentThreadId && data.length) await selectThread(data[0].id);
     }
 
     async function loadThreadMeta(threadId) {
       const meta = await jsonGET(`/threads/${threadId}`);
       titleInput.value = meta.title || '';
-      currentFigure.textContent = meta.figure_slug ? `Figure: ${meta.figure_slug}` : 'Figure: none';
+      const figName = meta.figure_slug ? (await getFigureName(meta.figure_slug)) : null;
+      currentFigure.textContent = figName ? `Figure: ${figName}` : 'Figure: none';
       figureSelect.value = meta.figure_slug || '';
+      return meta;
     }
 
     async function selectThread(threadId) {
       currentThreadId = threadId;
-      await loadThreadMeta(threadId);
+      const meta = await loadThreadMeta(threadId);
 
       if (figureFromQuery && !appliedQueryFigure) {
         try {
@@ -210,6 +260,7 @@
       div.className = m.role === 'user' ? 'msg-user' : 'msg-assistant';
       div.textContent = m.message;
       messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
     async function renderMessages() {
@@ -219,39 +270,65 @@
       msgs.forEach(renderMessage);
     }
 
+    async function sendMessage() {
+      const text = messageInput.value.trim();
+      if (!text || !currentThreadId || sending) return;
+
+      try {
+        sending = true;
+        sendBtn.disabled = true;
+
+        const meta = await jsonGET(`/threads/${currentThreadId}`);
+        const figName = meta.figure_slug ? (await getFigureName(meta.figure_slug)) : null;
+        const thinker = figName || 'The historian';
+        setStatus(`${thinker} is thinking…`);
+
+        const form = new URLSearchParams();
+        form.set('user_id', String(userId));
+        form.set('message', text);
+        form.set('thread_id', String(currentThreadId));
+
+        const resp = await fetch('/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: form.toString()
+        });
+
+        if (resp.status !== 303 && resp.status !== 200) throw new Error('Send failed');
+
+        messageInput.value = '';
+        await renderMessages();
+        setStatus('');
+      } catch (err) {
+        setStatus('Send failed. Please try again.', 'err');
+      } finally {
+        sending = false;
+        sendBtn.disabled = false;
+        messageInput.focus();
+      }
+    }
+
     newThreadBtn.addEventListener('click', async () => {
       try {
         const created = await jsonPOSTAuth('/threads', { user_id: userId, title: 'New thread' });
         const newId = created.thread_id;
         await listThreads();
-        if (newId) {
-          await selectThread(newId);
-        }
+        if (newId) await selectThread(newId);
       } catch (e) {
         alert('Could not create thread');
         console.error(e);
       }
     });
 
-    messageForm.addEventListener('submit', async (ev) => {
+    messageForm.addEventListener('submit', (ev) => {
       ev.preventDefault();
-      const text = messageInput.value.trim();
-      if (!text || !currentThreadId) return;
-      const form = new URLSearchParams();
-      form.set('user_id', String(userId));
-      form.set('message', text);
-      form.set('thread_id', String(currentThreadId));
-      const resp = await fetch('/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: form.toString()
-      });
-      if (resp.status !== 303 && resp.status !== 200) {
-        alert('Send failed');
-        return;
+      sendMessage();
+    });
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
       }
-      messageInput.value = '';
-      await renderMessages();
     });
 
     saveTitleBtn.addEventListener('click', async () => {

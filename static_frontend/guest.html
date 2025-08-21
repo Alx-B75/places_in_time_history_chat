@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Guest Chat · Places in Time</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    :root { --card: #0f172a; --accent: #22d3ee; --muted: #94a3b8; --bg: #0b1020; }
+    body { margin: 0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: #e5e7eb; }
+    .wrap { max-width: 880px; margin: 24px auto; padding: 0 16px; }
+    .header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 16px var(--accent); }
+    h1 { font-size: 1.25rem; margin: 0; }
+    .sub { color: var(--muted); font-size: 0.95rem; margin: 4px 0 16px; }
+    .card { background: var(--card); border-radius: 14px; border: 1px solid rgba(255,255,255,.06); box-shadow: 0 12px 24px rgba(0,0,0,.35); }
+    .messages { min-height: 260px; max-height: 60vh; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .msg { padding: 12px 14px; border-radius: 12px; max-width: 85%; line-height: 1.5; white-space: pre-wrap; }
+    .user { background: rgba(34, 211, 238, .12); border: 1px solid rgba(34, 211, 238, .35); align-self: flex-end; }
+    .assistant { background: rgba(148, 163, 184, .12); border: 1px solid rgba(148, 163, 184, .35); align-self: flex-start; }
+    .row { display: flex; gap: 10px; padding: 12px; border-top: 1px solid rgba(255,255,255,.06); }
+    textarea { flex: 1; resize: vertical; min-height: 42px; max-height: 160px; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: #0a1228; color: #e5e7eb; }
+    button, .btn { padding: 10px 14px; border-radius: 10px; border: 1px solid transparent; background: rgba(34,211,238,.2); color: #e6feff; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-primary { background: linear-gradient(180deg, rgba(34,211,238,.45), rgba(34,211,238,.25)); border-color: rgba(34,211,238,.6); }
+    .btn-secondary { background: rgba(148,163,184,.18); border-color: rgba(148,163,184,.35); color: #e5e7eb; }
+    button[disabled] { opacity: .55; cursor: not-allowed; }
+    .status { color: var(--muted); font-size: .92rem; margin: 8px 0 16px; }
+    .cta { margin-top: 14px; background: rgba(34,211,238,.10); border: 1px dashed rgba(34,211,238,.35); color: #c7f9ff; padding: 16px; border-radius: 14px; }
+    .cta h3 { margin: 0 0 6px; font-size: 1.05rem; }
+    .cta p { margin: 0 0 12px; color: var(--muted); }
+    .cta .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+    .small { font-size: .88rem; color: var(--muted); }
+    .err { color: #fecaca; }
+    .ok { color: #bbf7d0; }
+    .hidden { display: none; }
+    .pill { display: inline-block; padding: 4px 8px; border-radius: 999px; background: rgba(148,163,184,.15); border: 1px solid rgba(148,163,184,.3); font-size: .8rem; margin-left: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="dot"></div>
+      <h1 id="title">Guest Chat</h1>
+      <span id="limit-pill" class="pill hidden"></span>
+    </div>
+    <div id="subtitle" class="sub">Loading figure…</div>
+
+    <div class="card">
+      <div id="messages" class="messages" aria-live="polite" aria-atomic="false"></div>
+      <div class="row">
+        <textarea id="input" placeholder="Ask your question…" autocomplete="off"></textarea>
+        <button id="send">Send</button>
+      </div>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div id="upgrade" class="cta hidden">
+      <h3>Would you like to save your conversation and speak with many other figures from history?</h3>
+      <p>Create an account to start your journey through time. Once you’re signed in, we’ll save this chat and redirect you automatically.</p>
+      <div class="actions">
+        <a href="/?signup=1" target="_blank" rel="noopener" class="btn btn-primary">Create an account</a>
+        <a href="/?login=1" target="_blank" rel="noopener" class="btn btn-secondary">I already have an account</a>
+        <button id="saveBtn" class="btn btn-secondary" disabled>I’m logged in — Save now</button>
+      </div>
+      <div id="upgrade-status" class="small" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <script>
+    function getSlugFromPath() {
+      const m = window.location.pathname.match(/^\/guest\/([^/?#]+)/i);
+      return m ? decodeURIComponent(m[1]) : null;
+    }
+
+    function formatSlugToName(slug) {
+      if (!slug) return null;
+      const romans = new Set(["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI","XVII","XVIII","XIX","XX"]);
+      return slug
+        .split("-")
+        .map(part => {
+          const bare = part.replace(/[^a-z0-9]/gi, "");
+          const upper = bare.toUpperCase();
+          if (romans.has(upper)) return upper + part.slice(bare.length);
+          return part.charAt(0).toUpperCase() + part.slice(1);
+        })
+        .join(" ")
+        .replace(/\s+,/g, ",");
+    }
+
+    const qs = new URLSearchParams(location.search);
+    const slug = qs.get('slug') || getSlugFromPath();
+
+    const title = document.getElementById('title');
+    const subtitle = document.getElementById('subtitle');
+    const messagesEl = document.getElementById('messages');
+    const inputEl = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+    const statusEl = document.getElementById('status');
+    const upgradeEl = document.getElementById('upgrade');
+    const upgradeStatus = document.getElementById('upgrade-status');
+    const saveBtn = document.getElementById('saveBtn');
+    const limitPill = document.getElementById('limit-pill');
+
+    let maxQuestions = 3;
+    let remaining = 3;
+    let starting = false;
+    let started = false;
+    let figureDisplayName = null;
+
+    const AUTO_SAVE_ON_LOGIN = true;
+    let autoSaved = false;
+
+    function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
+    function setStatus(msg, cls) {
+      statusEl.className = 'status' + (cls ? ' ' + cls : '');
+      statusEl.textContent = msg || '';
+    }
+    function setUpgradeStatus(msg, cls) {
+      upgradeStatus.className = 'small' + (cls ? ' ' + cls : '');
+      upgradeStatus.textContent = msg || '';
+    }
+    function setLimitPill() {
+      if (!started) return;
+      limitPill.classList.remove('hidden');
+      limitPill.textContent = `${remaining}/${maxQuestions} left`;
+    }
+    function append(role, text) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + (role === 'user' ? 'user' : 'assistant');
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      scrollToBottom();
+    }
+    function disableInput(disabled) {
+      inputEl.disabled = disabled;
+      sendBtn.disabled = disabled;
+    }
+    function getAuth() {
+      const accessToken = localStorage.getItem('access_token') || '';
+      const userId = localStorage.getItem('user_id') || '';
+      return { accessToken, userId };
+    }
+    function syncUpgradeButton() {
+      const { accessToken } = getAuth();
+      if (accessToken) {
+        saveBtn.disabled = false;
+        setUpgradeStatus('Login detected. Saving is available.', 'ok');
+        if (AUTO_SAVE_ON_LOGIN && !autoSaved && !upgradeEl.classList.contains('hidden')) {
+          tryUpgrade();
+        }
+      } else {
+        saveBtn.disabled = true;
+      }
+    }
+    window.addEventListener('storage', (e) => { if (e.key === 'access_token') syncUpgradeButton(); });
+
+    async function loadFigureName() {
+      if (!slug) return;
+      try {
+        const res = await fetch(`/figures/${encodeURIComponent(slug)}`);
+        if (res.ok) {
+          const fig = await res.json();
+          if (fig && fig.name) {
+            figureDisplayName = fig.name;
+            return;
+          }
+        }
+      } catch (_) {}
+      figureDisplayName = formatSlugToName(slug) || "the historian";
+    }
+
+    async function startGuest() {
+      if (!slug) {
+        title.textContent = 'Guest Chat';
+        subtitle.textContent = 'Missing figure slug. Use /guest/{slug} or ?slug=your-figure.';
+        setStatus('No figure selected.', 'err');
+        disableInput(true);
+        return;
+      }
+      if (starting || started) return;
+      starting = true;
+
+      await loadFigureName();
+
+      title.textContent = `Guest Chat · ${figureDisplayName || slug}`;
+      subtitle.textContent = 'Starting trial session…';
+      setStatus('Starting session…');
+
+      try {
+        const res = await fetch(`/guest/start/${encodeURIComponent(slug)}`, { method: 'POST', credentials: 'include' });
+        if (res.status === 404) {
+          subtitle.textContent = 'Figure not found.';
+          setStatus('No such figure. Check the link slug.', 'err');
+          disableInput(true);
+          return;
+        }
+        if (!res.ok) {
+          subtitle.textContent = 'Could not start session.';
+          setStatus(`Error ${res.status}: Failed to start session.`, 'err');
+          disableInput(true);
+          return;
+        }
+        const data = await res.json();
+        maxQuestions = Number(data.max_questions || 3);
+        remaining = maxQuestions;
+        subtitle.textContent = `You can ask up to ${maxQuestions} questions.`;
+        setStatus('Session ready.', 'ok');
+        started = true;
+        setLimitPill();
+        disableInput(false);
+      } catch (e) {
+        subtitle.textContent = 'Network error.';
+        setStatus('Network error while starting session.', 'err');
+        disableInput(true);
+      } finally {
+        starting = false;
+      }
+    }
+
+    async function ask() {
+      const text = (inputEl.value || '').trim();
+      if (!text) return;
+      if (!started) {
+        await startGuest();
+        if (!started) return;
+      }
+      if (remaining <= 0) {
+        setStatus('Trial limit reached. Please create an account to continue.', 'err');
+        upgradeEl.classList.remove('hidden');
+        syncUpgradeButton();
+        disableInput(true);
+        return;
+      }
+
+      append('user', text);
+      inputEl.value = '';
+      disableInput(true);
+      const thinker = figureDisplayName || formatSlugToName(slug) || 'The historian';
+      setStatus(`${thinker} is thinking…`);
+
+      try {
+        const res = await fetch('/guest/ask', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text })
+        });
+
+        if (res.status === 403) {
+          setStatus('Trial limit reached.', 'err');
+          upgradeEl.classList.remove('hidden');
+          setLimitPill();
+          syncUpgradeButton();
+          disableInput(true);
+          return;
+        }
+        if (res.status === 401) {
+          setStatus('Session expired. Restarting…', 'err');
+          started = false;
+          await startGuest();
+          disableInput(false);
+          return;
+        }
+        if (res.status === 400) {
+          setStatus('Session missing. Restarting…', 'err');
+          started = false;
+          await startGuest();
+          disableInput(false);
+          return;
+        }
+        if (!res.ok) {
+          setStatus(`Error ${res.status}: Unable to get an answer.`, 'err');
+          disableInput(false);
+          return;
+        }
+
+        const data = await res.json();
+        append('assistant', data.answer || '(no answer)');
+        remaining = Number(data.remaining_questions ?? remaining);
+        setLimitPill();
+
+        if (remaining <= 0) {
+          setStatus('Trial limit reached. Create an account to continue.', 'err');
+          upgradeEl.classList.remove('hidden');
+          syncUpgradeButton();
+          disableInput(true);
+        } else {
+          setStatus(`${remaining} question${remaining === 1 ? '' : 's'} left.`, 'ok');
+          disableInput(false);
+          inputEl.focus();
+        }
+      } catch (e) {
+        setStatus('Network error. Please try again.', 'err');
+        disableInput(false);
+      }
+    }
+
+    async function tryUpgrade() {
+      const { accessToken } = getAuth();
+      if (!accessToken) {
+        setUpgradeStatus('You are not logged in yet. Use one of the buttons above, then return here.', 'err');
+        syncUpgradeButton();
+        return;
+      }
+      setUpgradeStatus('Saving your conversation…');
+      saveBtn.disabled = true;
+      try {
+        const res = await fetch('/guest/upgrade', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (res.status === 401 || res.status === 403) {
+          setUpgradeStatus('Your login is not valid. Please re-authenticate and try again.', 'err');
+          saveBtn.disabled = false;
+          syncUpgradeButton();
+          return;
+        }
+        if (!res.ok) {
+          setUpgradeStatus(`Error ${res.status}: Could not upgrade session.`, 'err');
+          saveBtn.disabled = false;
+          return;
+        }
+        const data = await res.json();
+        autoSaved = true;
+        setUpgradeStatus('Saved. Redirecting…', 'ok');
+        const userId = Number(data.user_id);
+        if (Number.isFinite(userId)) {
+          window.location.href = `/user/${userId}/threads`;
+        } else {
+          setUpgradeStatus('Saved, but could not determine your user id. Please navigate to your threads page.', 'err');
+          saveBtn.disabled = false;
+        }
+      } catch (e) {
+        setUpgradeStatus('Network error while upgrading. Please try again.', 'err');
+        saveBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', ask);
+    inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); } });
+    saveBtn.addEventListener('click', tryUpgrade);
+
+    startGuest();
+    syncUpgradeButton();
+    setInterval(syncUpgradeButton, 3000);
+  </script>
+</body>
+</html>
