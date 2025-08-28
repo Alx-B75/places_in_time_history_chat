@@ -1,17 +1,21 @@
 """Main FastAPI application entry point for Places in Time History Chat.
 
-Serves the API and static frontend with explicit routes for index and
-user threads pages, plus compatibility routes for legacy asset paths.
+This module serves the API and static frontend. It includes explicit routes
+for the landing page and the user threads page, a guest page route that
+renders the guest chat client at `/guest/{slug}`, convenience routes for
+legacy asset paths, robust favicon handling, and a static mount for other
+assets under `/static`.
 """
 
 import os
+from pathlib import Path
 from typing import List
 
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
@@ -24,8 +28,8 @@ load_dotenv()
 
 app = FastAPI(redirect_slashes=True)
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STATIC_DIR = os.path.join(BASE_DIR, "static_frontend")
+BASE_DIR = Path(__file__).resolve().parents[1]
+STATIC_DIR = BASE_DIR / "static_frontend"
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,7 +55,10 @@ def health() -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
-@app.get("/threads/user/{user_id}", response_model=List[schemas.ThreadRead])
+@app.get(
+    "/threads/user/{user_id}",
+    response_model=List[schemas.ThreadRead],
+)
 def list_user_threads(
     user_id: int,
     db: Session = Depends(get_db_chat),
@@ -59,74 +66,86 @@ def list_user_threads(
 ):
     """Return all threads for the authenticated user."""
     if current_user.id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to access these threads")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access these threads",
+        )
     return crud.get_threads_by_user(db, user_id)
 
 
 @app.get("/", response_class=FileResponse)
 def serve_index() -> FileResponse:
     """Serve the landing page HTML."""
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
 
 
 @app.get("/user/{user_id}/threads", response_class=FileResponse)
 def serve_threads_page(user_id: int) -> FileResponse:
     """Serve the threads page HTML for a user."""
-    return FileResponse(os.path.join(STATIC_DIR, "threads.html"), media_type="text/html")
+    return FileResponse(STATIC_DIR / "threads.html", media_type="text/html")
+
+
+@app.get("/guest/{slug}", response_class=FileResponse)
+def serve_guest_page(slug: str) -> FileResponse:
+    """Serve the guest chat page for a specific figure slug."""
+    return FileResponse(STATIC_DIR / "guest.html", media_type="text/html")
 
 
 @app.get("/ui/figures", response_class=FileResponse)
 def serve_figures_ui() -> FileResponse:
-    """Serve the UI page that lists figures and links to Ask."""
-    return FileResponse(os.path.join(STATIC_DIR, "figures.html"), media_type="text/html")
+    """Serve a UI page listing figures that link to Ask."""
+    return FileResponse(STATIC_DIR / "figures.html", media_type="text/html")
 
-
-# --- Static asset convenience routes (legacy/pretty paths) ---
 
 @app.get("/main.js", response_class=FileResponse)
 def serve_main_js() -> FileResponse:
     """Serve main.js from static_frontend for legacy paths."""
-    return FileResponse(os.path.join(STATIC_DIR, "main.js"), media_type="application/javascript")
+    return FileResponse(STATIC_DIR / "main.js", media_type="application/javascript")
 
 
 @app.get("/style.css", response_class=FileResponse)
 def serve_style_css() -> FileResponse:
     """Serve style.css from static_frontend for legacy paths."""
-    return FileResponse(os.path.join(STATIC_DIR, "style.css"), media_type="text/css")
+    return FileResponse(STATIC_DIR / "style.css", media_type="text/css")
 
 
 @app.get("/logo.png", response_class=FileResponse)
 def serve_logo_png() -> FileResponse:
     """Serve logo.png from static_frontend for legacy paths."""
-    return FileResponse(os.path.join(STATIC_DIR, "logo.png"), media_type="image/png")
+    return FileResponse(STATIC_DIR / "logo.png", media_type="image/png")
 
 
 @app.get("/threads_visual.png", response_class=FileResponse)
 def serve_threads_visual() -> FileResponse:
     """Serve threads_visual.png from static_frontend for legacy paths."""
-    return FileResponse(os.path.join(STATIC_DIR, "threads_visual.png"), media_type="image/png")
+    return FileResponse(STATIC_DIR / "threads_visual.png", media_type="image/png")
 
 
-# --- Favicons (add your .ico/.svg to static_frontend) ---
-
-@app.get("/favicon.ico", response_class=FileResponse)
-def serve_favicon_ico() -> FileResponse:
-    """Serve favicon.ico if present; falls back to SVG if ICO is missing."""
-    ico_path = os.path.join(STATIC_DIR, "favicon.ico")
-    if os.path.exists(ico_path):
-        return FileResponse(ico_path, media_type="image/x-icon")
-    # Fall back to the SVG if no ICO on disk
-    return FileResponse(os.path.join(STATIC_DIR, "favicon.svg"), media_type="image/svg+xml")
-
-
-@app.get("/favicon.svg", response_class=FileResponse)
-def serve_favicon_svg() -> FileResponse:
-    """Serve the SVG favicon."""
-    return FileResponse(os.path.join(STATIC_DIR, "favicon.svg"), media_type="image/svg+xml")
+@app.get("/favicon.ico")
+def serve_favicon_ico() -> Response:
+    """Serve a stable favicon, preferring ICO, then app icon PNG."""
+    candidates = [
+        STATIC_DIR / "pit-favicon-mark.ico",
+        STATIC_DIR / "favicon.ico",
+        STATIC_DIR / "icon-192.png",
+    ]
+    for p in candidates:
+        if p.exists():
+            media = "image/x-icon" if p.suffix == ".ico" else "image/png"
+            return FileResponse(p, media_type=media)
+    return Response(status_code=status.HTTP_404_NOT_FOUND)
 
 
-# Mount /static for anything else in static_frontend
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+@app.get("/favicon.svg")
+def serve_favicon_svg() -> Response:
+    """Serve the SVG favicon if present, otherwise 404."""
+    svg_path = STATIC_DIR / "favicon.svg"
+    if svg_path.exists():
+        return FileResponse(svg_path, media_type="image/svg+xml")
+    return Response(status_code=status.HTTP_404_NOT_FOUND)
+
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 if __name__ == "__main__":

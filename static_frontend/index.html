@@ -4,95 +4,60 @@
   <meta charset="utf-8">
   <title>Places in Time — Login</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- Favicons / manifest -->
-    <link rel="icon" href="/static/pit-favicon-mark.ico" sizes="any">
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png">
-    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
-    <link rel="manifest" href="/static/site.webmanifest">
-    <meta name="theme-color" content="#0b1020">
-
-  <link href="/style.css" rel="stylesheet">
-  <script defer src="/main.js"></script>
+  <link rel="icon" href="/static/pit-favicon-mark.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+  <link rel="manifest" href="/static/site.webmanifest">
+  <meta name="theme-color" content="#0b1020">
+  <link href="/static/style.css?v=brand-6" rel="stylesheet">
+  <script defer src="/static/main.js?v=brand-6"></script>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; }
-    .card { max-width: 420px; margin: 5vh auto; padding: 1.25rem; border: 1px solid #ddd; border-radius: 12px; }
+    .auth-wrap { max-width: 520px; margin: 24px auto; padding: 0 16px; }
+    .auth-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 16px; }
     .row { margin-bottom: 0.75rem; display: flex; flex-direction: column; }
     label { font-size: 0.9rem; margin-bottom: 0.25rem; }
-    input { padding: 0.6rem 0.7rem; border: 1px solid #ccc; border-radius: 8px; }
-    button { padding: 0.65rem 0.9rem; border-radius: 10px; border: none; background: #111827; color: #fff; cursor: pointer; }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .muted { color: #666; font-size: 0.9rem; margin-top: 0.5rem; }
-    .error { color: #b91c1c; margin-top: 0.5rem; }
+    input { padding: 0.6rem 0.7rem; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; background: #0a1228; color: var(--text); }
+    .actions { display: flex; gap: 10px; justify-content: center; }
+    .muted { color: var(--muted); font-size: 0.9rem; margin-top: 0.5rem; text-align: center; }
+    .error { color: #fecaca; margin-top: 0.5rem; display: none; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Places in Time</h1>
-    <p class="muted">Sign in to view your threads.</p>
-    <form id="login-form">
-      <div class="row">
-        <label for="username">Username</label>
-        <input id="username" name="username" autocomplete="username" required>
+  <div class="wrap">
+    <div class="banner">
+      <div class="brand-side">
+        <div class="brand-mark">
+          <img src="/static/icon-192.png" alt="Places in Time">
+        </div>
+        <div class="brand-title">
+          <h1>Places in Time</h1>
+          <div class="muted">Sign in to view your threads</div>
+        </div>
       </div>
-      <div class="row">
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
-      </div>
-      <button id="login-btn" type="submit">Log in</button>
-      <div id="login-error" class="error" hidden></div>
-    </form>
+    </div>
 
-    <p class="muted" style="margin-top:1rem">
-      No account? Use the same form and press “Register”:
-    </p>
-    <button id="register-btn" type="button" style="background:#2563eb">Register</button>
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <form id="login-form">
+          <div class="row">
+            <label for="username">Username</label>
+            <input id="username" name="username" autocomplete="username" required>
+          </div>
+          <div class="row">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit">Log in</button>
+            <button class="btn" type="submit" id="register-form">Register</button>
+          </div>
+          <div id="message" class="error" role="alert"></div>
+        </form>
+        <p class="muted">You can use the same fields to register if you don’t have an account.</p>
+      </div>
+    </div>
   </div>
-
-  <script>
-    const form = document.getElementById('login-form');
-    const btn = document.getElementById('login-btn');
-    const reg = document.getElementById('register-btn');
-    const err = document.getElementById('login-error');
-
-    async function auth(path) {
-      err.hidden = true;
-      btn.disabled = true;
-      reg.disabled = true;
-      const username = document.getElementById('username').value.trim();
-      const password = document.getElementById('password').value;
-      try {
-        const resp = await fetch(path, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-        if (!resp.ok) {
-          const msg = await resp.text();
-          throw new Error(msg || 'Authentication failed');
-        }
-        const data = await resp.json();
-        localStorage.setItem('access_token', data.access_token);
-        localStorage.setItem('user_id', String(data.user_id));
-        localStorage.setItem('username', data.username);
-        window.location.href = `/user/${data.user_id}/threads`;
-      } catch (e) {
-        err.textContent = e.message.replace(/["{}]/g, '') || 'Authentication failed';
-        err.hidden = false;
-      } finally {
-        btn.disabled = false;
-        reg.disabled = false;
-      }
-    }
-
-    form.addEventListener('submit', (ev) => {
-      ev.preventDefault();
-      auth('/auth/login');
-    });
-
-    reg.addEventListener('click', () => {
-      auth('/auth/register');
-    });
-  </script>
 </body>
 </html>

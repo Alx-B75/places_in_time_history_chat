@@ -20,7 +20,11 @@ def get_figure_db() -> Generator[Session, None, None]:
         db.close()
 
 
-@router.get("/", response_model=List[schemas.HistoricalFigureRead], status_code=status.HTTP_200_OK)
+@router.get(
+    "/",
+    response_model=List[schemas.HistoricalFigureRead],
+    status_code=status.HTTP_200_OK,
+)
 def list_figures(
     skip: int = Query(0, ge=0, description="Number of records to skip."),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return."),
@@ -30,7 +34,11 @@ def list_figures(
     return crud.get_all_figures(db, skip=skip, limit=limit)
 
 
-@router.get("/search", response_model=List[schemas.HistoricalFigureRead], status_code=status.HTTP_200_OK)
+@router.get(
+    "/search",
+    response_model=List[schemas.HistoricalFigureRead],
+    status_code=status.HTTP_200_OK,
+)
 def search_figures(
     q: str = Query(..., min_length=1, description="Query string to match against name or slug."),
     limit: int = Query(20, ge=1, le=100, description="Maximum number of matches to return."),
@@ -40,7 +48,11 @@ def search_figures(
     return crud.search_figures(db, q, limit=limit)
 
 
-@router.get("/{slug}", response_model=schemas.HistoricalFigureDetail, status_code=status.HTTP_200_OK)
+@router.get(
+    "/{slug}",
+    response_model=schemas.HistoricalFigureDetail,
+    status_code=status.HTTP_200_OK,
+)
 def get_figure_by_slug(
     slug: str,
     db: Session = Depends(get_figure_db),
@@ -48,5 +60,21 @@ def get_figure_by_slug(
     """Return full details for a single historical figure."""
     figure = crud.get_figure_by_slug(db, slug=slug)
     if not figure:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Figure not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Figure not found",
+        )
     return figure
+
+
+@router.get("/{slug}/bio", status_code=status.HTTP_200_OK)
+def get_figure_bio(
+    slug: str,
+    db: Session = Depends(get_figure_db),  # must be figures DB
+) -> dict:
+    """
+    Return a concise description (bio/summary) for a given figure slug.
+    """
+    desc = crud.get_figure_description(db, slug)
+    return {"slug": slug, "description": desc}
+

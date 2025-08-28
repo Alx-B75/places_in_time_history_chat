@@ -3,6 +3,7 @@
 from typing import List, Optional
 
 from sqlalchemy import or_
+from sqlalchemy import text
 from sqlalchemy.orm import Session, selectinload
 
 from app import models, schemas
@@ -117,6 +118,45 @@ def get_figure_by_slug(db: Session, slug: str) -> Optional[models.HistoricalFigu
         .options(selectinload(models.HistoricalFigure.contexts))
         .first()
     )
+
+
+def get_figure_description(db, slug: str) -> str:
+    """
+    Return a description for a figure by slug.
+
+    Prefers 'bio' in figure_contexts; falls back to historical_figures.persona_prompt.
+    """
+    row = db.execute(
+        text(
+            """
+            SELECT content
+            FROM figure_contexts
+            WHERE figure_slug = :slug
+              AND content_type = 'bio'
+            ORDER BY id ASC
+            LIMIT 1
+            """
+        ),
+        {"slug": slug},
+    ).fetchone()
+    if row and row[0]:
+        return str(row[0]).strip()
+
+    row = db.execute(
+        text(
+            """
+            SELECT persona_prompt
+            FROM historical_figures
+            WHERE slug = :slug
+            LIMIT 1
+            """
+        ),
+        {"slug": slug},
+    ).fetchone()
+    if row and row[0]:
+        return str(row[0]).strip()
+
+    return ""
 
 
 def search_figures(db: Session, query: str, limit: int = 20) -> List[models.HistoricalFigure]:

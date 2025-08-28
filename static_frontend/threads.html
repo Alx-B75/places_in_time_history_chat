@@ -4,25 +4,20 @@
   <meta charset="utf-8" />
   <title>Your Threads — Places in Time</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <!-- Icons / manifest -->
   <link rel="icon" href="/static/pit-favicon-mark.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png" />
   <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png" />
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
   <link rel="manifest" href="/static/site.webmanifest" />
   <meta name="theme-color" content="#0b1020" />
-
-  <link href="/static/style.css?v=brand-3" rel="stylesheet" />
-  <script defer src="/static/main.js?v=brand-3"></script>
+  <link href="/static/style.css?v=brand-7" rel="stylesheet" />
 </head>
 <body>
   <div class="wrap">
-    <!-- Landscape banner -->
     <div class="banner">
       <div class="brand-side">
         <div class="brand-mark">
-          <!-- Use icon-192.png which you already have -->
           <img src="/static/icon-192.png" alt="Places in Time" />
         </div>
         <div class="brand-title">
@@ -50,16 +45,20 @@
             <button id="save-title-btn" class="btn">Save Title</button>
           </div>
 
-          <!-- Figure row (image + name + selector) -->
-          <div class="figure-row">
-            <img id="figure-avatar" class="figure-avatar" alt="" src="/static/icon-192.png"
-                 onerror="this.onerror=null;this.src='/static/logo.png';" />
-            <div class="figure-name" id="current-figure">Figure: none</div>
-            <div class="figure-select">
-              <label class="muted" for="figure-select" style="margin-right:8px;">Change</label>
-              <select id="figure-select">
-                <option value="">None (generic historian)</option>
-              </select>
+          <div class="figure-hero">
+            <img id="figure-hero-img" class="figure-hero-img" src="/static/icon-192.png" alt="">
+            <div class="figure-hero-text">
+              <div class="figure-row">
+                <img id="figure-avatar" class="figure-avatar" alt="" src="/static/icon-192.png">
+                <div class="figure-name" id="current-figure">Figure: none</div>
+                <div class="figure-select">
+                  <label class="muted" for="figure-select" style="margin-right:8px;">Change</label>
+                  <select id="figure-select">
+                    <option value="">None (generic historian)</option>
+                  </select>
+                </div>
+              </div>
+              <p id="figure-desc" class="figure-desc muted"></p>
             </div>
           </div>
 
@@ -77,6 +76,28 @@
   </div>
 
   <script>
+    function cleanDesc(s) {
+      const t = String(s || "").trim();
+      if (!t) return "";
+      return t
+        .replace(/^You are .*?\.\s*/i, "")
+        .replace(/^Act as .*?\.\s*/i, "")
+        .replace(/\n{2,}/g, "\n")
+        .split("\n")[0]
+        .trim();
+    }
+
+    async function fetchBio(slug) {
+      try {
+        const r = await fetch(`/figures/${encodeURIComponent(slug)}/bio`);
+        if (r.ok) {
+          const j = await r.json();
+          return cleanDesc(j.description || "");
+        }
+      } catch (_) {}
+      return "";
+    }
+
     const token = localStorage.getItem('access_token');
     const userId = Number(localStorage.getItem('user_id'));
     const username = localStorage.getItem('username') || '';
@@ -96,6 +117,8 @@
     const figureSelect = document.getElementById('figure-select');
     const currentFigure = document.getElementById('current-figure');
     const figureAvatar = document.getElementById('figure-avatar');
+    const figureHeroImg = document.getElementById('figure-hero-img');
+    const figureDesc = document.getElementById('figure-desc');
     const statusEl = document.getElementById('status');
 
     if (!token || !userId) window.location.href = '/';
@@ -103,7 +126,7 @@
 
     let currentThreadId = null;
     let appliedQueryFigure = false;
-    const figureCache = Object.create(null); // slug -> { name, image_url }
+    const figureCache = Object.create(null);
     let sending = false;
 
     function authHeaders() { return { 'Authorization': `Bearer ${token}` }; }
@@ -127,12 +150,17 @@
         const res = await fetch(`/figures/${encodeURIComponent(slug)}`);
         if (res.ok){
           const fig = await res.json();
-          const payload = { name: fig.name || titleCaseSlug(slug), image_url: fig.image_url || "" };
+          const bio = await fetchBio(slug);
+          const payload = {
+            name: fig.name || titleCaseSlug(slug),
+            image_url: fig.image_url || "",
+            description: bio || cleanDesc(fig.description || fig.summary || fig.persona_prompt || "")
+          };
           figureCache[slug] = payload;
           return payload;
         }
       }catch(_){}
-      const fallback = { name: titleCaseSlug(slug), image_url: "" };
+      const fallback = { name: titleCaseSlug(slug), image_url: "", description: "" };
       figureCache[slug] = fallback;
       return fallback;
     }
@@ -153,7 +181,7 @@
       figureSelect.innerHTML='';
       const none=document.createElement('option'); none.value=''; none.textContent='None (generic historian)'; figureSelect.appendChild(none);
       list.forEach(f=>{
-        if(f.slug) figureCache[f.slug] = { name: f.name || f.slug, image_url: f.image_url || "" };
+        if(f.slug) figureCache[f.slug] = { name: f.name || f.slug, image_url: f.image_url || "", description: "" };
         const opt=document.createElement('option'); opt.value=f.slug; opt.textContent=f.name || f.slug; figureSelect.appendChild(opt);
       });
     }
@@ -187,6 +215,8 @@
         el.appendChild(thumb); el.appendChild(meta);
         el.addEventListener('click', () => selectThread(t.id));
         threadsEl.appendChild(el);
+      } else {
+        el.className = 'thread-item' + (t.id === currentThreadId ? ' active' : '');
       }
     }
 
@@ -197,25 +227,28 @@
       if(!currentThreadId && data.length) await selectThread(data[0].id);
     }
 
-    async function applyFigureUI(slug){
+    function setFigureHero(info){
       const fallback = '/static/icon-192.png';
       const fallback2 = '/static/logo.png';
-      if (!slug){
-        currentFigure.textContent = 'Figure: none';
-        figureAvatar.src = fallback;
-        return;
-      }
-      const info = await getFigure(slug);
-      currentFigure.textContent = `Figure: ${info.name}`;
-      figureAvatar.src = info.image_url || fallback;
+      figureHeroImg.src = info && info.image_url ? info.image_url : fallback;
+      figureHeroImg.onerror = function(){ this.onerror=null; this.src=fallback; this.onerror=()=>{ this.src=fallback2; }; };
+      figureAvatar.src = info && info.image_url ? info.image_url : fallback;
       figureAvatar.onerror = function(){ this.onerror=null; this.src=fallback; this.onerror=()=>{ this.src=fallback2; }; };
+      currentFigure.textContent = info && info.name ? `Figure: ${info.name}` : 'Figure: none';
+      figureDesc.textContent = info && info.description ? info.description : '';
     }
 
     async function loadThreadMeta(threadId){
       const meta=await jsonGET(`/threads/${threadId}`);
       titleInput.value=meta.title || 'New thread';
-      await applyFigureUI(meta.figure_slug || null);
-      figureSelect.value=meta.figure_slug || '';
+      if (meta.figure_slug){
+        const info = await getFigure(meta.figure_slug);
+        setFigureHero(info);
+        figureSelect.value=meta.figure_slug || '';
+      } else {
+        setFigureHero(null);
+        figureSelect.value='';
+      }
       return meta;
     }
 
@@ -228,7 +261,7 @@
           await jsonPATCH(`/threads/${currentThreadId}/figure`,{figure_slug:figureFromQuery});
           await loadThreadMeta(currentThreadId);
           history.replaceState({},'',window.location.pathname);
-        }catch(e){ console.warn('Could not set figure from query:', e); }
+        }catch(e){}
         finally{ appliedQueryFigure=true; }
       }
 
@@ -263,25 +296,27 @@
         const info = meta.figure_slug ? await getFigure(meta.figure_slug) : null;
         const thinker=(info && info.name) || 'The historian';
         setStatus(`${thinker} is thinking…`);
-
         const form=new URLSearchParams();
         form.set('user_id', String(userId));
         form.set('message', text);
         form.set('thread_id', String(currentThreadId));
-
         const resp=await fetch('/complete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:form.toString()});
         if(resp.status!==303 && resp.status!==200) throw new Error('Send failed');
-
-        messageInput.value=''; await renderMessages(); setStatus('');
-      }catch(err){ console.error(err); setStatus('Send failed. Please try again.','err'); }
-      finally{ sending=false; sendBtn.disabled=false; messageInput.focus(); }
+        messageInput.value='';
+        await renderMessages();
+        setStatus('');
+      }catch(err){
+        setStatus('Send failed. Please try again.','err');
+      }finally{
+        sending=false; sendBtn.disabled=false; messageInput.focus();
+      }
     }
 
     newThreadBtn.addEventListener('click', async ()=>{
       try{
         const created=await jsonPOSTAuth('/threads',{user_id:userId,title:'New thread'});
         const newId=created.thread_id; await listThreads(); if(newId) await selectThread(newId);
-      }catch(e){ alert('Could not create thread'); console.error(e); }
+      }catch(e){}
     });
 
     messageForm.addEventListener('submit',(e)=>{ e.preventDefault(); sendMessage(); });
@@ -291,7 +326,7 @@
       if(!currentThreadId) return;
       const newTitle=titleInput.value.trim(); if(!newTitle) return;
       try{ await jsonPATCH(`/threads/${currentThreadId}/title`,{title:newTitle}); await listThreads(); }
-      catch(e){ alert('Rename failed'); console.error(e); }
+      catch(e){}
     });
 
     figureSelect.addEventListener('change', async ()=>{
@@ -299,9 +334,14 @@
       const slug=figureSelect.value || null;
       try{
         await jsonPATCH(`/threads/${currentThreadId}/figure`,{figure_slug:slug});
-        await applyFigureUI(slug);
+        if (slug){
+          const info=await getFigure(slug);
+          setFigureHero(info);
+        } else {
+          setFigureHero(null);
+        }
         await listThreads();
-      }catch(e){ alert('Failed to update figure'); console.error(e); }
+      }catch(e){}
     });
 
     logoutBtn.addEventListener('click', ()=>{
