@@ -1,155 +1,135 @@
 (function () {
-  function base() {
-    const { protocol, host } = window.location;
-    return `${protocol}//${host}`;
+  const form = document.getElementById("login-form");
+  if (!form) return;
+
+  const emailEl = document.getElementById("email");
+  const passwordEl = document.getElementById("password");
+  const loginBtn = document.getElementById("login-btn");
+  const registerBtn = document.getElementById("register-btn");
+  const msgEl = document.getElementById("message");
+  const gdprEl = document.getElementById("gdpr-consent");
+  const aiAckEl = document.getElementById("ai-ack");
+
+  function showError(text) {
+    msgEl.textContent = text || "Something went wrong.";
+    msgEl.style.display = "block";
+    msgEl.style.color = "#fecaca";
+  }
+  function showInfo(text) {
+    msgEl.textContent = text || "";
+    msgEl.style.display = text ? "block" : "none";
+    msgEl.style.color = "#9cc3c8";
+  }
+  function clearMsg() {
+    msgEl.textContent = "";
+    msgEl.style.display = "none";
   }
 
-  function qs(sel) {
-    return document.querySelector(sel);
+  function storeAuth(data) {
+    if (!data || !data.access_token) throw new Error("No token in response");
+    localStorage.setItem("access_token", data.access_token);
+    if (data.user_id != null) localStorage.setItem("user_id", String(data.user_id));
+    if (data.username) localStorage.setItem("username", data.username);
   }
 
-  function el(tag, props = {}, ...children) {
-    const node = document.createElement(tag);
-    Object.entries(props).forEach(([k, v]) => {
-      if (k === 'class') node.className = v;
-      else if (k === 'html') node.innerHTML = v;
-      else node.setAttribute(k, v);
-    });
-    children.forEach((c) => node.appendChild(c));
-    return node;
+  function validEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
-  function showError(id, msg) {
-    const box = qs(id);
-    if (!box) return;
-    box.textContent = msg;
-    box.style.display = 'block';
+  function strongEnough(pw) {
+    if (typeof pw !== "string" || pw.length < 8) return false;
+    const hasUpper = /[A-Z]/.test(pw);
+    const hasLower = /[a-z]/.test(pw);
+    const hasNum = /[0-9]/.test(pw);
+    const hasSpecial = /[^A-Za-z0-9]/.test(pw);
+    return hasUpper && hasLower && hasNum && hasSpecial;
   }
 
-  const URL_PARAMS = new URLSearchParams(window.location.search);
-  const PARAM_FIGURE = URL_PARAMS.get('figure');
+  async function login() {
+    clearMsg();
+    const email = (emailEl.value || "").trim();
+    const password = passwordEl.value || "";
+    if (!validEmail(email)) {
+      showError("Enter a valid email address.");
+      emailEl.focus();
+      return;
+    }
+    if (!password) {
+      showError("Password is required.");
+      passwordEl.focus();
+      return;
+    }
 
-  function stashPendingFigure(slug) {
-    if (slug) localStorage.setItem('pending_figure_slug', slug);
-  }
-  function popPendingFigure() {
-    const v = localStorage.getItem('pending_figure_slug');
-    if (v) localStorage.removeItem('pending_figure_slug');
-    return v;
-  }
-
-  async function postForm(url, fields) {
-    const fd = new FormData();
-    Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
-    const res = await fetch(url, { method: 'POST', body: fd });
-    let body = {};
     try {
-      body = await res.json();
-    } catch (_) {}
-    if (!res.ok) {
-      const detail = body && body.detail ? body.detail : res.statusText || 'Request failed';
-      throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
-    }
-    return body;
-  }
-
-  function storeAuth(payload) {
-    if (payload && payload.access_token) localStorage.setItem('access_token', payload.access_token);
-    if (payload && payload.user_id != null) localStorage.setItem('user_id', String(payload.user_id));
-    if (payload && payload.username) localStorage.setItem('username', payload.username);
-  }
-
-  async function doLogin() {
-    const username = qs('#username')?.value?.trim() || '';
-    const password = qs('#password')?.value || '';
-    if (PARAM_FIGURE) stashPendingFigure(PARAM_FIGURE);
-    const resp = await postForm(`${base()}/auth/login`, { username, password });
-    storeAuth(resp);
-    const userId = resp.user_id || resp.id;
-    if (!userId) throw new Error('Missing user_id in response');
-    const pending = popPendingFigure();
-    const suffix = pending ? `?figure=${encodeURIComponent(pending)}` : '';
-    window.location.href = `${base()}/user/${userId}/threads${suffix}`;
-  }
-
-  async function doRegister() {
-    const username = qs('#username')?.value?.trim() || '';
-    const password = qs('#password')?.value || '';
-    if (PARAM_FIGURE) stashPendingFigure(PARAM_FIGURE);
-    const reg = await postForm(`${base()}/auth/register`, { username, password });
-    let userId = reg.user_id || reg.id;
-    if (!userId) {
-      const login = await postForm(`${base()}/auth/login`, { username, password });
-      storeAuth(login);
-      userId = login.user_id || login.id;
-    } else {
-      storeAuth(reg);
-    }
-    if (!userId) throw new Error('Missing user_id in response');
-    const pending = popPendingFigure();
-    const suffix = pending ? `?figure=${encodeURIComponent(pending)}` : '';
-    window.location.href = `${base()}/user/${userId}/threads${suffix}`;
-  }
-
-  document.addEventListener(
-    'submit',
-    function (e) {
-      const t = e.target;
-      if (!(t instanceof HTMLFormElement)) return;
-      if (t.id === 'login-form') {
-        e.preventDefault();
-        doLogin().catch((err) => showError('#message', err.message || 'Request failed'));
-      } else if (t.id === 'register-form') {
-        e.preventDefault();
-        doRegister().catch((err) => showError('#message', err.message || 'Request failed'));
+      showInfo("Signing you in…");
+      const res = await fetch("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: email, password })
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        showError(text || `Login failed (${res.status}).`);
+        return;
       }
-    },
-    true
-  );
-
-  window.addEventListener('DOMContentLoaded', async function () {
-    const list = qs('#figures-list');
-    if (list) {
-      try {
-        const res = await fetch(`${base()}/figures/`);
-        const data = await res.json();
-        list.innerHTML = '';
-        data.forEach((item) => {
-          const card = el('div', { class: 'card' });
-          const img = el('img', {
-            src: item.image_url || '/static/icon-192.png',
-            alt: item.name,
-            class: 'card-img'
-          });
-          img.onerror = function () {
-            this.onerror = null;
-            this.src = '/static/icon-192.png';
-            this.onerror = () => { this.src = '/static/logo.png'; };
-          };
-          const title = el('h3', { class: 'card-title', html: item.name });
-          const meta = el('p', {
-            class: 'card-meta',
-            html: [item.era, item.roles].filter(Boolean).join(' • ')
-          });
-          const userId = localStorage.getItem('user_id');
-          const target = userId
-            ? `/user/${userId}/threads?figure=${encodeURIComponent(item.slug)}`
-            : `/?figure=${encodeURIComponent(item.slug)}`;
-          const link = el('a', { class: 'button', href: target }, document.createTextNode('Ask this figure'));
-          card.appendChild(img);
-          card.appendChild(title);
-          card.appendChild(meta);
-          card.appendChild(link);
-          list.appendChild(card);
-        });
-      } catch (err) {
-        showError('#figures-error', err.message || 'Failed to load figures.');
-      }
+      const data = await res.json();
+      storeAuth(data);
+      const uid = data.user_id ?? localStorage.getItem("user_id");
+      window.location.href = `/user/${uid}/threads`;
+    } catch {
+      showError("Network error during login.");
     }
-  });
+  }
 
-  window.__pit_params__ = {
-    figureFromQuery: PARAM_FIGURE || null,
-    popPendingFigure
-  };
+  async function register() {
+    clearMsg();
+    const email = (emailEl.value || "").trim();
+    const password = passwordEl.value || "";
+    const gdprConsent = !!gdprEl?.checked;
+    const aiAck = !!aiAckEl?.checked;
+
+    if (!validEmail(email)) {
+      showError("Enter a valid email address to register.");
+      emailEl.focus();
+      return;
+    }
+    if (!strongEnough(password)) {
+      showError("Password must include uppercase, lowercase, number, and special character.");
+      passwordEl.focus();
+      return;
+    }
+    if (!gdprConsent || !aiAck) {
+      showError("Please accept the GDPR consent and AI disclosure to register.");
+      return;
+    }
+
+    try {
+      showInfo("Creating your account…");
+      const res = await fetch("/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: email,
+          email,
+          password,
+          gdpr_consent: gdprConsent,
+          ai_ack: aiAck
+        })
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        showError(text || `Registration failed (${res.status}).`);
+        return;
+      }
+      const data = await res.json();
+      storeAuth(data);
+      const uid = data.user_id ?? localStorage.getItem("user_id");
+      window.location.href = `/user/${uid}/threads`;
+    } catch {
+      showError("Network error during registration.");
+    }
+  }
+
+  loginBtn.addEventListener("click", (e) => { e.preventDefault(); login(); });
+  registerBtn.addEventListener("click", (e) => { e.preventDefault(); register(); });
 })();

@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=brand-8" />
+  <link rel="stylesheet" href="/static/style.css?v=brand-9" />
   <style>
     .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50}
     .modal{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);max-width:520px;width:92%;padding:18px}
@@ -123,7 +123,7 @@
 
     let started = false;
     let figureDisplayName = null;
-    let qaCount = 0;  // hard guest limit
+    let qaCount = 0;
 
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
     function setStatus(msg, cls){ statusEl.className = 'status' + (cls ? ' ' + cls : ''); statusEl.textContent = msg || ''; }
@@ -161,13 +161,27 @@
       const name = (fig && (fig.name || formatSlugToName(slug))) || formatSlugToName(slug);
       const imageUrl = fig && fig.image_url ? fig.image_url : '';
       const desc = bio || (fig && (fig.description || fig.summary || fig.persona_prompt || "")) || "";
-
       figureDisplayName = name;
       setHero(imageUrl, name, cleanDesc(desc));
 
-      setStatus('Session ready.');
-      started = true;
-      disableInput(false);
+      setStatus('Starting session…');
+      try {
+        const res = await fetch(`/guest/start/${encodeURIComponent(slug)}`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+        if (!res.ok) {
+          setStatus(`Error ${res.status}: Failed to start session.`, 'err');
+          disableInput(true);
+          return;
+        }
+        setStatus('Session ready.');
+        started = true;
+        disableInput(false);
+      } catch (e) {
+        setStatus('Network error while starting session.', 'err');
+        disableInput(true);
+      }
     }
 
     async function ask() {

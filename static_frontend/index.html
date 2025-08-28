@@ -2,26 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Places in Time — Login</title>
+  <title>Places in Time — Sign in / Register</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="/static/pit-favicon-mark.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png">
-  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
   <link rel="manifest" href="/static/site.webmanifest">
   <meta name="theme-color" content="#0b1020">
-  <link href="/static/style.css?v=brand-6" rel="stylesheet">
-  <script defer src="/static/main.js?v=brand-6"></script>
+  <link href="/static/style.css?v=gdpr-4" rel="stylesheet">
+  <script defer src="/static/main.js?v=gdpr-4"></script>
   <style>
-    .auth-wrap { max-width: 520px; margin: 24px auto; padding: 0 16px; }
+    .auth-wrap { max-width: 560px; margin: 24px auto; padding: 0 16px; }
     .auth-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 16px; }
-    .row { margin-bottom: 0.75rem; display: flex; flex-direction: column; }
-    label { font-size: 0.9rem; margin-bottom: 0.25rem; }
-    input { padding: 0.6rem 0.7rem; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; background: #0a1228; color: var(--text); }
-    .actions { display: flex; gap: 10px; justify-content: center; }
-    .muted { color: var(--muted); font-size: 0.9rem; margin-top: 0.5rem; text-align: center; }
+    .row { margin-bottom: 0.85rem; display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: 0.95rem; }
+    input[type="email"], input[type="password"] {
+      padding: 0.6rem 0.7rem; border: 1px solid rgba(255,255,255,.12);
+      border-radius: 10px; background: #0a1228; color: var(--text);
+    }
+    .hint { color: var(--muted); font-size: 0.88rem; line-height: 1.35; }
+    .actions { display: flex; gap: 10px; justify-content: center; margin-top: 8px; }
+    .muted { color: var(--muted); font-size: 0.9rem; }
     .error { color: #fecaca; margin-top: 0.5rem; display: none; }
+    .consents { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+    .consents .item { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0; }
+    .consents input[type="checkbox"] { margin-top: 3px; }
+    .consents small { color: var(--muted); line-height: 1.35; }
+    .legal-links { text-align: center; margin-top: 10px; }
+    .legal-links a { color: var(--accent); }
   </style>
 </head>
 <body>
@@ -33,29 +40,58 @@
         </div>
         <div class="brand-title">
           <h1>Places in Time</h1>
-          <div class="muted">Sign in to view your threads</div>
+          <div class="muted">Sign in or create an account</div>
         </div>
       </div>
     </div>
 
     <div class="auth-wrap">
       <div class="auth-card">
-        <form id="login-form">
+        <form id="login-form" novalidate>
           <div class="row">
-            <label for="username">Username</label>
-            <input id="username" name="username" autocomplete="username" required>
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@example.com" required>
+            <div class="hint">
+              Use a valid, reachable email (format: name@domain.tld). This will serve as your account ID.
+            </div>
           </div>
+
           <div class="row">
             <label for="password">Password</label>
             <input id="password" name="password" type="password" autocomplete="current-password" required>
+            <div class="hint">
+              Must be at least 8 characters and include: uppercase, lowercase, number, and special character.
+            </div>
           </div>
+
           <div class="actions">
-            <button class="btn btn-primary" type="submit">Log in</button>
-            <button class="btn" type="submit" id="register-form">Register</button>
+            <button class="btn btn-primary" id="login-btn" type="button">Sign in</button>
+            <button class="btn" id="register-btn" type="button">Register</button>
           </div>
+
+          <div class="consents">
+            <div class="item">
+              <input id="gdpr-consent" type="checkbox">
+              <label for="gdpr-consent">
+                <small>I consent to the processing of my personal data for providing my account, as described in the Privacy Notice.</small>
+              </label>
+            </div>
+            <div class="item">
+              <input id="ai-ack" type="checkbox">
+              <label for="ai-ack">
+                <small>I understand my messages are processed by AI systems and may be stored to provide the service and improve safety. I will not submit special-category data.</small>
+              </label>
+            </div>
+            <div class="legal-links">
+              <small>
+                <a href="/static/privacy.html" target="_blank" rel="noopener">Privacy Notice (GDPR)</a> ·
+                <a href="/static/ai-disclaimer.html" target="_blank" rel="noopener">AI Use Disclosure</a>
+              </small>
+            </div>
+          </div>
+
           <div id="message" class="error" role="alert"></div>
         </form>
-        <p class="muted">You can use the same fields to register if you don’t have an account.</p>
       </div>
     </div>
   </div>

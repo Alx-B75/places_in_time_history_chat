@@ -9,3 +9,5 @@ pydantic>=2,<3
 openai
 chromadb
 python-multipart
+pydantic>=2
+email-validator>=2
