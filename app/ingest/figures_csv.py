@@ -21,7 +21,7 @@ Integer fields:
 import csv
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -194,12 +194,15 @@ def upsert_figures_from_csv(
     Returns
     -------
     dict
-        Ingestion report with counts and errors.
+        Ingestion report with counts, headers, and errors.
     """
     added = 0
     updated = 0
     skipped = 0
+    skipped_missing_required = 0
     errors: List[str] = []
+    headers: List[str] = []
+    total_rows = 0
 
     if not csv_path.exists():
         return {
@@ -209,21 +212,30 @@ def upsert_figures_from_csv(
             "added": 0,
             "updated": 0,
             "skipped": 0,
+            "skipped_missing_required": 0,
+            "total_rows": 0,
+            "headers": [],
             "errors": ["CSV path does not exist"],
         }
 
     with csv_path.open("r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        row_count = 0
+        headers = reader.fieldnames or []
+
+        effective_map = header_map.copy()
+        if not effective_map and headers:
+            effective_map = {h: h for h in headers}
+
         for row in reader:
-            row_count += 1
+            total_rows += 1
             try:
-                norm = _normalize_row(row, header_map)
+                norm = _normalize_row(row, effective_map)
                 slug = str(norm.get("slug", "")).strip().lower()
                 name = norm.get("name")
 
                 if not slug or not name:
                     skipped += 1
+                    skipped_missing_required += 1
                     continue
 
                 existing = (
@@ -246,7 +258,7 @@ def upsert_figures_from_csv(
                 if (added + updated + skipped) % batch_commit == 0:
                     db.commit()
             except Exception as exc:
-                errors.append(f"row {row_count}: {exc!r}")
+                errors.append(f"row {total_rows}: {exc!r}")
                 skipped += 1
 
         db.commit()
@@ -257,5 +269,8 @@ def upsert_figures_from_csv(
         "added": added,
         "updated": updated,
         "skipped": skipped,
+        "skipped_missing_required": skipped_missing_required,
+        "total_rows": total_rows,
+        "headers": headers,
         "errors": errors,
     }
