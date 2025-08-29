@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: places-in-time-history-chat
+    env: python
+    region: frankfurt
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:$PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: CHAT_DB_PATH
+        value: /data/chat.db
+      - key: FIGURES_DB_PATH
+        value: /data/figures.db
+      - key: ALLOWED_ORIGINS
+        value: "http://localhost:8000,https://places-in-time-chatbot.onrender.com,https://www.places-in-time.com"
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1

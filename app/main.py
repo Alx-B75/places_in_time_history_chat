@@ -5,6 +5,10 @@ for the landing page and the user threads page, a guest page route that
 renders the guest chat client at `/guest/{slug}`, convenience routes for
 legacy asset paths, robust favicon handling, and a static mount for other
 assets under `/static`.
+
+CORS origins are configurable via the ALLOWED_ORIGINS environment variable
+as a comma-separated list. If not set, a sensible default is used for local
+development and the Render static host.
 """
 
 import os
@@ -31,12 +35,26 @@ app = FastAPI(redirect_slashes=True)
 BASE_DIR = Path(__file__).resolve().parents[1]
 STATIC_DIR = BASE_DIR / "static_frontend"
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+
+def _allowed_origins() -> List[str]:
+    """
+    Resolve allowed CORS origins.
+
+    Reads ALLOWED_ORIGINS as a comma-separated list. If unset, defaults to
+    localhost and the deployed static host used during development.
+    """
+    raw = os.getenv("ALLOWED_ORIGINS")
+    if raw:
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    return [
         "http://localhost:8000",
         "https://places-in-time-chatbot.onrender.com",
-    ],
+    ]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
