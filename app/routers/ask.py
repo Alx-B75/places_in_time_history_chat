@@ -18,7 +18,14 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 def get_figure_db() -> Generator[Session, None, None]:
-    """Yield a SQLAlchemy session bound to the figures database."""
+    """
+    Yield a SQLAlchemy session bound to the figures database.
+
+    Yields
+    ------
+    sqlalchemy.orm.Session
+        Database session for the figures database.
+    """
     db = FigureSessionLocal()
     try:
         yield db
@@ -26,17 +33,27 @@ def get_figure_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def _build_system_prompt(
-    figure: Optional[models.HistoricalFigure],
-) -> str:
-    """Return a system prompt using a figure’s persona if available."""
+def _build_system_prompt(figure: Optional[models.HistoricalFigure]) -> str:
+    """
+    Return a system prompt using a figure’s persona if available.
+
+    Parameters
+    ----------
+    figure : app.models.HistoricalFigure | None
+        The historical figure associated with the request.
+
+    Returns
+    -------
+    str
+        The system prompt text to seed the assistant.
+    """
     if figure and getattr(figure, "persona_prompt", None):
         return figure.persona_prompt
     if figure:
         return (
             f"You are {figure.name}, a historical figure. "
-            f"Answer clearly, accurately, and concisely for curious readers. "
-            f"If something is uncertain or debated, state that explicitly."
+            "Answer clearly, accurately, and concisely for curious readers. "
+            "If something is uncertain or debated, state that explicitly."
         )
     return (
         "You are a helpful and accurate historical guide. "
@@ -44,8 +61,25 @@ def _build_system_prompt(
     )
 
 
-def _compact_context(contexts: List[Dict[str, Any]], max_chars: int = 4000) -> Tuple[str, List[Dict[str, Any]]]:
-    """Compact context entries into a single string under a character budget and return sources."""
+def _compact_context(
+    contexts: List[Dict[str, Any]],
+    max_chars: int = 4000,
+) -> Tuple[str, List[Dict[str, Any]]]:
+    """
+    Compact context entries into a single string under a character budget and return sources.
+
+    Parameters
+    ----------
+    contexts : list[dict]
+        List of context records for the figure.
+    max_chars : int
+        Character budget for the compacted context text.
+
+    Returns
+    -------
+    tuple[str, list[dict]]
+        The compacted context text and a list of source descriptors.
+    """
     if not contexts:
         return "", []
     pieces: List[str] = []
@@ -55,8 +89,6 @@ def _compact_context(contexts: List[Dict[str, Any]], max_chars: int = 4000) -> T
         src = c.get("source_name") or "source"
         url = c.get("source_url")
         text = c.get("content") or ""
-        if not text:
-            continue
         snippet = text.strip()
         if not snippet:
             continue
@@ -69,8 +101,20 @@ def _compact_context(contexts: List[Dict[str, Any]], max_chars: int = 4000) -> T
     return "\n\n".join(pieces), sources
 
 
-def _figure_context_payload(figure) -> List[Dict[str, Any]]:
-    """Convert a HistoricalFigure with .contexts into a list of plain dicts."""
+def _figure_context_payload(figure: Optional[models.HistoricalFigure]) -> List[Dict[str, Any]]:
+    """
+    Convert a HistoricalFigure with .contexts into a list of plain dicts.
+
+    Parameters
+    ----------
+    figure : app.models.HistoricalFigure | None
+        The historical figure instance.
+
+    Returns
+    -------
+    list[dict]
+        List of context dictionaries suitable for compaction.
+    """
     results: List[Dict[str, Any]] = []
     if not figure or not getattr(figure, "contexts", None):
         return results
@@ -95,7 +139,17 @@ def ask(
     db_fig: Session = Depends(get_figure_db),
     current_user: models.User = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Answer a user question with optional figure context, enforcing ownership and persisting messages."""
+    """
+    Answer a user question with optional figure context, enforcing ownership and persisting messages.
+
+    The associated figure is resolved with the following precedence:
+    1) If a thread_id is supplied and the thread has a figure_slug, use that.
+    2) Otherwise, if payload.figure_slug is provided, use that.
+    3) Otherwise, no figure persona/context is applied.
+
+    If no thread_id is provided, a new thread is created. When creating a new
+    thread and a figure_slug is provided, the thread is initialized with that figure.
+    """
     if current_user.id != payload.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
@@ -114,6 +168,12 @@ def ask(
         )
         thread = crud.create_thread(db, thread_in)
 
+    resolved_slug: Optional[str] = None
+    if thread and getattr(thread, "figure_slug", None):
+        resolved_slug = thread.figure_slug
+    elif payload.figure_slug:
+        resolved_slug = payload.figure_slug
+
     user_msg = schemas.ChatMessageCreate(
         user_id=current_user.id,
         role="user",
@@ -124,10 +184,7 @@ def ask(
     )
     crud.create_chat_message(db, user_msg)
 
-    figure = None
-    if payload.figure_slug:
-        figure = crud.get_figure_by_slug(db_fig, payload.figure_slug)
-
+    figure = crud.get_figure_by_slug(db_fig, resolved_slug) if resolved_slug else None
     system_prompt = _build_system_prompt(figure)
     contexts = _figure_context_payload(figure) if figure else []
     ctx_text, sources = _compact_context(contexts, max_chars=4000)
