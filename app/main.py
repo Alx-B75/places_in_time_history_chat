@@ -19,7 +19,7 @@ when the seed CSV content has changed.
 import logging
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Tuple
 
 import uvicorn
 from dotenv import load_dotenv
@@ -37,7 +37,7 @@ from app.database import get_db_chat
 from app.figures_database import FigureBase
 from app.figures_database import SQLALCHEMY_DATABASE_URL as FIGURES_DB_URL
 from app.figures_database import engine as figures_engine
-from app.routers import ask, auth, chat, figures, guest
+from app.routers import admin, ask, auth, chat, figures, guest
 from app.utils.security import get_current_user
 
 load_dotenv()
@@ -69,6 +69,7 @@ def _allowed_origins() -> List[str]:
     return [
         "http://localhost:8000",
         "https://places-in-time-chatbot.onrender.com",
+        "https://places-in-time-history-chat.onrender.com",
     ]
 
 
@@ -85,6 +86,7 @@ app.include_router(chat.router)
 app.include_router(figures.router)
 app.include_router(ask.router)
 app.include_router(guest.router)
+app.include_router(admin.router)
 
 
 @app.on_event("startup")
