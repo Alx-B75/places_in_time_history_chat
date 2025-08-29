@@ -9,8 +9,13 @@ assets under `/static`.
 CORS origins are configurable via the ALLOWED_ORIGINS environment variable
 as a comma-separated list. If not set, a sensible default is used for local
 development and the Render static host.
+
+On startup, the application logs the active database URLs and ensures that
+database tables exist for both the primary chat database and the figures
+database.
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import List
@@ -24,11 +29,20 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
+from app.database import Base as ChatBase
+from app.database import SQLALCHEMY_DATABASE_URL as CHAT_DB_URL
+from app.database import engine as chat_engine
 from app.database import get_db_chat
+from app.figures_database import FigureBase
+from app.figures_database import SQLALCHEMY_DATABASE_URL as FIGURES_DB_URL
+from app.figures_database import engine as figures_engine
 from app.routers import ask, auth, chat, figures, guest
 from app.utils.security import get_current_user
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("places-in-time")
 
 app = FastAPI(redirect_slashes=True)
 
@@ -42,6 +56,11 @@ def _allowed_origins() -> List[str]:
 
     Reads ALLOWED_ORIGINS as a comma-separated list. If unset, defaults to
     localhost and the deployed static host used during development.
+
+    Returns
+    -------
+    list[str]
+        List of allowed origins.
     """
     raw = os.getenv("ALLOWED_ORIGINS")
     if raw:
@@ -67,9 +86,33 @@ app.include_router(ask.router)
 app.include_router(guest.router)
 
 
+@app.on_event("startup")
+def on_startup() -> None:
+    """
+    Initialize databases and log configuration details.
+
+    This logs the active database URLs and ensures that required tables
+    exist in both the chat and figures databases.
+    """
+    _ = models
+    logger.info("Starting Places in Time service")
+    logger.info("Chat DB URL: %s", CHAT_DB_URL)
+    logger.info("Figures DB URL: %s", FIGURES_DB_URL)
+    ChatBase.metadata.create_all(bind=chat_engine)
+    FigureBase.metadata.create_all(bind=figures_engine)
+    logger.info("Database schema ensured for chat and figures")
+
+
 @app.get("/health")
 def health() -> JSONResponse:
-    """Return a simple health check payload."""
+    """
+    Return a simple health check payload.
+
+    Returns
+    -------
+    fastapi.responses.JSONResponse
+        Health status payload.
+    """
     return JSONResponse({"ok": True})
 
 
@@ -82,7 +125,28 @@ def list_user_threads(
     db: Session = Depends(get_db_chat),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Return all threads for the authenticated user."""
+    """
+    Return all threads for the authenticated user.
+
+    Parameters
+    ----------
+    user_id : int
+        Target user identifier.
+    db : sqlalchemy.orm.Session
+        Database session dependency.
+    current_user : app.models.User
+        Authenticated user model.
+
+    Returns
+    -------
+    list[app.schemas.ThreadRead]
+        List of thread records for the user.
+
+    Raises
+    ------
+    fastapi.HTTPException
+        If the requester does not own the requested threads.
+    """
     if current_user.id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -93,55 +157,128 @@ def list_user_threads(
 
 @app.get("/", response_class=FileResponse)
 def serve_index() -> FileResponse:
-    """Serve the landing page HTML."""
+    """
+    Serve the landing page HTML.
+
+    Returns
+    -------
+    fastapi.responses.FileResponse
+        HTML file response.
+    """
     return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
 
 
 @app.get("/user/{user_id}/threads", response_class=FileResponse)
 def serve_threads_page(user_id: int) -> FileResponse:
-    """Serve the threads page HTML for a user."""
+    """
+    Serve the threads page HTML for a user.
+
+    Parameters
+    ----------
+    user_id : int
+        User identifier.
+
+    Returns
+    -------
+    fastapi.responses.FileResponse
+        HTML file response.
+    """
     return FileResponse(STATIC_DIR / "threads.html", media_type="text/html")
 
 
 @app.get("/guest/{slug}", response_class=FileResponse)
 def serve_guest_page(slug: str) -> FileResponse:
-    """Serve the guest chat page for a specific figure slug."""
+    """
+    Serve the guest chat page for a specific figure slug.
+
+    Parameters
+    ----------
+    slug : str
+        Historical figure slug.
+
+    Returns
+    -------
+    fastapi.responses.FileResponse
+        HTML file response.
+    """
     return FileResponse(STATIC_DIR / "guest.html", media_type="text/html")
 
 
 @app.get("/ui/figures", response_class=FileResponse)
 def serve_figures_ui() -> FileResponse:
-    """Serve a UI page listing figures that link to Ask."""
+    """
+    Serve a UI page listing figures that link to Ask.
+
+    Returns
+    -------
+    fastapi.responses.FileResponse
+        HTML file response.
+    """
     return FileResponse(STATIC_DIR / "figures.html", media_type="text/html")
 
 
 @app.get("/main.js", response_class=FileResponse)
 def serve_main_js() -> FileResponse:
-    """Serve main.js from static_frontend for legacy paths."""
+    """
+    Serve main.js from static_frontend for legacy paths.
+
+    Returns
+    -------
+    fastapi.responses.FileResponse
+        JavaScript file response.
+    """
     return FileResponse(STATIC_DIR / "main.js", media_type="application/javascript")
 
 
 @app.get("/style.css", response_class=FileResponse)
 def serve_style_css() -> FileResponse:
-    """Serve style.css from static_frontend for legacy paths."""
+    """
+    Serve style.css from static_frontend for legacy paths.
+
+    Returns
+    -------
+    fastapi.responses.FileResponse
+        CSS file response.
+    """
     return FileResponse(STATIC_DIR / "style.css", media_type="text/css")
 
 
 @app.get("/logo.png", response_class=FileResponse)
 def serve_logo_png() -> FileResponse:
-    """Serve logo.png from static_frontend for legacy paths."""
+    """
+    Serve logo.png from static_frontend for legacy paths.
+
+    Returns
+    -------
+    fastapi.responses.FileResponse
+        PNG image file response.
+    """
     return FileResponse(STATIC_DIR / "logo.png", media_type="image/png")
 
 
 @app.get("/threads_visual.png", response_class=FileResponse)
 def serve_threads_visual() -> FileResponse:
-    """Serve threads_visual.png from static_frontend for legacy paths."""
+    """
+    Serve threads_visual.png from static_frontend for legacy paths.
+
+    Returns
+    -------
+    fastapi.responses.FileResponse
+        PNG image file response.
+    """
     return FileResponse(STATIC_DIR / "threads_visual.png", media_type="image/png")
 
 
 @app.get("/favicon.ico")
 def serve_favicon_ico() -> Response:
-    """Serve a stable favicon, preferring ICO, then app icon PNG."""
+    """
+    Serve a stable favicon, preferring ICO, then app icon PNG.
+
+    Returns
+    -------
+    fastapi.responses.Response
+        ICO or PNG favicon response, or 404.
+    """
     candidates = [
         STATIC_DIR / "pit-favicon-mark.ico",
         STATIC_DIR / "favicon.ico",
@@ -156,7 +293,14 @@ def serve_favicon_ico() -> Response:
 
 @app.get("/favicon.svg")
 def serve_favicon_svg() -> Response:
-    """Serve the SVG favicon if present, otherwise 404."""
+    """
+    Serve the SVG favicon if present.
+
+    Returns
+    -------
+    fastapi.responses.Response
+        SVG favicon response, or 404.
+    """
     svg_path = STATIC_DIR / "favicon.svg"
     if svg_path.exists():
         return FileResponse(svg_path, media_type="image/svg+xml")
