@@ -22,7 +22,7 @@ from openai import OpenAI
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, selectinload
 
-from app import models, schemas
+from app import models, schemas, crud
 from app.crud import create_chat_message, create_thread
 from app.database import get_db_chat
 from app.figures_database import FigureSessionLocal
@@ -97,11 +97,17 @@ def _set_guest_cookie(response: Response, token: str, ttl: timedelta, secure_coo
     )
 
 
-def _build_system_prompt(figure: models.HistoricalFigure) -> str:
-    """Compose a system prompt for the selected historical figure."""
-    if getattr(figure, "persona_prompt", None):
-        return figure.persona_prompt
-    name = figure.name or "a historical figure"
+def _build_system_prompt(figure_db: Session, slug: str) -> str:
+    """
+    Compose a system prompt for the selected historical figure.
+
+    Uses persona_prompt if set; otherwise a generic fallback.
+    """
+    persona = crud.get_figure_persona(figure_db, slug)
+    if persona:
+        return persona
+    figure = crud.get_figure_by_slug(figure_db, slug)
+    name = figure.name if figure else slug
     return (
         f"You are {name}. Answer concisely and accurately. "
         "If you are unsure, say so and explain what would be needed to answer."
@@ -174,11 +180,7 @@ def start_guest_session(
 ) -> GuestStartResponse:
     """Create a new guest session for a given figure and set the session cookie."""
     limits = _get_limits()
-    figure = (
-        figure_db.query(models.HistoricalFigure)
-        .filter(models.HistoricalFigure.slug == figure_slug)
-        .first()
-    )
+    figure = crud.get_figure_by_slug(figure_db, slug=figure_slug)
     if not figure:
         raise HTTPException(status_code=404, detail="Figure not found")
     token = secrets.token_urlsafe(32)
@@ -226,11 +228,7 @@ def guest_ask(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Guest question limit reached",
         )
-    figure = (
-        figure_db.query(models.HistoricalFigure)
-        .filter(models.HistoricalFigure.slug == session.figure_slug)
-        .first()
-    )
+    figure = crud.get_figure_by_slug(figure_db, slug=session.figure_slug)
     if not figure:
         raise HTTPException(status_code=404, detail="Figure not found for this session")
     db.add(
@@ -243,7 +241,7 @@ def guest_ask(
     )
     session.question_count += 1
     db.commit()
-    system_prompt = _build_system_prompt(figure)
+    system_prompt = _build_system_prompt(figure_db, figure.slug)
     context_info = _build_context_snippet(figure_db, figure.slug)
     llm_out = _call_llm(
         system_prompt,
