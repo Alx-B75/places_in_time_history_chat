@@ -12,7 +12,8 @@ development and the Render static host.
 
 On startup, the application logs the active database URLs and ensures that
 database tables exist for both the primary chat database and the figures
-database.
+database. It also performs an idempotent CSV ingestion for historical figures
+when the seed CSV content has changed.
 """
 
 import logging
@@ -89,10 +90,11 @@ app.include_router(guest.router)
 @app.on_event("startup")
 def on_startup() -> None:
     """
-    Initialize databases and log configuration details.
+    Initialize databases, log configuration details, and ingest figures CSV.
 
-    This logs the active database URLs and ensures that required tables
-    exist in both the chat and figures databases.
+    This logs the active database URLs, ensures that required tables exist
+    in both the chat and figures databases, and performs an idempotent
+    CSV ingestion for historical figures when the seed CSV changes.
     """
     _ = models
     logger.info("Starting Places in Time service")
@@ -100,7 +102,14 @@ def on_startup() -> None:
     logger.info("Figures DB URL: %s", FIGURES_DB_URL)
     ChatBase.metadata.create_all(bind=chat_engine)
     FigureBase.metadata.create_all(bind=figures_engine)
-    logger.info("Database schema ensured for chat and figures")
+
+    from app.startup_ingest import maybe_ingest_seed_csv
+
+    ran, report = maybe_ingest_seed_csv(logger)
+    if ran:
+        logger.info("Figures ingest ran: %s", report)
+    else:
+        logger.info("Figures ingest skipped: %s", report)
 
 
 @app.get("/health")
