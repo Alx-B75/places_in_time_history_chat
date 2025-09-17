@@ -379,6 +379,7 @@ def chat_complete(
     user_id: int = Form(...),
     message: str = Form(...),
     thread_id: Optional[int] = Form(None),
+    figure_slug: Optional[str] = Form(None),
 ) -> RedirectResponse:
     """
     Persist a user message, generate an assistant reply, and redirect to the threads page.
@@ -400,6 +401,8 @@ def chat_complete(
         Message content.
     thread_id : int | None
         Optional thread identifier.
+    figure_slug : str | None
+        Optional figure slug from the form.
 
     Returns
     -------
@@ -411,7 +414,17 @@ def chat_complete(
         raise HTTPException(status_code=404, detail="User not found")
 
     if thread_id is None:
-        thread_in = schemas.ThreadCreate(user_id=user_id, title="New thread", figure_slug=None)
+        initial_slug = (figure_slug or "").strip() or None
+        if initial_slug:
+            figure = crud.get_figure_by_slug(db_fig, initial_slug)
+            if not figure:
+                raise HTTPException(status_code=404, detail="Figure not found")
+            initial_slug = figure.slug
+        thread_in = schemas.ThreadCreate(
+            user_id=user_id,
+            title="New thread",
+            figure_slug=initial_slug,
+        )
         thread = crud.create_thread(db, thread_in)
         thread_id = thread.id
     else:
@@ -420,6 +433,18 @@ def chat_complete(
             raise HTTPException(status_code=404, detail="Thread not found")
         if thread.user_id != user.id:
             raise HTTPException(status_code=403, detail="Not authorized to access this thread")
+        update_slug = (figure_slug or "").strip()
+        if update_slug or figure_slug == "":
+            if update_slug:
+                figure = crud.get_figure_by_slug(db_fig, update_slug)
+                if not figure:
+                    raise HTTPException(status_code=404, detail="Figure not found")
+                thread.figure_slug = figure.slug
+            else:
+                thread.figure_slug = None
+            db.add(thread)
+            db.commit()
+            db.refresh(thread)
 
     user_msg = schemas.ChatMessageCreate(
         user_id=user_id,
