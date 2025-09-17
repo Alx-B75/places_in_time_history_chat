@@ -181,6 +181,7 @@ def build_prompt(
     thread_history: List[Dict[str, str]],
     max_context_chars: int = 4000,
     use_rag: bool = True,
+    debug: bool = False,
 ) -> Tuple[List[Dict[str, str]], List[Dict[str, Any]]]:
     """
     Build the full prompt messages and sources for the AI model.
@@ -197,6 +198,8 @@ def build_prompt(
         Character budget for context text.
     use_rag : bool
         Whether to call the vector retriever.
+    debug : bool
+        When True, prints prompt construction details to stdout.
 
     Returns
     -------
@@ -220,5 +223,20 @@ def build_prompt(
     for m in thread_history:
         messages.append({"role": m["role"], "content": m["message"]})
     messages.append({"role": "user", "content": user_message})
+
+    if debug:
+        try:
+            import json
+            print("=== Prompt Debug Information ===")
+            if use_rag:
+                count = len(contexts) if contexts else 0
+                print(f"Context chunks retrieved via ChromaDB: {count}")
+                if count == 0:
+                    print("No ChromaDB results; using fallback contexts if available.")
+            else:
+                print(f"Context chunks retrieved (fallback): {len(contexts)}")
+            print("Messages sent to LLM:", json.dumps(messages, indent=2, ensure_ascii=False))
+        except Exception:
+            pass
 
     return messages, sources
