@@ -1,11 +1,12 @@
 """Question-answering routes for historical figure chats.
 
-This module composes prompts using persona text and instruction-type contexts
-stored in the figures database.
+This module uses the unified prompt builder to compose messages with persona,
+context, and thread history. It ensures consistent prompt construction across
+the application.
 """
 
 import os
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, Generator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from openai import OpenAI
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 from app import crud, models, schemas
 from app.database import get_db_chat
 from app.figures_database import FigureSessionLocal
+from app.utils.prompt import build_prompt
 from app.utils.security import get_current_user
 
 router = APIRouter(tags=["Ask"])
@@ -35,149 +37,6 @@ def get_figure_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
-
-
-def _extract_instruction_text(
-    figure: Optional[models.HistoricalFigure],
-) -> str:
-    """
-    Return concatenated instruction text from a figure's contexts.
-
-    Instruction rows are detected by content_type in the set
-    {"instruction", "instructions", "persona", "system"} case-insensitively.
-
-    Parameters
-    ----------
-    figure : app.models.HistoricalFigure | None
-        Figure instance with contexts preloaded.
-
-    Returns
-    -------
-    str
-        Concatenated instruction text or an empty string.
-    """
-    if not figure or not getattr(figure, "contexts", None):
-        return ""
-    labels = {"instruction", "instructions", "persona", "system"}
-    blocks: List[str] = []
-    for ctx in figure.contexts:
-        ctype = (ctx.content_type or "").strip().lower()
-        if ctype in labels:
-            text = (ctx.content or "").strip()
-            if text:
-                blocks.append(text)
-    return "\n\n".join(blocks).strip()
-
-
-def _build_system_prompt(
-    figure: Optional[models.HistoricalFigure],
-    db_instructions: str = "",
-) -> str:
-    """
-    Compose the system prompt from persona, fallback text, and DB instructions.
-
-    Parameters
-    ----------
-    figure : app.models.HistoricalFigure | None
-        The historical figure associated with the request.
-    db_instructions : str
-        Instruction text retrieved from figure contexts.
-
-    Returns
-    -------
-    str
-        The system prompt text to seed the assistant.
-    """
-    if figure and getattr(figure, "persona_prompt", None):
-        base = figure.persona_prompt
-    elif figure:
-        base = (
-            f"You are {figure.name}, a historical figure. "
-            "Answer clearly, accurately, and concisely for curious readers. "
-            "If something is uncertain or debated, state that explicitly."
-        )
-    else:
-        base = (
-            "You are a helpful and accurate historical guide. "
-            "Answer clearly and concisely. If a fact is uncertain, say so."
-        )
-    db_instructions = (db_instructions or "").strip()
-    if db_instructions:
-        return f"{base}\n\n{db_instructions}"
-    return base
-
-
-def _compact_context(
-    contexts: List[Dict[str, Any]],
-    max_chars: int = 4000,
-) -> Tuple[str, List[Dict[str, Any]]]:
-    """
-    Compact context entries into a single string and return sources.
-
-    Parameters
-    ----------
-    contexts : list[dict]
-        List of context records for the figure.
-    max_chars : int
-        Character budget for the compacted context text.
-
-    Returns
-    -------
-    tuple[str, list[dict]]
-        The compacted context text and a list of source descriptors.
-    """
-    if not contexts:
-        return "", []
-    pieces: List[str] = []
-    sources: List[Dict[str, Any]] = []
-    total = 0
-    for c in contexts:
-        src = c.get("source_name") or "source"
-        url = c.get("source_url")
-        text = c.get("content") or ""
-        snippet = text.strip()
-        if not snippet:
-            continue
-        block = f"[{src}] {snippet}"
-        if total + len(block) > max_chars and pieces:
-            break
-        pieces.append(block)
-        total += len(block)
-        sources.append({"source_name": src, "source_url": url})
-    return "\n\n".join(pieces), sources
-
-
-def _figure_context_payload(
-    figure: Optional[models.HistoricalFigure],
-) -> List[Dict[str, Any]]:
-    """
-    Convert a HistoricalFigure with contexts into a list of plain dicts.
-
-    Parameters
-    ----------
-    figure : app.models.HistoricalFigure | None
-        The historical figure instance.
-
-    Returns
-    -------
-    list[dict]
-        List of context dictionaries suitable for compaction.
-    """
-    results: List[Dict[str, Any]] = []
-    if not figure or not getattr(figure, "contexts", None):
-        return results
-    for ctx in figure.contexts:
-        results.append(
-            {
-                "figure_slug": ctx.figure_slug,
-                "source_name": ctx.source_name,
-                "source_url": ctx.source_url,
-                "content_type": ctx.content_type,
-                "content": ctx.content,
-                "is_manual": ctx.is_manual,
-            }
-        )
-    return results
 
 
 @router.post("/ask")
@@ -259,24 +118,21 @@ def ask(
     crud.create_chat_message(db, user_msg)
 
     figure = crud.get_figure_by_slug(db_fig, resolved_slug) if resolved_slug else None
-    instruction_text = _extract_instruction_text(figure)
-    system_prompt = _build_system_prompt(figure, instruction_text)
-    contexts = _figure_context_payload(figure) if figure else []
-    ctx_text, sources = _compact_context(contexts, max_chars=4000)
-
     history = crud.get_messages_by_thread(db, thread.id, limit=1000)
-    formatted = [{"role": "system", "content": system_prompt}]
-    if ctx_text:
-        formatted.append(
-            {"role": "system", "content": f"Context for reference:\n{ctx_text}"}
-        )
-    for m in history:
-        formatted.append({"role": m.role, "content": m.message})
+    history_dicts = [{"role": m.role, "message": m.message} for m in history]
+
+    messages, sources = build_prompt(
+        figure=figure,
+        user_message=payload.message,
+        thread_history=history_dicts,
+        max_context_chars=4000,
+        use_rag=True,
+    )
 
     model_name = payload.model_used or "gpt-4o-mini"
     response = client.chat.completions.create(
         model=model_name,
-        messages=formatted,
+        messages=messages,
         temperature=0.3,
     )
     answer = response.choices[0].message.content.strip() if response.choices else ""
