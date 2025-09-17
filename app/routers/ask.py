@@ -198,6 +198,22 @@ def ask(
     If no thread_id is provided, a new thread is created. When creating a new
     thread and a figure_slug is provided, the thread is initialized with that
     figure.
+
+    Parameters
+    ----------
+    payload : app.schemas.AskRequest
+        Request payload including message and optional figure/thread data.
+    db : sqlalchemy.orm.Session
+        Chat database session.
+    db_fig : sqlalchemy.orm.Session
+        Figures database session.
+    current_user : app.models.User
+        Authenticated user.
+
+    Returns
+    -------
+    dict
+        The answer, sources, thread_id, and usage metadata.
     """
     if current_user.id != payload.user_id:
         raise HTTPException(
