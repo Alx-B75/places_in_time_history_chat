@@ -9,7 +9,6 @@ to form the full prompt passed to the AI.
 from typing import Any, Dict, List, Optional, Tuple
 
 from app import models
-from app.vector.context_retriever import search_figure_context
 
 
 def _extract_instruction_text(figure: Optional[models.HistoricalFigure]) -> str:
@@ -148,6 +147,34 @@ def _figure_context_payload(
     return results
 
 
+def _safe_search_figure_context(query: str, figure_slug: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    """
+    Attempt to retrieve vector-based context; return an empty list if unavailable.
+
+    Parameters
+    ----------
+    query : str
+        The user's message or question.
+    figure_slug : str
+        Slug for the historical figure to filter context.
+    top_k : int
+        Number of top results to return.
+
+    Returns
+    -------
+    list[dict]
+        Relevant documents with their content and metadata, or an empty list.
+    """
+    try:
+        from app.vector.context_retriever import search_figure_context
+    except Exception:
+        return []
+    try:
+        return search_figure_context(query, figure_slug, top_k=top_k) or []
+    except Exception:
+        return []
+
+
 def build_prompt(
     figure: Optional[models.HistoricalFigure],
     user_message: str,
@@ -181,10 +208,7 @@ def build_prompt(
 
     contexts: List[Dict[str, Any]] = []
     if use_rag and figure and getattr(figure, "slug", None):
-        try:
-            contexts = search_figure_context(user_message, figure.slug, top_k=5)
-        except Exception:
-            contexts = []
+        contexts = _safe_search_figure_context(user_message, figure.slug, top_k=5)
     if not contexts:
         contexts = _figure_context_payload(figure) if figure else []
 
