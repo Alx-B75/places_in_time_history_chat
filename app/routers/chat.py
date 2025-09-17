@@ -1,8 +1,9 @@
 """Router for handling threaded chat interactions, thread management, and message completions.
 
-This module provides endpoints to create/list/update threads, fetch messages,
-assign a historical figure to a thread, and process chat completions using an
-LLM with optional persona/context derived from the assigned figure.
+This module provides endpoints to create, list, and update threads; fetch messages;
+assign a historical figure to a thread; and process chat completions using an LLM.
+It composes prompts using persona text and instruction-type contexts stored in the
+figures database.
 """
 
 import os
@@ -38,7 +39,7 @@ class ThreadTitleUpdate(BaseModel):
 class ThreadFigureUpdate(BaseModel):
     """Request body for updating a thread's linked historical figure.
 
-    If figure_slug is null or empty string, the figure association is cleared.
+    If figure_slug is null or an empty string, the figure association is cleared.
     """
     figure_slug: Optional[str] = Field(default=None)
 
@@ -52,27 +53,90 @@ def get_figure_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def build_system_prompt(figure) -> str:
-    """Create a system prompt based on an assigned figure, or a generic guide."""
+def _extract_instruction_text(figure) -> str:
+    """
+    Return concatenated instruction text from a figure's contexts.
+
+    Instruction rows are detected by content_type in the set
+    {"instruction", "instructions", "persona", "system"} case-insensitively.
+
+    Parameters
+    ----------
+    figure : app.models.HistoricalFigure | None
+        Figure instance with contexts preloaded.
+
+    Returns
+    -------
+    str
+        Concatenated instruction text or an empty string.
+    """
+    if not figure or not getattr(figure, "contexts", None):
+        return ""
+    labels = {"instruction", "instructions", "persona", "system"}
+    blocks: List[str] = []
+    for ctx in figure.contexts:
+        ctype = (getattr(ctx, "content_type", "") or "").strip().lower()
+        if ctype in labels:
+            text = (getattr(ctx, "content", "") or "").strip()
+            if text:
+                blocks.append(text)
+    return "\n\n".join(blocks).strip()
+
+
+def build_system_prompt(figure, db_instructions: str = "") -> str:
+    """
+    Create a system prompt based on an assigned figure and DB-stored instructions.
+
+    Parameters
+    ----------
+    figure : app.models.HistoricalFigure | None
+        Figure instance associated with the thread.
+    db_instructions : str
+        Instruction text retrieved from figure contexts.
+
+    Returns
+    -------
+    str
+        Composed system prompt string.
+    """
     if figure and getattr(figure, "persona_prompt", None):
-        return figure.persona_prompt
-    if figure:
-        return (
+        base = figure.persona_prompt
+    elif figure:
+        base = (
             f"You are {figure.name}, a historical figure. "
             "Answer clearly, accurately, and concisely. "
             "State uncertainty when appropriate."
         )
-    return (
-        "You are a helpful and accurate historical guide. "
-        "Answer clearly and concisely. State uncertainty when necessary."
-    )
+    else:
+        base = (
+            "You are a helpful and accurate historical guide. "
+            "Answer clearly and concisely. State uncertainty when necessary."
+        )
+    db_instructions = (db_instructions or "").strip()
+    if db_instructions:
+        return f"{base}\n\n{db_instructions}"
+    return base
 
 
 def compact_context(
     contexts: List[Dict[str, Any]],
     max_chars: int = 4000,
 ) -> Tuple[str, List[Dict[str, Any]]]:
-    """Compact a list of context entries into a text block within a character budget."""
+    """
+    Compact a list of context entries into a text block within a character budget.
+
+    Parameters
+    ----------
+    contexts : list[dict]
+        Context records for the figure.
+    max_chars : int
+        Character budget for the compacted context text.
+
+    Returns
+    -------
+    tuple[str, list[dict]]
+        The compacted context text and a list of source descriptors.
+    """
     if not contexts:
         return "", []
     lines: List[str] = []
@@ -94,7 +158,19 @@ def compact_context(
 
 
 def figure_context_payload(figure) -> List[Dict[str, Any]]:
-    """Convert a figure's contexts ORM collection to a list of dicts."""
+    """
+    Convert a figure's contexts ORM collection to a list of dictionaries.
+
+    Parameters
+    ----------
+    figure : app.models.HistoricalFigure | None
+        The historical figure instance.
+
+    Returns
+    -------
+    list[dict]
+        List of context dictionaries suitable for compaction.
+    """
     results: List[Dict[str, Any]] = []
     if not figure or not getattr(figure, "contexts", None):
         return results
@@ -113,13 +189,34 @@ def figure_context_payload(figure) -> List[Dict[str, Any]]:
 
 
 @router.post("/threads", status_code=201)
-def create_thread(payload: ThreadCreatePayload, db: Session = Depends(get_db_chat)) -> dict:
-    """Create a new thread for the user and return its identity."""
+def create_thread(
+    payload: ThreadCreatePayload,
+    db: Session = Depends(get_db_chat),
+) -> dict:
+    """
+    Create a new thread for the user and return its identity.
+
+    Parameters
+    ----------
+    payload : ThreadCreatePayload
+        Thread creation data.
+    db : sqlalchemy.orm.Session
+        Chat database session.
+
+    Returns
+    -------
+    dict
+        Thread identity payload.
+    """
     user = crud.get_user_by_id(db, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     title = payload.title or "New thread"
-    thread_in = schemas.ThreadCreate(user_id=payload.user_id, title=title, figure_slug=None)
+    thread_in = schemas.ThreadCreate(
+        user_id=payload.user_id,
+        title=title,
+        figure_slug=None,
+    )
     thread = crud.create_thread(db, thread_in)
     return {"thread_id": thread.id, "user_id": thread.user_id, "title": thread.title}
 
@@ -130,7 +227,23 @@ def get_thread(
     db: Session = Depends(get_db_chat),
     current_user: models.User = Depends(get_current_user),
 ) -> schemas.ThreadRead:
-    """Return a single thread if owned by the current user."""
+    """
+    Return a single thread if owned by the current user.
+
+    Parameters
+    ----------
+    thread_id : int
+        Thread identifier.
+    db : sqlalchemy.orm.Session
+        Chat database session.
+    current_user : app.models.User
+        Authenticated user.
+
+    Returns
+    -------
+    app.schemas.ThreadRead
+        Thread record.
+    """
     thread = crud.get_thread_by_id(db, thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
@@ -146,7 +259,25 @@ def update_thread_title(
     db: Session = Depends(get_db_chat),
     current_user: models.User = Depends(get_current_user),
 ) -> schemas.ThreadRead:
-    """Update the title of a thread owned by the current user."""
+    """
+    Update the title of a thread owned by the current user.
+
+    Parameters
+    ----------
+    thread_id : int
+        Thread identifier.
+    payload : ThreadTitleUpdate
+        New title payload.
+    db : sqlalchemy.orm.Session
+        Chat database session.
+    current_user : app.models.User
+        Authenticated user.
+
+    Returns
+    -------
+    app.schemas.ThreadRead
+        Updated thread record.
+    """
     thread = crud.get_thread_by_id(db, thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
@@ -167,7 +298,27 @@ def update_thread_figure(
     db_fig: Session = Depends(get_figure_db),
     current_user: models.User = Depends(get_current_user),
 ) -> schemas.ThreadRead:
-    """Set or clear the historical figure on a thread owned by the current user."""
+    """
+    Set or clear the historical figure on a thread owned by the current user.
+
+    Parameters
+    ----------
+    thread_id : int
+        Thread identifier.
+    payload : ThreadFigureUpdate
+        Figure slug payload.
+    db : sqlalchemy.orm.Session
+        Chat database session.
+    db_fig : sqlalchemy.orm.Session
+        Figures database session.
+    current_user : app.models.User
+        Authenticated user.
+
+    Returns
+    -------
+    app.schemas.ThreadRead
+        Updated thread record.
+    """
     thread = crud.get_thread_by_id(db, thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
@@ -195,7 +346,23 @@ def get_thread_messages(
     db: Session = Depends(get_db_chat),
     current_user: models.User = Depends(get_current_user),
 ) -> List[schemas.ChatMessageRead]:
-    """Return all messages in a thread if the current user owns it."""
+    """
+    Return all messages in a thread if the current user owns it.
+
+    Parameters
+    ----------
+    thread_id : int
+        Thread identifier.
+    db : sqlalchemy.orm.Session
+        Chat database session.
+    current_user : app.models.User
+        Authenticated user.
+
+    Returns
+    -------
+    list[app.schemas.ChatMessageRead]
+        Ordered list of messages in the thread.
+    """
     thread = crud.get_thread_by_id(db, thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
@@ -213,10 +380,31 @@ def chat_complete(
     message: str = Form(...),
     thread_id: Optional[int] = Form(None),
 ) -> RedirectResponse:
-    """Persist a user message, generate an assistant reply, and redirect to the threads page.
+    """
+    Persist a user message, generate an assistant reply, and redirect to the threads page.
 
     If the thread has an assigned historical figure, the completion uses a persona
     system prompt and compacted context derived from that figure.
+
+    Parameters
+    ----------
+    request : fastapi.Request
+        Incoming HTTP request.
+    db : sqlalchemy.orm.Session
+        Chat database session.
+    db_fig : sqlalchemy.orm.Session
+        Figures database session.
+    user_id : int
+        Identifier of the user sending the message.
+    message : str
+        Message content.
+    thread_id : int | None
+        Optional thread identifier.
+
+    Returns
+    -------
+    fastapi.responses.RedirectResponse
+        Redirect to the threads page for the user.
     """
     user = crud.get_user_by_id(db, user_id)
     if not user:
@@ -247,13 +435,16 @@ def chat_complete(
     if thread.figure_slug:
         figure = crud.get_figure_by_slug(db_fig, thread.figure_slug)
 
-    system_prompt = build_system_prompt(figure)
+    instruction_text = _extract_instruction_text(figure)
+    system_prompt = build_system_prompt(figure, instruction_text)
     contexts = figure_context_payload(figure) if figure else []
     ctx_text, _sources = compact_context(contexts, max_chars=4000)
 
     formatted_messages = [{"role": "system", "content": system_prompt}]
     if ctx_text:
-        formatted_messages.append({"role": "system", "content": f"Context for reference:\n{ctx_text}"})
+        formatted_messages.append(
+            {"role": "system", "content": f"Context for reference:\n{ctx_text}"}
+        )
     formatted_messages += [{"role": m.role, "content": m.message} for m in history]
 
     response = client.chat.completions.create(
@@ -271,4 +462,7 @@ def chat_complete(
     )
     crud.create_chat_message(db, assistant_msg)
 
-    return RedirectResponse(url=f"/user/{user_id}/threads", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(
+        url=f"/user/{user_id}/threads",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )

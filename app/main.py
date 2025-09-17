@@ -43,7 +43,7 @@ from app.utils.security import get_current_user
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("places-in-time")
+logger = logging.getLogger(__name__)
 
 app = FastAPI(redirect_slashes=True)
 
