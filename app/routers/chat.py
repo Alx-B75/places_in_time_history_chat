@@ -7,7 +7,7 @@ prompts via the centralized builder that merges persona, context, and thread his
 """
 
 import os
-from typing import Any, Dict, Generator, List, Optional
+from typing import Dict, Generator, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Form, Request, status
 from fastapi.responses import RedirectResponse
@@ -56,6 +56,19 @@ def get_figure_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+def _prompt_debug_enabled() -> bool:
+    """
+    Determine if prompt debugging is enabled for authenticated chat routes.
+
+    Returns
+    -------
+    bool
+        True if debugging is enabled via environment variable.
+    """
+    val = os.getenv("PROMPT_DEBUG") or "false"
+    return val.strip().lower() == "true"
 
 
 @router.post("/threads", status_code=201)
@@ -326,6 +339,7 @@ def chat_complete(
         thread_history=history_dicts,
         max_context_chars=4000,
         use_rag=True,
+        debug=_prompt_debug_enabled(),
     )
 
     user_msg = schemas.ChatMessageCreate(

@@ -39,6 +39,19 @@ def get_figure_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def _prompt_debug_enabled() -> bool:
+    """
+    Determine if prompt debugging is enabled for authenticated ask routes.
+
+    Returns
+    -------
+    bool
+        True if debugging is enabled via environment variable.
+    """
+    val = os.getenv("PROMPT_DEBUG") or "false"
+    return val.strip().lower() == "true"
+
+
 @router.post("/ask")
 def ask(
     payload: schemas.AskRequest,
@@ -127,6 +140,7 @@ def ask(
         thread_history=history_dicts,
         max_context_chars=4000,
         use_rag=True,
+        debug=_prompt_debug_enabled(),
     )
 
     model_name = payload.model_used or "gpt-4o-mini"
