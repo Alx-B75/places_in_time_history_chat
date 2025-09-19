@@ -1,11 +1,12 @@
-"""Question-answering routes for historical figure chats.
+"""
+Question-answering routes for historical figure chats.
 
-This module uses the unified prompt builder to compose messages with persona,
-context, and thread history. It ensures consistent prompt construction across
-the application.
+This router composes prompts via the unified builder and persists messages
+to the chat database.
 """
 
-import os
+from __future__ import annotations
+
 from typing import Any, Dict, Generator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,12 +16,15 @@ from sqlalchemy.orm import Session
 from app import crud, models, schemas
 from app.database import get_db_chat
 from app.figures_database import FigureSessionLocal
+from app.settings import get_settings
 from app.utils.prompt import build_prompt
 from app.utils.security import get_current_user
 
+
 router = APIRouter(tags=["Ask"])
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+_settings = get_settings()
+_client = OpenAI(api_key=_settings.openai_api_key)
 
 
 def get_figure_db() -> Generator[Session, None, None]:
@@ -39,19 +43,6 @@ def get_figure_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def _prompt_debug_enabled() -> bool:
-    """
-    Determine if prompt debugging is enabled for authenticated ask routes.
-
-    Returns
-    -------
-    bool
-        True if debugging is enabled via environment variable.
-    """
-    val = os.getenv("PROMPT_DEBUG") or "false"
-    return val.strip().lower() == "true"
-
-
 @router.post("/ask")
 def ask(
     payload: schemas.AskRequest,
@@ -60,16 +51,7 @@ def ask(
     current_user: models.User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
-    Answer a user question with optional figure context and persist messages.
-
-    The associated figure is resolved with the following precedence:
-    1) If a thread_id is supplied and the thread has a figure_slug, use that.
-    2) Otherwise, if payload.figure_slug is provided, use that.
-    3) Otherwise, no figure persona or context is applied.
-
-    If no thread_id is provided, a new thread is created. When creating a new
-    thread and a figure_slug is provided, the thread is initialized with that
-    figure.
+    Answer a user question with persona and optional RAG context.
 
     Parameters
     ----------
@@ -88,24 +70,15 @@ def ask(
         The answer, sources, thread_id, and usage metadata.
     """
     if current_user.id != payload.user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     thread = None
     if payload.thread_id is not None:
         thread = crud.get_thread_by_id(db, payload.thread_id)
         if not thread:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Thread not found",
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
         if thread.user_id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized",
-            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     else:
         thread_in = schemas.ThreadCreate(
             user_id=current_user.id,
@@ -139,12 +112,12 @@ def ask(
         user_message=payload.message,
         thread_history=history_dicts,
         max_context_chars=4000,
-        use_rag=True,
-        debug=_prompt_debug_enabled(),
+        use_rag=_settings.rag_enabled,
+        debug=_settings.guest_prompt_debug,
     )
 
     model_name = payload.model_used or "gpt-4o-mini"
-    response = client.chat.completions.create(
+    response = _client.chat.completions.create(
         model=model_name,
         messages=messages,
         temperature=0.3,
@@ -167,9 +140,4 @@ def ask(
     )
     crud.create_chat_message(db, assistant_msg)
 
-    return {
-        "answer": answer,
-        "sources": sources,
-        "thread_id": thread.id,
-        "usage": usage,
-    }
+    return {"answer": answer, "sources": sources, "thread_id": thread.id, "usage": usage}

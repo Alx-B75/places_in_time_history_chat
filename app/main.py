@@ -1,28 +1,16 @@
-"""Main FastAPI application entry point for Places in Time History Chat.
+"""
+Main FastAPI application entry point for Places in Time History Chat.
 
-This module serves the API and static frontend. It includes explicit routes
-for the landing page and the user threads page, a guest page route that
-renders the guest chat client at `/guest/{slug}`, convenience routes for
-legacy asset paths, robust favicon handling, and a static mount for other
-assets under `/static`.
-
-CORS origins are configurable via the ALLOWED_ORIGINS environment variable
-as a comma-separated list. If not set, a sensible default is used for local
-development and the Render static host.
-
-On startup, the application logs the active database URLs and ensures that
-database tables exist for both the primary chat database and the figures
-database. It also performs an idempotent CSV ingestion for historical figures
-when the seed CSV content has changed.
+This module configures the API, static frontend, CORS, startup tasks, and
+provides a health endpoint that verifies configuration and RAG availability.
 """
 
-import logging
-import os
+from __future__ import annotations
+
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import uvicorn
-from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -38,13 +26,11 @@ from app.figures_database import FigureBase
 from app.figures_database import SQLALCHEMY_DATABASE_URL as FIGURES_DB_URL
 from app.figures_database import engine as figures_engine
 from app.routers import admin, ask, auth, chat, figures, guest
+from app.settings import get_settings
 from app.utils.security import get_current_user
 
-load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
+_settings = get_settings()
 app = FastAPI(redirect_slashes=True)
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -53,24 +39,14 @@ STATIC_DIR = BASE_DIR / "static_frontend"
 
 def _allowed_origins() -> List[str]:
     """
-    Resolve allowed CORS origins.
-
-    Reads ALLOWED_ORIGINS as a comma-separated list. If unset, defaults to
-    localhost and the deployed static host used during development.
+    Resolve allowed CORS origins from centralized settings.
 
     Returns
     -------
     list[str]
         List of allowed origins.
     """
-    raw = os.getenv("ALLOWED_ORIGINS")
-    if raw:
-        return [o.strip() for o in raw.split(",") if o.strip()]
-    return [
-        "http://localhost:8000",
-        "https://places-in-time-chatbot.onrender.com",
-        "https://places-in-time-history-chat.onrender.com",
-    ]
+    return _settings.allowed_origins
 
 
 app.add_middleware(
@@ -92,39 +68,54 @@ app.include_router(admin.router)
 @app.on_event("startup")
 def on_startup() -> None:
     """
-    Initialize databases, log configuration details, and ingest figures CSV.
+    Initialize databases and perform idempotent figures ingest.
 
-    This logs the active database URLs, ensures that required tables exist
-    in both the chat and figures databases, and performs an idempotent
-    CSV ingestion for historical figures when the seed CSV changes.
+    This ensures that required tables exist in both databases and runs the
+    figures CSV ingestion when the seed changes.
     """
     _ = models
-    logger.info("Starting Places in Time service")
-    logger.info("Chat DB URL: %s", CHAT_DB_URL)
-    logger.info("Figures DB URL: %s", FIGURES_DB_URL)
     ChatBase.metadata.create_all(bind=chat_engine)
     FigureBase.metadata.create_all(bind=figures_engine)
-
     from app.startup_ingest import maybe_ingest_seed_csv
 
-    ran, report = maybe_ingest_seed_csv(logger)
-    if ran:
-        logger.info("Figures ingest ran: %s", report)
-    else:
-        logger.info("Figures ingest skipped: %s", report)
+    maybe_ingest_seed_csv(None)
 
 
 @app.get("/health")
 def health() -> JSONResponse:
     """
-    Return a simple health check payload.
+    Return a configuration and dependency health report.
 
     Returns
     -------
     fastapi.responses.JSONResponse
-        Health status payload.
+        Health status payload including RAG availability.
     """
-    return JSONResponse({"ok": True})
+    keys_present = {
+        "OPENAI_API_KEY": bool(_settings.openai_api_key),
+        "OPENROUTER_API_KEY": bool(_settings.openrouter_api_key),
+    }
+    rag_status = {"enabled": _settings.rag_enabled, "ok": False, "detail": None}
+    try:
+        if _settings.rag_enabled:
+            from app.vector.chroma_client import get_figure_context_collection
+
+            collection = get_figure_context_collection()
+            _ = collection.name
+            rag_status["ok"] = True
+    except Exception as exc:
+        rag_status["ok"] = False
+        rag_status["detail"] = str(exc)
+
+    payload = {
+        "ok": True,
+        "chat_db_url": CHAT_DB_URL,
+        "figures_db_url": FIGURES_DB_URL,
+        "keys_present": keys_present,
+        "rag": rag_status,
+        "debug": {"guest_prompt_debug": _settings.guest_prompt_debug},
+    }
+    return JSONResponse(payload)
 
 
 @app.get(
@@ -152,17 +143,9 @@ def list_user_threads(
     -------
     list[app.schemas.ThreadRead]
         List of thread records for the user.
-
-    Raises
-    ------
-    fastapi.HTTPException
-        If the requester does not own the requested threads.
     """
     if current_user.id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access these threads",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access these threads")
     return crud.get_threads_by_user(db, user_id)
 
 

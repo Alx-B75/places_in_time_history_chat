@@ -1,37 +1,33 @@
-"""Guest trial chat router.
+"""
+Guest trial chat router.
 
-This router enables an anonymous, short-lived guest chat experience that is
-scoped to a specific historical figure. The flow is:
-1) Start a guest session for a figure, which sets an HttpOnly cookie.
-2) Ask up to a server-enforced maximum number of questions in that session.
-3) Upgrade the session by logging in or registering, which transfers the guest
-   transcript into a real user thread and invalidates the guest session.
-
-The implementation is isolated from authenticated chat routes and uses
-dedicated guest tables, avoiding regression risks in existing flows.
+This router enables an anonymous, short-lived guest chat experience scoped
+to a specific historical figure. Guests can later upgrade their session to
+a real user thread, migrating the transcript.
 """
 
-import os
+from __future__ import annotations
+
 import secrets
 from datetime import datetime, timedelta
 from typing import Any, Dict, Generator, List, Optional
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
-from fastapi.responses import JSONResponse
 from openai import OpenAI
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, selectinload
 
-from app import models, schemas, crud
-from app.crud import create_chat_message, create_thread
+from app import crud, models, schemas
 from app.database import get_db_chat
 from app.figures_database import FigureSessionLocal
+from app.settings import get_settings
 from app.utils.prompt import build_prompt
 from app.utils.security import get_current_user
 
 router = APIRouter(prefix="/guest", tags=["Guest"])
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+_settings = get_settings()
+_client = OpenAI(api_key=_settings.openai_api_key)
 
 
 def get_figure_db() -> Generator[Session, None, None]:
@@ -51,7 +47,10 @@ def get_figure_db() -> Generator[Session, None, None]:
 
 
 class GuestStartResponse(BaseModel):
-    """Response payload returned when starting a guest session."""
+    """
+    Response payload returned when starting a guest session.
+    """
+
     session_started: bool
     figure_slug: str
     max_questions: int
@@ -59,14 +58,20 @@ class GuestStartResponse(BaseModel):
 
 
 class GuestAskRequest(BaseModel):
-    """Request payload for submitting a guest question."""
+    """
+    Request payload for submitting a guest question.
+    """
+
     message: str
     model_used: Optional[str] = "gpt-4o-mini"
     source_page: Optional[str] = None
 
 
 class GuestAskResponse(BaseModel):
-    """Response payload for a guest assistant answer."""
+    """
+    Response payload for a guest assistant answer.
+    """
+
     answer: str
     sources: List[Dict[str, Any]]
     usage: Optional[Dict[str, Any]] = None
@@ -75,7 +80,10 @@ class GuestAskResponse(BaseModel):
 
 
 class GuestUpgradeResponse(BaseModel):
-    """Response payload returned after upgrading a guest session."""
+    """
+    Response payload returned after upgrading a guest session.
+    """
+
     upgraded: bool
     user_id: int
     thread_id: int
@@ -91,9 +99,9 @@ def _get_limits() -> Dict[str, Any]:
     dict
         Limit configuration for guest session lifetime and quotas.
     """
-    max_q = int(os.getenv("GUEST_MAX_QUESTIONS", "3"))
-    ttl_minutes = int(os.getenv("GUEST_SESSION_TTL_MINUTES", "120"))
-    secure_cookie = os.getenv("GUEST_COOKIE_SECURE", "true").lower() == "true"
+    max_q = 3
+    ttl_minutes = 120
+    secure_cookie = True
     return {
         "max_questions": max_q,
         "ttl": timedelta(minutes=ttl_minutes),
@@ -125,19 +133,6 @@ def _set_guest_cookie(response: Response, token: str, ttl: timedelta, secure_coo
         max_age=int(ttl.total_seconds()),
         path="/",
     )
-
-
-def _prompt_debug_enabled() -> bool:
-    """
-    Determine if prompt debugging is enabled for guest routes.
-
-    Returns
-    -------
-    bool
-        True if debugging is enabled via environment variable.
-    """
-    val = os.getenv("GUEST_PROMPT_DEBUG") or os.getenv("PROMPT_DEBUG") or "false"
-    return val.strip().lower() == "true"
 
 
 @router.post("/start/{figure_slug}", response_model=GuestStartResponse)
@@ -231,10 +226,7 @@ def guest_ask(
     if session.expires_at and session.expires_at < datetime.utcnow():
         raise HTTPException(status_code=401, detail="Guest session expired")
     if session.question_count >= limits["max_questions"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Guest question limit reached",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Guest question limit reached")
 
     figure = (
         figure_db.query(models.HistoricalFigure)
@@ -258,12 +250,12 @@ def guest_ask(
         user_message=payload.message,
         thread_history=history_dicts,
         max_context_chars=4000,
-        use_rag=True,
-        debug=_prompt_debug_enabled(),
+        use_rag=_settings.rag_enabled,
+        debug=_settings.guest_prompt_debug,
     )
 
     model_name = payload.model_used or "gpt-4o-mini"
-    resp = client.chat.completions.create(
+    resp = _client.chat.completions.create(
         model=model_name,
         messages=messages,
         temperature=0.2,
@@ -276,22 +268,8 @@ def guest_ask(
         "total_tokens": getattr(resp.usage, "total_tokens", None),
     }
 
-    db.add(
-        models.GuestMessage(
-            session_id=session.id,
-            role="user",
-            message=payload.message,
-            model_used=model_name,
-        )
-    )
-    db.add(
-        models.GuestMessage(
-            session_id=session.id,
-            role="assistant",
-            message=answer,
-            model_used=model_name,
-        )
-    )
+    db.add(models.GuestMessage(session_id=session.id, role="user", message=payload.message, model_used=model_name))
+    db.add(models.GuestMessage(session_id=session.id, role="assistant", message=answer, model_used=model_name))
     session.question_count += 1
     db.commit()
 
@@ -347,7 +325,7 @@ def upgrade_guest_session(
         title=title,
         figure_slug=session.figure_slug,
     )
-    thread = create_thread(db, thread_schema)
+    thread = crud.create_thread(db, thread_schema)
 
     messages = (
         db.query(models.GuestMessage)
@@ -365,7 +343,7 @@ def upgrade_guest_session(
             thread_id=thread.id,
             summary_of=None,
         )
-        create_chat_message(db, chat_schema)
+        crud.create_chat_message(db, chat_schema)
 
     db.query(models.GuestMessage).filter(models.GuestMessage.session_id == session.id).delete()
     db.delete(session)

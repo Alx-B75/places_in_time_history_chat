@@ -1,12 +1,9 @@
-"""Router for handling threaded chat interactions, thread management, and message
-completions using a unified prompt pipeline.
-
-This module provides endpoints to create, list, and update threads; fetch messages;
-assign a historical figure to a thread; and process chat completions. It composes
-prompts via the centralized builder that merges persona, context, and thread history.
+"""
+Threaded chat routes and message completions using the unified prompt pipeline.
 """
 
-import os
+from __future__ import annotations
+
 from typing import Dict, Generator, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Form, Request, status
@@ -18,27 +15,39 @@ from sqlalchemy.orm import Session
 from app import crud, models, schemas
 from app.database import get_db_chat
 from app.figures_database import FigureSessionLocal
+from app.settings import get_settings
 from app.utils.prompt import build_prompt
 from app.utils.security import get_current_user
 
+
 router = APIRouter(tags=["Chat"])
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+_settings = get_settings()
+_client = OpenAI(api_key=_settings.openai_api_key)
 
 
 class ThreadCreatePayload(BaseModel):
-    """Request body for creating a new conversation thread."""
+    """
+    Request body for creating a new conversation thread.
+    """
+
     user_id: int = Field(...)
     title: Optional[str] = None
 
 
 class ThreadTitleUpdate(BaseModel):
-    """Request body for updating a thread title."""
+    """
+    Request body for updating a thread title.
+    """
+
     title: str = Field(..., min_length=1, max_length=200)
 
 
 class ThreadFigureUpdate(BaseModel):
-    """Request body for updating or clearing a thread's historical figure."""
+    """
+    Request body for updating or clearing a thread's historical figure.
+    """
+
     figure_slug: Optional[str] = Field(default=None)
 
 
@@ -56,19 +65,6 @@ def get_figure_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
-
-
-def _prompt_debug_enabled() -> bool:
-    """
-    Determine if prompt debugging is enabled for authenticated chat routes.
-
-    Returns
-    -------
-    bool
-        True if debugging is enabled via environment variable.
-    """
-    val = os.getenv("PROMPT_DEBUG") or "false"
-    return val.strip().lower() == "true"
 
 
 @router.post("/threads", status_code=201)
@@ -95,11 +91,7 @@ def create_thread(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     title = payload.title or "New thread"
-    thread_in = schemas.ThreadCreate(
-        user_id=payload.user_id,
-        title=title,
-        figure_slug=None,
-    )
+    thread_in = schemas.ThreadCreate(user_id=payload.user_id, title=title, figure_slug=None)
     thread = crud.create_thread(db, thread_in)
     return {"thread_id": thread.id, "user_id": thread.user_id, "title": thread.title}
 
@@ -300,11 +292,7 @@ def chat_complete(
             if not figure_obj:
                 raise HTTPException(status_code=404, detail="Figure not found")
             initial_slug = figure_obj.slug
-        thread_in = schemas.ThreadCreate(
-            user_id=user_id,
-            title="New thread",
-            figure_slug=initial_slug,
-        )
+        thread_in = schemas.ThreadCreate(user_id=user_id, title="New thread", figure_slug=initial_slug)
         thread = crud.create_thread(db, thread_in)
         thread_id = thread.id
     else:
@@ -338,34 +326,17 @@ def chat_complete(
         user_message=message,
         thread_history=history_dicts,
         max_context_chars=4000,
-        use_rag=True,
-        debug=_prompt_debug_enabled(),
+        use_rag=_settings.rag_enabled,
+        debug=_settings.guest_prompt_debug,
     )
 
-    user_msg = schemas.ChatMessageCreate(
-        user_id=user_id,
-        role="user",
-        message=message,
-        thread_id=thread_id,
-    )
+    user_msg = schemas.ChatMessageCreate(user_id=user_id, role="user", message=message, thread_id=thread_id)
     crud.create_chat_message(db, user_msg)
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages,
-        temperature=0.3,
-    )
+    response = _client.chat.completions.create(model="gpt-4o-mini", messages=messages, temperature=0.3)
     answer = response.choices[0].message.content.strip() if response.choices else ""
 
-    assistant_msg = schemas.ChatMessageCreate(
-        user_id=user_id,
-        role="assistant",
-        message=answer,
-        thread_id=thread_id,
-    )
+    assistant_msg = schemas.ChatMessageCreate(user_id=user_id, role="assistant", message=answer, thread_id=thread_id)
     crud.create_chat_message(db, assistant_msg)
 
-    return RedirectResponse(
-        url=f"/user/{user_id}/threads",
-        status_code=status.HTTP_303_SEE_OTHER,
-    )
+    return RedirectResponse(url=f"/user/{user_id}/threads", status_code=status.HTTP_303_SEE_OTHER)

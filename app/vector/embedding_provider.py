@@ -1,68 +1,91 @@
-"""Embedding provider for generating vector representations using OpenAI or local models."""
+"""
+Embedding provider for generating vector representations.
 
-import os
-from typing import List
+This module supports either OpenAI embeddings or a local SentenceTransformer
+model, selected via configuration.
+"""
+
+from __future__ import annotations
+
+from typing import List, Optional, Union
 
 from openai import OpenAI
 from sentence_transformers import SentenceTransformer
 
-# --- Provider Configuration ---
-USE_OPENAI = os.getenv("USE_OPENAI_EMBEDDING", "false").lower() == "true"
+from app.settings import get_settings
 
-MODEL_CONFIG = {
-    "local": {
-        "model_name": "all-MiniLM-L6-v2",
-        "dimension": 384,
-    },
-    "openai": {
-        "model_name": "text-embedding-3-small",
-        "dimension": 1536,
-    },
-}
 
-provider_key = "openai" if USE_OPENAI else "local"
+_client: Optional[Union[OpenAI, SentenceTransformer]] = None
+_provider_key: Optional[str] = None
+_DIMENSIONS = {"local": 384, "openai": 1536}
+_LOCAL_MODEL = "all-MiniLM-L6-v2"
+_OPENAI_MODEL = "text-embedding-3-small"
 
-# --- Initialize Embedding Client ---
-client = None
-try:
-    if USE_OPENAI:
-        client = OpenAI()
-    else:
-        client = SentenceTransformer(MODEL_CONFIG["local"]["model_name"])
-except Exception:
-    client = None
+
+def _init() -> None:
+    """
+    Initialize the embedding client and provider selection.
+    """
+    global _client, _provider_key
+    settings = get_settings()
+    if settings.use_openai_embedding:
+        try:
+            _client = OpenAI(api_key=settings.openai_api_key)
+            _provider_key = "openai"
+            return
+        except Exception:
+            _client = None
+            _provider_key = "openai"
+            return
+    try:
+        _client = SentenceTransformer(_LOCAL_MODEL)
+        _provider_key = "local"
+    except Exception:
+        _client = None
+        _provider_key = "local"
 
 
 def get_embedding_dimension() -> int:
     """
-    Return the embedding vector dimension for the current provider.
+    Return the embedding vector dimension for the active provider.
 
-    Returns:
-        int: Embedding size (e.g., 384 for local, 1536 for OpenAI).
+    Returns
+    -------
+    int
+        Embedding size for the current provider.
     """
-    return MODEL_CONFIG[provider_key]["dimension"]
+    if _provider_key is None:
+        _init()
+    return _DIMENSIONS["openai" if _provider_key == "openai" else "local"]
 
 
 def get_embedding(text: str) -> List[float]:
     """
-    Generate an embedding for the given input text.
+    Generate an embedding for input text, or a zero-vector on failure.
 
-    Args:
-        text (str): Input string to embed.
+    Parameters
+    ----------
+    text : str
+        Input to embed.
 
-    Returns:
-        List[float]: The embedding vector or a zero-vector on failure.
+    Returns
+    -------
+    list[float]
+        Embedding vector.
     """
-    if not client or not isinstance(text, str) or not text.strip():
+    if _provider_key is None:
+        _init()
+    if not isinstance(text, str) or not text.strip():
         return [0.0] * get_embedding_dimension()
-
     try:
-        if USE_OPENAI:
-            response = client.embeddings.create(
+        if _provider_key == "openai" and isinstance(_client, OpenAI):
+            response = _client.embeddings.create(
                 input=text.replace("\n", " "),
-                model=MODEL_CONFIG["openai"]["model_name"]
+                model=_OPENAI_MODEL,
             )
             return response.data[0].embedding
-        return client.encode(text, convert_to_tensor=False).tolist()
+        if isinstance(_client, SentenceTransformer):
+            return _client.encode(text, convert_to_tensor=False).tolist()
+        return [0.0] * get_embedding_dimension()
     except Exception:
         return [0.0] * get_embedding_dimension()

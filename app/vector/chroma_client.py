@@ -1,35 +1,47 @@
-"""ChromaDB client setup for persistent storage of historical figure context vectors."""
+"""
+ChromaDB client setup for persistent storage of historical figure context vectors.
 
-import os
+This module initializes a persistent Chroma client and exposes a helper to
+obtain the collection used for figure context documents.
+"""
+
+from __future__ import annotations
+
+from typing import Any
 
 import chromadb
 
-# --- Determine environment: local vs Render ---
-if os.getenv("RENDER", "false").lower() == "true":
-    # Render-specific path (read-write on Render)
-    CHROMA_DATA_PATH = "/data/chroma_db"
-else:
-    # Local development path (inside project root)
-    CHROMA_DATA_PATH = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "data", "chroma_db")
-    )
+from app.settings import get_settings
 
-# Ensure the directory exists (safe for local only)
-os.makedirs(CHROMA_DATA_PATH, exist_ok=True)
 
-# --- Constants ---
-COLLECTION_NAME = "figure_context_collection"
+_COLLECTION_NAME = "figure_context_collection"
+_client: Any = None
 
-# --- Persistent ChromaDB Client ---
-client = chromadb.PersistentClient(path=CHROMA_DATA_PATH)
+
+def _get_client() -> chromadb.PersistentClient:
+    """
+    Return a singleton persistent Chroma client.
+
+    Returns
+    -------
+    chromadb.PersistentClient
+        Persistent client instance.
+    """
+    global _client
+    if _client is None:
+        settings = get_settings()
+        _client = chromadb.PersistentClient(path=settings.chroma_data_path)
+    return _client
 
 
 def get_figure_context_collection():
     """
-    Get or create the collection used for storing vectorized context entries
-    tied to historical figures.
+    Return the persistent collection for figure context vectors.
 
-    Returns:
-        chromadb.api.models.Collection.Collection: The Chroma collection object.
+    Returns
+    -------
+    chromadb.api.models.Collection.Collection
+        The collection instance for figure contexts.
     """
-    return client.get_or_create_collection(name=COLLECTION_NAME)
+    client = _get_client()
+    return client.get_or_create_collection(name=_COLLECTION_NAME)
