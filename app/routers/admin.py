@@ -1,50 +1,273 @@
-"""Admin endpoints for operational tasks such as seeding figures.
+"""
+Admin API v1 (guarded by admin step-up tokens).
 
-This module exposes a protected endpoint to trigger the figures CSV ingestion
-idempotently in production. It reuses the existing startup ingestion logic and
-returns a structured report describing what happened.
+This router provides a minimal set of endpoints to validate the admin step-up
+flow and exercise role-based authorization. All endpoints require an admin-
+scoped bearer token via the admin_required dependency.
 """
 
-from typing import Dict, Tuple
+from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Generator, List
 
-from app import models
-from app.startup_ingest import maybe_ingest_seed_csv
-from app.utils.security import get_current_user
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy.orm import Session
+
+from app import models, schemas
+from app.database import get_db_chat
+from app.figures_database import FigureSessionLocal
+from app.utils.security import admin_required
+
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
-@router.post("/figures/ingest", status_code=status.HTTP_200_OK)
-def admin_ingest_figures(
-    current_user: models.User = Depends(get_current_user),
-) -> Dict[str, object]:
+def get_figure_db() -> Generator[Session, None, None]:
     """
-    Trigger the figures CSV ingestion and return a report.
+    Yield a SQLAlchemy session bound to the figures database.
 
-    Parameters
-    ----------
-    current_user : app.models.User
-        The authenticated user invoking the operation.
+    Yields
+    ------
+    sqlalchemy.orm.Session
+        Database session for the figures database.
+    """
+    db = FigureSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@router.get("/health")
+def admin_health(_: models.User = Depends(admin_required)) -> dict:
+    """
+    Return a simple health payload to confirm admin access.
 
     Returns
     -------
     dict
-        A dictionary with keys:
-        - "ran": bool indicating whether ingestion executed
-        - "report": dict containing details from the ingestion step
-
-    Notes
-    -----
-    This endpoint requires authentication but does not enforce a special role,
-    as the operation is idempotent and safe. To harden further, restrict access
-    by user or add a shared secret check as needed.
+        Static health response.
     """
-    ran, report = maybe_ingest_seed_csv(logger=None)  # logger optional here
-    if not report.get("ok", True) and report.get("reason") == "csv_not_found":
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"CSV not found at {report.get('path')}",
+    return {"ok": True, "scope": "admin"}
+
+
+@router.get("/users", response_model=List[schemas.UserRead])
+def list_users(
+    _: models.User = Depends(admin_required),
+    db_chat: Session = Depends(get_db_chat),
+) -> List[schemas.UserRead]:
+    """
+    List all users for administration.
+    """
+    return db_chat.query(models.User).order_by(models.User.id.asc()).all()
+
+
+@router.patch("/users/{user_id}/role", response_model=schemas.UserRead)
+def update_user_role(
+    user_id: int,
+    payload: schemas.UserRoleUpdate,
+    request: Request,
+    admin_user: models.User = Depends(admin_required),
+    db_chat: Session = Depends(get_db_chat),
+) -> schemas.UserRead:
+    """
+    Update a user's role. Requires admin scope.
+    """
+    user = db_chat.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    previous = user.role
+    user.role = payload.role
+    db_chat.add(user)
+    db_chat.add(
+        models.AuditLog(
+            actor_user_id=admin_user.id,
+            action="user.role.update",
+            object_type="user",
+            object_id=str(user.id),
+            diff_json=f'{{"before":"{previous}","after":"{user.role}"}}',
+            ip=request.client.host if request.client else None,
         )
-    return {"ran": ran, "report": report}
+    )
+    db_chat.commit()
+    db_chat.refresh(user)
+    return user
+
+
+@router.get("/figures", response_model=List[schemas.HistoricalFigureRead])
+def list_figures_admin(
+    _: models.User = Depends(admin_required),
+    db_fig: Session = Depends(get_figure_db),
+) -> List[schemas.HistoricalFigureRead]:
+    """
+    List all historical figures for administration.
+    """
+    return db_fig.query(models.HistoricalFigure).order_by(models.HistoricalFigure.id.asc()).all()
+
+
+@router.post("/figures", response_model=schemas.HistoricalFigureDetail, status_code=status.HTTP_201_CREATED)
+def create_figure_admin(
+    data: schemas.HistoricalFigureDetail,
+    request: Request,
+    admin_user: models.User = Depends(admin_required),
+    db_fig: Session = Depends(get_figure_db),
+    db_chat: Session = Depends(get_db_chat),
+) -> schemas.HistoricalFigureDetail:
+    """
+    Create a new historical figure.
+    """
+    slug = (data.slug or "").strip()
+    if not slug:
+        raise HTTPException(status_code=400, detail="slug is required")
+    existing = db_fig.query(models.HistoricalFigure).filter(models.HistoricalFigure.slug == slug).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Figure with this slug already exists")
+
+    figure = models.HistoricalFigure()
+    figure.from_dict(
+        {
+            "name": data.name,
+            "slug": slug,
+            "main_site": data.main_site,
+            "related_sites": [],
+            "era": data.era,
+            "roles": [],
+            "short_summary": data.short_summary,
+            "long_bio": data.long_bio,
+            "echo_story": data.echo_story,
+            "image_url": data.image_url,
+            "sources": {},
+            "wiki_links": {},
+            "quote": data.quote,
+            "birth_year": data.birth_year,
+            "death_year": data.death_year,
+            "verified": data.verified or 0,
+        }
+    )
+    db_fig.add(figure)
+    db_fig.flush()
+
+    db_fig.add(
+        models.FigureContext(
+            figure_slug=slug,
+            source_name="persona",
+            source_url=None,
+            content_type="persona",
+            content=(data.long_bio or "")[:2000] if data.long_bio else "",
+            is_manual=1,
+        )
+    )
+    db_fig.add(
+        models.FigureContext(
+            figure_slug=slug,
+            source_name="quote",
+            source_url=None,
+            content_type="instruction",
+            content=(data.quote or "")[:500] if data.quote else "",
+            is_manual=1,
+        )
+    )
+
+    db_chat.add(
+        models.AuditLog(
+            actor_user_id=admin_user.id,
+            action="figure.create",
+            object_type="figure",
+            object_id=slug,
+            diff_json=None,
+            ip=request.client.host if request.client else None,
+        )
+    )
+
+    db_fig.commit()
+    db_chat.commit()
+
+    out = db_fig.query(models.HistoricalFigure).filter(models.HistoricalFigure.slug == slug).first()
+    return out  # type: ignore[return-value]
+
+
+@router.patch("/figures/{slug}", response_model=schemas.HistoricalFigureDetail)
+def update_figure_admin(
+    slug: str,
+    data: schemas.HistoricalFigureUpdate,
+    request: Request,
+    admin_user: models.User = Depends(admin_required),
+    db_fig: Session = Depends(get_figure_db),
+    db_chat: Session = Depends(get_db_chat),
+) -> schemas.HistoricalFigureDetail:
+    """
+    Partially update a historical figure by slug.
+    """
+    figure = db_fig.query(models.HistoricalFigure).filter(models.HistoricalFigure.slug == slug).first()
+    if not figure:
+        raise HTTPException(status_code=404, detail="Figure not found")
+
+    before = figure.to_dict()
+    figure.from_dict(
+        {
+            "name": data.name or before["name"],
+            "slug": slug,
+            "main_site": data.main_site if data.main_site is not None else before["main_site"],
+            "related_sites": before["related_sites"],
+            "era": data.era if data.era is not None else before["era"],
+            "roles": before["roles"],
+            "short_summary": data.short_summary if data.short_summary is not None else before["short_summary"],
+            "long_bio": data.long_bio if data.long_bio is not None else before["long_bio"],
+            "echo_story": data.echo_story if data.echo_story is not None else before["echo_story"],
+            "image_url": data.image_url if data.image_url is not None else before["image_url"],
+            "sources": before["sources"],
+            "wiki_links": before["wiki_links"],
+            "quote": data.quote if data.quote is not None else before["quote"],
+            "birth_year": data.birth_year if data.birth_year is not None else before["birth_year"],
+            "death_year": data.death_year if data.death_year is not None else before["death_year"],
+            "verified": data.verified if data.verified is not None else int(before["verified"]),
+        }
+    )
+
+    db_chat.add(
+        models.AuditLog(
+            actor_user_id=admin_user.id,
+            action="figure.update",
+            object_type="figure",
+            object_id=slug,
+            diff_json=None,
+            ip=request.client.host if request.client else None,
+        )
+    )
+
+    db_fig.commit()
+    db_chat.commit()
+    db_fig.refresh(figure)
+    return figure  # type: ignore[return-value]
+
+
+@router.delete("/figures/{slug}")
+def delete_figure_admin(
+    slug: str,
+    request: Request,
+    admin_user: models.User = Depends(admin_required),
+    db_fig: Session = Depends(get_figure_db),
+    db_chat: Session = Depends(get_db_chat),
+) -> Response:
+    """
+    Delete a historical figure by slug.
+    """
+    figure = db_fig.query(models.HistoricalFigure).filter(models.HistoricalFigure.slug == slug).first()
+    if not figure:
+        raise HTTPException(status_code=404, detail="Figure not found")
+
+    db_fig.delete(figure)
+    db_chat.add(
+        models.AuditLog(
+            actor_user_id=admin_user.id,
+            action="figure.delete",
+            object_type="figure",
+            object_id=slug,
+            diff_json=None,
+            ip=request.client.host if request.client else None,
+        )
+    )
+
+    db_fig.commit()
+    db_chat.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

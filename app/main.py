@@ -249,6 +249,12 @@ def serve_logo_png() -> FileResponse:
     """
     return FileResponse(STATIC_DIR / "logo.png", media_type="image/png")
 
+@app.get("/admin/ui", response_class=FileResponse)
+def serve_admin_ui() -> FileResponse:
+    """
+    Serve the Admin Dashboard UI for Phase 1 (users & figures).
+    """
+    return FileResponse(STATIC_DIR / "admin.html", media_type="text/html")
 
 @app.get("/threads_visual.png", response_class=FileResponse)
 def serve_threads_visual() -> FileResponse:

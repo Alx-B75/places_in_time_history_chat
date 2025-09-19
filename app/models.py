@@ -1,22 +1,10 @@
-"""SQLAlchemy models for users, chats, threads, historical figures, and guest chat.
+"""
+SQLAlchemy models for users, chats, threads, historical figures, guest chat, and admin audit.
 
-This module defines the core ORM models used by the application. The existing
-authenticated-user models are preserved as-is. Two additional models are
-introduced to enable a limited guest chat flow without touching the current
-authenticated-chat tables or behavior:
-
-1) GuestSession
-   Represents an ephemeral, anonymous trial session scoped to a single
-   historical figure. Contains a random opaque session token, a server-side
-   counter for the number of guest questions asked, and timestamps.
-
-2) GuestMessage
-   Stores individual messages exchanged in a guest session. This mirrors the
-   structure of Chat but remains isolated so that guest data handling cannot
-   impact the authenticated flow.
-
-These guest models allow enforcing a strict question limit server-side while
-keeping the existing user/thread/chat logic unchanged.
+This module defines the core ORM models used by the application. It preserves the
+authenticated-user tables and the isolated guest tables, and introduces role-based
+access via a new User.role field alongside an AuditLog table for administrative
+actions.
 """
 
 import json
@@ -29,9 +17,9 @@ from app.figures_database import FigureBase
 
 class Chat(Base):
     """
-    Represents a single message in a chat conversation between a user and the
-    chatbot.
+    Represents a single message in a chat conversation between a user and the chatbot.
     """
+
     __tablename__ = "chats"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -51,22 +39,26 @@ class Chat(Base):
 
 class User(Base):
     """
-    Represents a user who can submit chats.
+    Represents an application user with role-based access.
     """
+
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="user", index=True)
 
     chats = relationship("Chat", back_populates="user", cascade="all, delete")
     threads = relationship("Thread", back_populates="user", cascade="all, delete")
+    audit_logs = relationship("AuditLog", back_populates="actor", cascade="all, delete")
 
 
 class Thread(Base):
     """
     Represents a conversation thread grouping related messages.
     """
+
     __tablename__ = "threads"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -76,20 +68,14 @@ class Thread(Base):
     figure_slug = Column(String, nullable=True)
 
     user = relationship("User", back_populates="threads")
-    chats = relationship(
-        "Chat",
-        back_populates="thread",
-        cascade="all, delete-orphan",
-    )
+    chats = relationship("Chat", back_populates="thread", cascade="all, delete-orphan")
 
 
 class HistoricalFigure(FigureBase):
     """
     Represents a historical figure relevant to the Places in Time project.
-
-    JSON fields (e.g., roles, wiki_links) are stored as TEXT in SQLite and
-    decoded manually.
     """
+
     __tablename__ = "historical_figures"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -127,9 +113,7 @@ class HistoricalFigure(FigureBase):
             "name": self.name,
             "slug": self.slug,
             "main_site": self.main_site,
-            "related_sites": json.loads(self.related_sites)
-            if self.related_sites
-            else [],
+            "related_sites": json.loads(self.related_sites) if self.related_sites else [],
             "era": self.era,
             "roles": json.loads(self.roles) if self.roles else [],
             "short_summary": self.short_summary,
@@ -168,9 +152,9 @@ class HistoricalFigure(FigureBase):
 
 class FigureContext(FigureBase):
     """
-    Stores original source context for a historical figure, used in the chatbot
-    for grounding.
+    Stores original source context for a historical figure, used in the chatbot for grounding.
     """
+
     __tablename__ = "figure_contexts"
 
     id = Column(Integer, primary_key=True)
@@ -185,13 +169,8 @@ class FigureContext(FigureBase):
 class GuestSession(Base):
     """
     Represents a short-lived anonymous session for a specific historical figure.
-
-    A GuestSession is identified by an opaque, random token that is stored in an
-    HttpOnly cookie on the client. The server enforces a maximum number of
-    questions for the session and can set an optional expiry. This model is
-    intentionally separate from the authenticated thread models to prevent any
-    coupling or regression risk in existing flows.
     """
+
     __tablename__ = "guest_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -212,10 +191,8 @@ class GuestSession(Base):
 class GuestMessage(Base):
     """
     Represents a single message within a guest session.
-
-    This mirrors the structure of Chat for the authenticated flow but remains
-    isolated so that guest data is fully sandboxed.
     """
+
     __tablename__ = "guest_messages"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -226,3 +203,22 @@ class GuestMessage(Base):
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
     session = relationship("GuestSession", back_populates="messages")
+
+
+class AuditLog(Base):
+    """
+    Records administrative actions for auditing and accountability.
+    """
+
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action = Column(String, nullable=False, index=True)
+    object_type = Column(String, nullable=False, index=True)
+    object_id = Column(String, nullable=True)
+    diff_json = Column(Text, nullable=True)
+    ip = Column(String, nullable=True)
+
+    actor = relationship("User", back_populates="audit_logs")
