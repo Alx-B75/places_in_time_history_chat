@@ -1,191 +1,272 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Places in Time — Admin Dashboard</title>
+  <meta charset="UTF-8" />
+  <title>Places in Time — Admin</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="icon" href="/static/pit-favicon-mark.ico" />
-  <link rel="stylesheet" href="/static/style.css?v=brand-9" />
   <style>
-    :root {
-      --bg: #0f172a;
-      --panel: #111827;
-      --muted: #94a3b8;
-      --text: #e5e7eb;
-      --accent: #60a5fa;
-      --accent-2: #34d399;
-      --danger: #ef4444;
-      --panel-2: #1f2937;
-      --border: #273549;
-    }
-    body {
-      background: linear-gradient(180deg, #0b1220, #0f172a 30%, #0b0f1a);
-      color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
-      min-height: 100vh;
-    }
-    .container { max-width: 1100px; margin: 40px auto; padding: 0 16px; }
-    .card {
-      background: linear-gradient(180deg, var(--panel), var(--panel-2));
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      box-shadow: 0 8px 24px rgba(0,0,0,.35);
-      overflow: hidden;
-    }
-    .header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 18px 20px; border-bottom: 1px solid var(--border);
-      background: rgba(255,255,255,0.02); backdrop-filter: blur(6px);
-    }
-    .title { font-size: 20px; font-weight: 700; letter-spacing: .2px; }
-    .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; }
-    .controls { display: flex; gap: 10px; align-items: center; }
-    .pill {
-      padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px;
-      font-size: 12px; color: var(--muted);
-    }
-    .pill.good { color: var(--accent-2); border-color: #14532d; background: rgba(20,83,45,.2); }
-    .pill.bad { color: var(--danger); border-color: #7f1d1d; background: rgba(127,29,29,.2); }
-    input[type="text"], input[type="password"], input[type="email"] {
-      background: #0b1220; color: var(--text); border: 1px solid var(--border);
-      border-radius: 10px; padding: 10px 12px; font-size: 13px; outline: none; width: 100%;
-    }
-    input::placeholder { color: #6b7280; }
-    .btn {
-      border: 1px solid var(--border); color: var(--text); background: #0e1526;
-      border-radius: 10px; padding: 10px 14px; font-weight: 600; cursor: pointer;
-    }
-    .btn:hover { border-color: var(--accent); }
-    .btn.primary { background: linear-gradient(180deg, #1a2376, #1e40af); border-color: #334155; }
-    .btn.success { background: linear-gradient(180deg, #0b5f3e, #065f46); }
-    .btn.danger { background: linear-gradient(180deg, #7f1d1d, #991b1b); }
-    .tabs { display: flex; gap: 8px; padding: 14px; border-bottom: 1px solid var(--border); }
-    .tab { padding: 10px 14px; border-radius: 10px; cursor: pointer; color: var(--muted); border: 1px solid transparent; user-select: none; }
-    .tab.active { color: var(--text); border-color: var(--border); background: rgba(255,255,255,0.03); }
-    .tab.disabled { opacity: .35; pointer-events: none; }
-    .panel { padding: 16px; }
-    .grid { width: 100%; border-collapse: collapse; }
-    .grid th, .grid td { border-bottom: 1px solid var(--border); padding: 10px 8px; font-size: 14px; vertical-align: top; }
-    .grid th { text-align: left; color: var(--muted); font-weight: 600; }
-    .row-actions { display: flex; gap: 8px; }
-    .inline { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .muted { color: var(--muted); font-size: 12px; }
-    .form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
-    .form .full { grid-column: 1 / -1; }
-    .kicker { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-    .spacer { height: 10px; }
-    .footer-note { color: var(--muted); font-size: 12px; padding: 12px 16px; border-top: 1px solid var(--border); }
-    .status { font-size: 12px; color: var(--muted); }
-    .good { color: var(--accent-2); }
-    .bad { color: var(--danger); }
-    .section { border-top: 1px dashed var(--border); padding-top: 12px; margin-top: 12px; }
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; }
+    body { margin: 0; padding: 0; background: #0b0f14; color: #e7ebf0; }
+    header { padding: 16px 20px; border-bottom: 1px solid #1f2a35; display: flex; align-items: center; gap: 12px; }
+    h1 { font-size: 20px; margin: 0; }
+    .container { padding: 20px; max-width: 1100px; margin: 0 auto; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .tab { padding: 8px 12px; border: 1px solid #1f2a35; border-radius: 10px; background: #101822; cursor: pointer; user-select: none; }
+    .tab.active { background: #152233; border-color: #2b3a4a; }
+    section { display: none; }
+    section.active { display: block; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 24px; }
+    th, td { padding: 10px; border-bottom: 1px solid #1f2a35; vertical-align: top; }
+    th { text-align: left; color: #d0d7e0; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid #2b3a4a; background: #122033; font-size: 12px; }
+    .badge.ok { border-color: #184f2e; background: #0f2b1e; color: #9fe7b3; }
+    .badge.err { border-color: #4f1818; background: #2b0f0f; color: #f29b9b; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { border: 1px solid #1f2a35; background: #0e1620; border-radius: 12px; padding: 16px; }
+    label { display: block; font-size: 14px; margin-bottom: 6px; color: #c2c9d1; }
+    input, select, textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #253243; background: #0a121b; color: #e7ebf0; }
+    textarea { min-height: 140px; }
+    button { padding: 10px 14px; border-radius: 10px; border: 1px solid #2b3a4a; background: #152233; color: #e7ebf0; cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .muted { color: #98a3af; font-size: 13px; }
+    .right { text-align: right; }
+    .toast { position: fixed; bottom: 16px; right: 16px; background: #0e1620; border: 1px solid #2b3a4a; padding: 12px 14px; border-radius: 10px; display:none; }
+    a { color: #8fc7ff; text-decoration: none; }
+    .sr { position:absolute; left:-10000px; top:auto; width:1px; height:1px; overflow:hidden; }
   </style>
 </head>
 <body>
+  <header>
+    <img src="/logo.png" alt="Places in Time" style="height:28px;width:auto" />
+    <h1>Admin Dashboard</h1>
+  </header>
+
   <div class="container">
-    <div class="card">
-      <div class="header">
-        <div>
-          <div class="title">Admin Dashboard</div>
-          <div class="subtitle">Phase 1 · Users &amp; Figures · Header tokens (in-memory) with step-up</div>
-        </div>
-        <div class="controls">
-          <div id="authStatus" class="pill bad">Signed out</div>
-          <div id="adminStatus" class="pill">Admin inactive</div>
-          <button class="btn" id="lockAdminBtn" title="Drop admin token only">Lock Admin</button>
-          <button class="btn danger" id="logoutBtn" title="Drop all tokens & clear UI">Logout</button>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="kicker">Sign in</div>
-        <div class="form">
-          <div><input id="email" type="email" autocomplete="username" placeholder="Email" /></div>
-          <div><input id="password" type="password" autocomplete="current-password" placeholder="Password" /></div>
-          <div class="inline full">
-            <button class="btn primary" id="loginBtn">Sign in & Step Up</button>
-            <label class="inline" style="gap:6px;">
-              <input type="checkbox" id="autoRefresh" />
-              <span class="muted">Auto-refresh admin token while this tab is open</span>
-            </label>
-            <span class="status" id="loginStatus">Waiting…</span>
-          </div>
-        </div>
-        <div class="section">
-          <div class="inline">
-            <button class="btn" id="checkHealthBtn">Check Admin Health</button>
-            <span class="status" id="healthStatus">Waiting…</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="tabs">
-        <div class="tab disabled active" data-tab="users">Users</div>
-        <div class="tab disabled" data-tab="figures">Figures</div>
-        <div class="pill" id="envInfo">/admin API</div>
-      </div>
-
-      <div class="panel" id="panel-users">
-        <div class="inline">
-          <button class="btn" id="refreshUsers">Refresh</button>
-          <span class="status" id="usersStatus">Waiting…</span>
-        </div>
-        <div class="spacer"></div>
-        <table class="grid" id="usersTable">
-          <thead>
-            <tr>
-              <th style="width:60px;">ID</th>
-              <th>Username</th>
-              <th style="width:120px;">Role</th>
-              <th style="width:220px;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="usersBody"></tbody>
-        </table>
-      </div>
-
-      <div class="panel" id="panel-figures" style="display:none;">
-        <div class="kicker">Create / Update Figure</div>
-        <div class="form">
-          <div class="full inline">
-            <input id="figName" type="text" placeholder="Name (required for create)" />
-            <input id="figSlug" type="text" placeholder="Slug (required for create & update)" />
-            <button class="btn success" id="createFigureBtn">Create</button>
-            <button class="btn" id="updateFigureBtn">Update (PATCH)</button>
-          </div>
-          <div class="full"><input id="figShort" type="text" placeholder="Short summary" /></div>
-          <div class="full"><input id="figLong" type="text" placeholder="Long bio (truncated in seed)" /></div>
-          <div><input id="figEra" type="text" placeholder="Era" /></div>
-          <div><input id="figImage" type="text" placeholder="Image URL" /></div>
-          <div><input id="figQuote" type="text" placeholder="Quote" /></div>
-        </div>
-        <div class="spacer"></div>
-        <div class="inline">
-          <button class="btn" id="refreshFigures">Refresh</button>
-          <span class="status" id="figuresStatus">Waiting…</span>
-        </div>
-        <div class="spacer"></div>
-        <table class="grid" id="figuresTable">
-          <thead>
-            <tr>
-              <th style="width:60px;">ID</th>
-              <th>Name</th>
-              <th>Slug</th>
-              <th>Era</th>
-              <th>Summary</th>
-              <th style="width:220px;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="figuresBody"></tbody>
-        </table>
-      </div>
-
-      <div class="footer-note">
-        Tokens are kept in-memory only (this tab). Close or reload to drop them.
-      </div>
+    <div class="tabs">
+      <div class="tab active" data-target="tab-users">Users</div>
+      <div class="tab" data-target="tab-figures">Figures</div>
+      <div class="tab" data-target="tab-rag">RAG Sources</div>
     </div>
+
+    <section id="tab-users" class="active" aria-labelledby="tab-users-label">
+      <h2 id="tab-users-label" class="sr">Users</h2>
+      <div class="card">
+        <h2 style="margin-top:0">Users</h2>
+        <p class="muted">This section uses your existing admin APIs for listing and role updates.</p>
+      </div>
+    </section>
+
+    <section id="tab-figures" aria-labelledby="tab-figures-label">
+      <h2 id="tab-figures-label" class="sr">Figures</h2>
+      <div class="card">
+        <h2 style="margin-top:0">Figures</h2>
+        <p class="muted">Manage figures with your existing endpoints. The RAG tab below augments context management.</p>
+      </div>
+    </section>
+
+    <section id="tab-rag" aria-labelledby="tab-rag-label">
+      <h2 id="tab-rag-label" class="sr">RAG Sources</h2>
+      <div class="row">
+        <div class="card">
+          <h2 style="margin-top:0">Current Sources</h2>
+          <div id="chromaStatus"></div>
+          <table id="ragTable" aria-describedby="ragHelp">
+            <thead>
+              <tr>
+                <th>Figure</th>
+                <th>Total</th>
+                <th>Persona</th>
+                <th>Instruction</th>
+                <th>Bio</th>
+                <th>Note</th>
+                <th>Quote</th>
+                <th>Context</th>
+                <th>Manual?</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div id="ragHelp" class="muted">Counts reflect <code>figure_contexts</code> in the Figures DB. Vector index info is collection-level.</div>
+        </div>
+
+        <div class="card">
+          <h2 style="margin-top:0">Add Manual Source</h2>
+          <form id="addSourceForm" novalidate>
+            <label for="figureSelect">Figure</label>
+            <select id="figureSelect" required></select>
+
+            <label for="sourceName">Source name</label>
+            <input id="sourceName" type="text" maxlength="200" required />
+
+            <label for="contentType">Content type</label>
+            <select id="contentType" required>
+              <option value="persona">persona</option>
+              <option value="instruction">instruction</option>
+              <option value="bio">bio</option>
+              <option value="note">note</option>
+              <option value="quote">quote</option>
+              <option value="context">context</option>
+            </select>
+
+            <label for="sourceUrl">Source URL (optional)</label>
+            <input id="sourceUrl" type="url" placeholder="https://example.org/page" />
+
+            <label for="content">Content</label>
+            <textarea id="content" required></textarea>
+
+            <div class="right" style="margin-top:12px">
+              <button id="submitBtn" type="submit">Add Source</button>
+            </div>
+          </form>
+          <p class="muted">Manual sources are stored as rows in <code>figure_contexts</code> with <code>is_manual=1</code>. Identical duplicates are rejected.</p>
+        </div>
+      </div>
+    </section>
   </div>
 
-  <script src="/static/admin.js?v=phase1-ui-auto"></script>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const tabs = document.querySelectorAll('.tab');
+    const sections = document.querySelectorAll('section');
+    tabs.forEach(t => {
+      t.addEventListener('click', () => {
+        tabs.forEach(x => x.classList.remove('active'));
+        sections.forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        document.getElementById(t.dataset.target).classList.add('active');
+        if (t.dataset.target === 'tab-rag') refreshRag();
+      });
+    });
+
+    function getToken() {
+      return sessionStorage.getItem('access_token') || localStorage.getItem('access_token') || '';
+    }
+
+    async function apiGet(path) {
+      const res = await fetch(path, { headers: { 'Authorization': 'Bearer ' + getToken() } });
+      if (res.status === 401 || res.status === 403) throw new Error('Unauthorized');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }
+
+    async function apiPost(path, body) {
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (res.status === 401 || res.status === 403) throw new Error('Unauthorized');
+      if (res.status === 409) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.detail || 'Duplicate');
+      }
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.detail || ('HTTP ' + res.status));
+      }
+      return res.json().catch(() => ({}));
+    }
+
+    function toast(msg, ok=true) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.style.borderColor = ok ? '#184f2e' : '#4f1818';
+      el.style.display = 'block';
+      clearTimeout(el._t);
+      el._t = setTimeout(() => { el.style.display = 'none'; }, 2500);
+    }
+
+    function setChromaStatus(collection) {
+      const s = document.getElementById('chromaStatus');
+      const ok = collection && collection.available;
+      const detail = collection && collection.detail ? String(collection.detail) : '';
+      s.innerHTML = `<span class="badge ${ok ? 'ok' : 'err'}">${ok ? 'Chroma: available' : 'Chroma: unavailable'}${detail ? ' — ' + detail : ''}</span>`;
+    }
+
+    function renderRagTable(figures) {
+      const tbody = document.querySelector('#ragTable tbody');
+      tbody.innerHTML = '';
+      const safe = x => x == null ? 0 : x;
+      figures.forEach(f => {
+        const cc = f.context_counts || {};
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${f.name} <div class="muted">${f.slug}</div></td>
+          <td>${safe(f.total_contexts)}</td>
+          <td>${safe(cc.persona)}</td>
+          <td>${safe(cc.instruction)}</td>
+          <td>${safe(cc.bio)}</td>
+          <td>${safe(cc.note)}</td>
+          <td>${safe(cc.quote)}</td>
+          <td>${safe(cc.context)}</td>
+          <td>${f.has_manual_context ? '<span class="badge ok">yes</span>' : '<span class="badge">no</span>'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadFiguresForSelect() {
+      const sel = document.getElementById('figureSelect');
+      sel.innerHTML = '';
+      const items = await apiGet('/admin/figures');
+      items.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.slug;
+        opt.textContent = f.name + ' (' + f.slug + ')';
+        sel.appendChild(opt);
+      });
+    }
+
+    async function refreshRag() {
+      try {
+        const data = await apiGet('/admin/rag/sources');
+        setChromaStatus(data.collection || {});
+        renderRagTable(data.figures || []);
+        const hadOptions = document.getElementById('figureSelect').options.length > 0;
+        if (!hadOptions) await loadFiguresForSelect();
+      } catch (e) {
+        toast(String(e.message || e), false);
+      }
+    }
+
+    document.getElementById('addSourceForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      const payload = {
+        figure_slug: document.getElementById('figureSelect').value,
+        source_name: document.getElementById('sourceName').value.trim(),
+        content_type: document.getElementById('contentType').value,
+        source_url: document.getElementById('sourceUrl').value.trim() || null,
+        content: document.getElementById('content').value.trim()
+      };
+      if (!payload.figure_slug || !payload.source_name || !payload.content || !payload.content_type) {
+        toast('Please fill in all required fields.', false);
+        btn.disabled = false;
+        return;
+      }
+      try {
+        await apiPost('/admin/rag/sources', payload);
+        toast('Source added.');
+        document.getElementById('sourceName').value = '';
+        document.getElementById('sourceUrl').value = '';
+        document.getElementById('content').value = '';
+        await refreshRag();
+      } catch (e) {
+        toast(String(e.message || e), false);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    (async function init() {
+      if (document.querySelector('.tab.active')?.dataset.target === 'tab-rag') {
+        await refreshRag();
+      } else {
+        try { await apiGet('/admin/health'); } catch(_e) {}
+      }
+    })();
+  </script>
 </body>
 </html>

@@ -4,13 +4,20 @@ Admin API v1 (guarded by admin step-up tokens).
 This router provides a minimal set of endpoints to validate the admin step-up
 flow and exercise role-based authorization. All endpoints require an admin-
 scoped bearer token via the admin_required dependency.
+
+This version adds:
+- GET /admin/rag/sources   → list current RAG sources and Chroma availability
+- POST /admin/rag/sources  → create a manual RAG source (FigureContext, is_manual=1)
 """
 
 from __future__ import annotations
 
-from typing import Generator, List
+import hashlib
+import json
+from typing import Dict, Generator, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -18,6 +25,8 @@ from app.database import get_db_chat
 from app.figures_database import FigureSessionLocal
 from app.utils.security import admin_required
 
+# Chroma probe (safe, no secrets)
+from app.vector.chroma_client import get_figure_context_collection
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -25,11 +34,6 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 def get_figure_db() -> Generator[Session, None, None]:
     """
     Yield a SQLAlchemy session bound to the figures database.
-
-    Yields
-    ------
-    sqlalchemy.orm.Session
-        Database session for the figures database.
     """
     db = FigureSessionLocal()
     try:
@@ -42,11 +46,6 @@ def get_figure_db() -> Generator[Session, None, None]:
 def admin_health(_: models.User = Depends(admin_required)) -> dict:
     """
     Return a simple health payload to confirm admin access.
-
-    Returns
-    -------
-    dict
-        Static health response.
     """
     return {"ok": True, "scope": "admin"}
 
@@ -271,3 +270,178 @@ def delete_figure_admin(
     db_fig.commit()
     db_chat.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------
+# RAG Sources: Admin endpoints
+# ---------------------------
+
+class RagSourceCreate(BaseModel):
+    figure_slug: str = Field(..., min_length=1)
+    source_name: str = Field(..., min_length=1, max_length=200)
+    content_type: str = Field(..., min_length=1, max_length=50)  # e.g., persona, instruction, bio, note, context
+    content: str = Field(..., min_length=1)
+    source_url: Optional[str] = Field(None, max_length=1000)
+
+
+@router.get("/rag/sources")
+def list_rag_sources(
+    _: models.User = Depends(admin_required),
+    db_fig: Session = Depends(get_figure_db),
+):
+    """
+    List current RAG sources by figure, plus Chroma collection availability.
+    """
+    # Figures
+    figures = db_fig.query(models.HistoricalFigure).all()
+    figures_by_slug = {f.slug: f for f in figures}
+
+    # Contexts
+    ctx_rows = db_fig.query(models.FigureContext).all()
+
+    # Aggregate counts per figure and per content_type
+    agg: Dict[str, Dict[str, int]] = {}
+    manual_flags: Dict[str, bool] = {}
+    for r in ctx_rows:
+        slug = r.figure_slug or ""
+        if slug not in agg:
+            agg[slug] = {}
+        ct = (r.content_type or "unknown").strip().lower()
+        agg[slug][ct] = agg[slug].get(ct, 0) + 1
+        if r.is_manual:
+            manual_flags[slug] = True
+
+    # Build response entries
+    figure_entries: List[dict] = []
+    for slug, fig in figures_by_slug.items():
+        counts = agg.get(slug, {})
+        total = sum(counts.values()) if counts else 0
+        # Decode historical_figures.sources JSON safely; read-only
+        try:
+            sources_meta = json.loads(fig.sources) if fig.sources else {}
+        except Exception:
+            sources_meta = {}
+        entry = {
+            "slug": slug,
+            "name": fig.name,
+            "context_counts": counts,
+            "total_contexts": total,
+            "has_manual_context": bool(manual_flags.get(slug, False)),
+            "sources_meta": sources_meta,
+        }
+        figure_entries.append(entry)
+
+    # Chroma availability probe (collection-level only; no secrets)
+    collection_info = {
+        "name": "figure_context_collection",
+        "available": False,
+        "detail": None,
+        "vector_index_stats": None,  # kept null; per-figure stats not cheap/standard
+    }
+    try:
+        col = get_figure_context_collection()
+        _ = col.name  # touch property to ensure client is alive
+        collection_info["available"] = True
+    except Exception as exc:  # pragma: no cover
+        collection_info["available"] = False
+        collection_info["detail"] = str(exc)
+
+    return {
+        "collection": collection_info,
+        "figures": sorted(figure_entries, key=lambda x: x["slug"]),
+    }
+
+
+@router.post("/rag/sources", status_code=status.HTTP_201_CREATED)
+def create_rag_source(
+    payload: RagSourceCreate,
+    request: Request,
+    admin_user: models.User = Depends(admin_required),
+    db_fig: Session = Depends(get_figure_db),
+    db_chat: Session = Depends(get_db_chat),
+):
+    """
+    Create a manual, admin-curated RAG source by inserting a FigureContext row.
+
+    - Writes to figures DB only (FigureContext with is_manual=1)
+    - Adds an AuditLog entry in chat DB
+    - Idempotency: if an identical manual record already exists (same figure_slug,
+      source_name, content_type, and content hash), returns 409.
+    """
+    slug = payload.figure_slug.strip()
+    if not slug:
+        raise HTTPException(status_code=400, detail="figure_slug is required")
+
+    figure = db_fig.query(models.HistoricalFigure).filter(models.HistoricalFigure.slug == slug).first()
+    if not figure:
+        raise HTTPException(status_code=404, detail="Figure not found")
+
+    # Controlled vocabulary is enforced lightly here (no schema change).
+    # You can widen this list later.
+    allowed_types = {"persona", "instruction", "bio", "note", "quote", "context"}
+    ctype = payload.content_type.strip().lower()
+    if ctype not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"content_type must be one of {sorted(allowed_types)}",
+        )
+
+    # Idempotency via content hash (not stored in schema; logged in AuditLog)
+    norm_text = payload.content.replace("\r\n", "\n").strip()
+    content_hash = hashlib.sha256(norm_text.encode("utf-8")).hexdigest()
+
+    # Check for duplicate: same slug, source_name, content_type, AND identical content
+    dup = (
+        db_fig.query(models.FigureContext)
+        .filter(
+            models.FigureContext.figure_slug == slug,
+            models.FigureContext.source_name == payload.source_name,
+            models.FigureContext.content_type == ctype,
+            models.FigureContext.content == norm_text,
+        )
+        .first()
+    )
+    if dup:
+        raise HTTPException(status_code=409, detail="Identical manual source already exists")
+
+    ctx = models.FigureContext(
+        figure_slug=slug,
+        source_name=payload.source_name,
+        source_url=payload.source_url,
+        content_type=ctype,
+        content=norm_text,
+        is_manual=1,
+    )
+    db_fig.add(ctx)
+    db_fig.flush()  # get ctx.id
+
+    db_chat.add(
+        models.AuditLog(
+            actor_user_id=admin_user.id,
+            action="rag.source.create",
+            object_type="figure_context",
+            object_id=str(ctx.id),
+            diff_json=json.dumps(
+                {
+                    "figure_slug": slug,
+                    "source_name": payload.source_name,
+                    "content_type": ctype,
+                    "content_hash": content_hash,
+                    "source_url": payload.source_url,
+                }
+            ),
+            ip=request.client.host if request.client else None,
+        )
+    )
+
+    db_fig.commit()
+    db_chat.commit()
+
+    return {
+        "ok": True,
+        "id": ctx.id,
+        "figure_slug": slug,
+        "source_name": ctx.source_name,
+        "content_type": ctx.content_type,
+        "is_manual": True,
+    }
