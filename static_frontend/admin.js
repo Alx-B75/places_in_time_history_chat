@@ -2,11 +2,11 @@
   const $ = (sel) => document.querySelector(sel);
 
   const state = {
-    userToken: null,
-    adminToken: null,
-    password: null,
+    userToken: null,      // JWT (scope=user)
+    adminToken: null,     // JWT (scope=admin)
+    password: null,       // plaintext password (memory only; never persisted)
     adminRefreshTimer: null,
-    autoRefresh: false,
+    autoRefresh: true,    // default ON
   };
 
   const dom = {
@@ -41,6 +41,7 @@
     updateFigureBtn: $("#updateFigureBtn"),
   };
 
+  // ---------- Helpers ----------
   function setAuthUI() {
     if (state.userToken) {
       dom.authStatus.textContent = "Signed in";
@@ -75,13 +76,39 @@
     }
   }
 
+  function isValidAdminToken(tok) {
+    const p = parseJwt(tok);
+    return p && p.scope === "admin" && p.exp && p.exp * 1000 > Date.now() + 10_000;
+  }
+
+  function isValidUserToken(tok) {
+    const p = parseJwt(tok);
+    return p && p.scope === "user" && p.exp && p.exp * 1000 > Date.now() + 10_000;
+  }
+
+  function saveTokensToSession() {
+    // Only tokens are persisted (sessionStorage); password never persisted.
+    if (state.userToken) sessionStorage.setItem("user_token", state.userToken);
+    else sessionStorage.removeItem("user_token");
+
+    if (state.adminToken) sessionStorage.setItem("admin_token", state.adminToken);
+    else sessionStorage.removeItem("admin_token");
+  }
+
+  function loadTokensFromSession() {
+    const ut = sessionStorage.getItem("user_token");
+    const at = sessionStorage.getItem("admin_token");
+    if (ut && isValidUserToken(ut)) state.userToken = ut;
+    if (at && isValidAdminToken(at)) state.adminToken = at;
+  }
+
   function scheduleAdminRefresh() {
     clearTimeout(state.adminRefreshTimer);
     if (!state.autoRefresh || !state.adminToken || !state.password || !state.userToken) return;
     const payload = parseJwt(state.adminToken);
     if (!payload || !payload.exp) return;
     const msUntilExp = payload.exp * 1000 - Date.now();
-    const bufferMs = 60 * 1000;
+    const bufferMs = 60 * 1000; // refresh 60s early
     const wait = Math.max(5_000, msUntilExp - bufferMs);
     state.adminRefreshTimer = setTimeout(async () => {
       try { await stepUp(); } catch (e) { /* ignore; UI will reflect */ }
@@ -93,15 +120,29 @@
     const token = requireAdmin ? state.adminToken : state.userToken;
     if (token) headers["Authorization"] = `Bearer ${token}`;
     let res = await fetch(path, { ...opts, headers });
-    if (res.status === 401 || res.status === 403) {
-      if (requireAdmin && state.userToken && state.password) {
+
+    // If unauthorized, try to regain admin token automatically.
+    if ((res.status === 401 || res.status === 403) && requireAdmin) {
+      // If we still have userToken + password, try step-up.
+      if (state.userToken && state.password) {
         try {
           await stepUp();
           const headers2 = { ...headers, Authorization: `Bearer ${state.adminToken}` };
           res = await fetch(path, { ...opts, headers: headers2 });
-        } catch {}
+        } catch {
+          // fall through to interactive recovery
+        }
+      }
+      // If still unauthorized (or missing user token), prompt for creds.
+      if (res.status === 401 || res.status === 403) {
+        const ok = await interactiveLoginAndStepUp();
+        if (ok) {
+          const headers3 = { ...headers, Authorization: `Bearer ${state.adminToken}` };
+          res = await fetch(path, { ...opts, headers: headers3 });
+        }
       }
     }
+
     if (res.status === 204) return { ok: true, status: 204 };
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -139,19 +180,21 @@
       fetchJSON(`/admin/figures/${encodeURIComponent(slug)}`, { method: "DELETE" }, true),
   };
 
+  // ---------- Auth flows ----------
   async function loginAndStepUp() {
     dom.loginStatus.textContent = "Signing in…";
     const username = dom.email.value.trim();
     const password = dom.password.value;
     if (!username || !password) {
       dom.loginStatus.innerHTML = `<span class="bad">Email and password required</span>`;
-      return;
+      return false;
     }
     try {
       const login = await API.login(username, password);
       if (!login?.access_token) throw new Error("Login failed");
       state.userToken = login.access_token;
       state.password = password;
+      localStorage.setItem("username", username); // remember email only
       setAuthUI();
 
       dom.loginStatus.textContent = "Stepping up to admin…";
@@ -159,26 +202,44 @@
       if (!r?.admin_access_token) {
         dom.loginStatus.innerHTML = `<span class="bad">${r?.detail || "Step-up failed"}</span>`;
         state.adminToken = null;
+        saveTokensToSession();
         setAuthUI();
-        return;
+        return false;
       }
       state.adminToken = r.admin_access_token;
+      saveTokensToSession();
       setAuthUI();
       dom.loginStatus.innerHTML = `<span class="good">Admin active</span>`;
       scheduleAdminRefresh();
       await hydrate();
+      return true;
     } catch (e) {
       dom.loginStatus.innerHTML = `<span class="bad">${e.message}</span>`;
       state.userToken = null;
       state.adminToken = null;
+      saveTokensToSession();
       setAuthUI();
+      return false;
     }
+  }
+
+  async function interactiveLoginAndStepUp() {
+    // Minimal prompts only when needed (401/403 and no usable tokens).
+    const defaultUser = localStorage.getItem("username") || "";
+    const u = prompt("Admin email:", defaultUser);
+    if (!u) return false;
+    const p = prompt("Password:");
+    if (!p) return false;
+    dom.email.value = u;           // reflect in UI
+    dom.password.value = p;
+    return await loginAndStepUp();
   }
 
   async function stepUp() {
     const r = await API.stepUp(state.password);
     if (!r?.admin_access_token) throw new Error(r?.detail || "Step-up failed");
     state.adminToken = r.admin_access_token;
+    saveTokensToSession();
     setAuthUI();
     scheduleAdminRefresh();
   }
@@ -186,14 +247,16 @@
   function lockAdmin() {
     state.adminToken = null;
     clearTimeout(state.adminRefreshTimer);
+    saveTokensToSession();
     setAuthUI();
   }
 
   function logout() {
     state.userToken = null;
     state.adminToken = null;
-    state.password = null;
+    state.password = null; // forget password
     clearTimeout(state.adminRefreshTimer);
+    saveTokensToSession();
     setAuthUI();
     dom.usersBody.innerHTML = "";
     dom.figuresBody.innerHTML = "";
@@ -207,6 +270,7 @@
     try { await loadFigures(); } catch {}
   }
 
+  // ---------- Data loaders ----------
   async function loadUsers() {
     dom.usersStatus.textContent = "Loading…";
     dom.usersBody.innerHTML = "";
@@ -287,7 +351,7 @@
       .replaceAll("'", "&#039;");
   }
 
-  // Tabs
+  // ---------- Tabs ----------
   dom.tabs.forEach((el) => {
     el.addEventListener("click", () => {
       if (el.classList.contains("disabled")) return;
@@ -299,14 +363,18 @@
     });
   });
 
-  // Events
+  // ---------- Events ----------
   dom.loginBtn.addEventListener("click", loginAndStepUp);
+
+  dom.autoRefresh.checked = true; // default ON
   dom.autoRefresh.addEventListener("change", () => {
     state.autoRefresh = dom.autoRefresh.checked;
     scheduleAdminRefresh();
   });
+
   dom.lockAdminBtn.addEventListener("click", lockAdmin);
   dom.logoutBtn.addEventListener("click", logout);
+
   dom.checkHealthBtn.addEventListener("click", async () => {
     dom.healthStatus.textContent = "Checking…";
     try {
@@ -316,8 +384,10 @@
       dom.healthStatus.innerHTML = `<span class="bad">${e.message}</span>`;
     }
   });
+
   dom.refreshUsers.addEventListener("click", loadUsers);
   dom.refreshFigures.addEventListener("click", loadFigures);
+
   dom.createFigureBtn.addEventListener("click", async () => {
     dom.figuresStatus.textContent = "Creating…";
     try {
@@ -340,6 +410,7 @@
       await loadFigures();
     } catch (e) { dom.figuresStatus.innerHTML = `<span class="bad">${e.message}</span>`; }
   });
+
   dom.updateFigureBtn.addEventListener("click", async () => {
     dom.figuresStatus.textContent = "Updating…";
     try {
@@ -361,5 +432,25 @@
     } catch (e) { dom.figuresStatus.innerHTML = `<span class="bad">${e.message}</span>`; }
   });
 
-  setAuthUI();
+  // ---------- Boot ----------
+  (function boot() {
+    // Prefill remembered email; default auto refresh ON.
+    dom.email.value = localStorage.getItem("username") || "";
+    dom.autoRefresh.checked = true;
+    state.autoRefresh = true;
+
+    // Restore tokens from this tab's sessionStorage (survives soft reloads).
+    loadTokensFromSession();
+    setAuthUI();
+
+    // If we already hold a valid admin token (e.g., soft reload), hydrate.
+    if (state.adminToken && isValidAdminToken(state.adminToken)) {
+      scheduleAdminRefresh();
+      (async () => { try { await hydrate(); } catch {} })();
+    }
+  })();
+
+  // Never persist password; clear memory on unload.
+  window.addEventListener("beforeunload", () => { state.password = null; });
+
 })();
