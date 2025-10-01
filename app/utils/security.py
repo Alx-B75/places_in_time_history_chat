@@ -1,11 +1,8 @@
 """
 Security utilities for password hashing and JWT-based authentication, including admin step-up.
 
-This module provides:
-- Password hashing and verification.
-- Normal user JWT creation and verification.
-- Admin step-up JWT creation with a short TTL and scope claim.
-- Dependency helpers for current user and admin-only access.
+- Uses bcrypt_sha256 for new password hashes (solves bcrypt 72-byte limit; robust with latest bcrypt wheels).
+- Still verifies legacy bcrypt hashes for existing users.
 """
 
 from __future__ import annotations
@@ -22,8 +19,13 @@ from sqlalchemy.orm import Session
 from app import crud, models, database
 from app.settings import get_settings
 
+# Accept legacy "bcrypt" hashes, generate "bcrypt_sha256" going forward.
+_pwd_context = CryptContext(
+    schemes=["bcrypt_sha256", "bcrypt"],
+    default="bcrypt_sha256",
+    deprecated="auto",
+)
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _settings = get_settings()
 
 _ALGORITHM = "HS256"
@@ -35,7 +37,8 @@ _oauth2_admin_scheme = OAuth2PasswordBearer(tokenUrl="/auth/admin/stepup")
 
 def hash_password(password: str) -> str:
     """
-    Return a bcrypt hash for the given plain-text password.
+    Return a secure hash for the given plain-text password.
+    Uses bcrypt_sha256 to avoid the 72-byte bcrypt limit.
     """
     return _pwd_context.hash(password)
 
@@ -43,6 +46,7 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Return True if the plain-text password matches the stored hash.
+    Supports both bcrypt_sha256 and legacy bcrypt hashes.
     """
     return _pwd_context.verify(plain_password, hashed_password)
 
@@ -50,21 +54,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(data: dict, *, minutes: Optional[int] = None, scope: str = "user") -> str:
     """
     Create and sign a JWT access token with an expiration claim and scope.
-
-    Parameters
-    ----------
-    data : dict
-        Claims to include, must contain a stable subject identifier.
-    minutes : int | None
-        Expiration in minutes. Defaults to ACCESS_TOKEN_EXPIRE_MINUTES for user scope
-        and a short TTL for admin scope.
-    scope : str
-        Token scope, either "user" or "admin".
-
-    Returns
-    -------
-    str
-        Encoded JWT.
     """
     exp_minutes = minutes
     if exp_minutes is None:
@@ -79,21 +68,6 @@ def create_access_token(data: dict, *, minutes: Optional[int] = None, scope: str
 def _decode_token(token: str) -> dict:
     """
     Decode a JWT and return its payload.
-
-    Parameters
-    ----------
-    token : str
-        Encoded JWT.
-
-    Returns
-    -------
-    dict
-        Decoded claims.
-
-    Raises
-    ------
-    jose.JWTError
-        If decoding fails or the token is invalid.
     """
     return jwt.decode(token, _settings.secret_key, algorithms=[_ALGORITHM])
 
@@ -104,23 +78,6 @@ def get_current_user(
 ) -> models.User:
     """
     Return the authenticated user derived from a normal bearer token.
-
-    Parameters
-    ----------
-    token : str
-        Bearer token from the Authorization header.
-    db : sqlalchemy.orm.Session
-        Database session.
-
-    Returns
-    -------
-    app.models.User
-        The authenticated user.
-
-    Raises
-    ------
-    fastapi.HTTPException
-        If the token is invalid or the user does not exist.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -146,23 +103,6 @@ def admin_required(
 ) -> models.User:
     """
     Validate an admin step-up token and return the admin user.
-
-    Parameters
-    ----------
-    token : str
-        Admin bearer token from the Authorization header.
-    db : sqlalchemy.orm.Session
-        Database session.
-
-    Returns
-    -------
-    app.models.User
-        The authenticated admin user.
-
-    Raises
-    ------
-    fastapi.HTTPException
-        If the token is invalid, not an admin scope, or the user lacks admin role.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
