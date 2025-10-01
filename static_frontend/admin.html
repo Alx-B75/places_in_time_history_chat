@@ -9,30 +9,31 @@
     body { margin: 0; padding: 0; background: #0b0f14; color: #e7ebf0; }
     header { padding: 16px 20px; border-bottom: 1px solid #1f2a35; display: flex; align-items: center; gap: 12px; }
     h1 { font-size: 20px; margin: 0; }
-    .container { padding: 20px; max-width: 1100px; margin: 0 auto; }
+    .container { padding: 20px; max-width: 1200px; margin: 0 auto; }
     .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
     .tab { padding: 8px 12px; border: 1px solid #1f2a35; border-radius: 10px; background: #101822; cursor: pointer; user-select: none; }
     .tab.active { background: #152233; border-color: #2b3a4a; }
     section { display: none; }
     section.active { display: block; }
+    .card { border: 1px solid #1f2a35; background: #0e1620; border-radius: 12px; padding: 16px; }
+    .row { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; }
     table { width: 100%; border-collapse: collapse; margin: 12px 0 24px; }
     th, td { padding: 10px; border-bottom: 1px solid #1f2a35; vertical-align: top; }
     th { text-align: left; color: #d0d7e0; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid #2b3a4a; background: #122033; font-size: 12px; }
-    .badge.ok { border-color: #184f2e; background: #0f2b1e; color: #9fe7b3; }
-    .badge.err { border-color: #4f1818; background: #2b0f0f; color: #f29b9b; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .card { border: 1px solid #1f2a35; background: #0e1620; border-radius: 12px; padding: 16px; }
     label { display: block; font-size: 14px; margin-bottom: 6px; color: #c2c9d1; }
     input, select, textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #253243; background: #0a121b; color: #e7ebf0; }
-    textarea { min-height: 140px; }
+    textarea { min-height: 120px; }
     button { padding: 10px 14px; border-radius: 10px; border: 1px solid #2b3a4a; background: #152233; color: #e7ebf0; cursor: pointer; }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
     .muted { color: #98a3af; font-size: 13px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid #2b3a4a; background: #122033; font-size: 12px; }
+    .badge.ok { border-color: #184f2e; background: #0f2b1e; color: #9fe7b3; }
     .right { text-align: right; }
     .toast { position: fixed; bottom: 16px; right: 16px; background: #0e1620; border: 1px solid #2b3a4a; padding: 12px 14px; border-radius: 10px; display:none; }
     a { color: #8fc7ff; text-decoration: none; }
     .sr { position:absolute; left:-10000px; top:auto; width:1px; height:1px; overflow:hidden; }
+    .toolbar { display:flex; gap: 8px; align-items:center; justify-content: space-between; margin-bottom: 8px; }
+    .pill { display:inline-flex; gap:6px; align-items:center; border:1px solid #2b3a4a; background:#101822; border-radius:999px; padding:6px 10px; }
   </style>
 </head>
 <body>
@@ -48,22 +49,91 @@
       <div class="tab" data-target="tab-rag">RAG Sources</div>
     </div>
 
+    <!-- USERS -->
     <section id="tab-users" class="active" aria-labelledby="tab-users-label">
       <h2 id="tab-users-label" class="sr">Users</h2>
       <div class="card">
-        <h2 style="margin-top:0">Users</h2>
-        <p class="muted">This section uses your existing admin APIs for listing and role updates.</p>
+        <div class="toolbar">
+          <h2 style="margin:0">Users</h2>
+          <button id="refreshUsersBtn">Refresh</button>
+        </div>
+        <table id="usersTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th class="right">Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <p class="muted">Change a user’s role and it will be audited server-side.</p>
       </div>
     </section>
 
+    <!-- FIGURES -->
     <section id="tab-figures" aria-labelledby="tab-figures-label">
       <h2 id="tab-figures-label" class="sr">Figures</h2>
-      <div class="card">
-        <h2 style="margin-top:0">Figures</h2>
-        <p class="muted">Manage figures with your existing endpoints. The RAG tab below augments context management.</p>
+      <div class="row">
+        <div class="card">
+          <div class="toolbar">
+            <h2 style="margin:0">Figures</h2>
+            <button id="refreshFiguresBtn">Refresh</button>
+          </div>
+          <table id="figuresTable">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name / Slug</th>
+                <th>Era</th>
+                <th>Verified</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p class="muted">These are stored in the <code>figures.db</code> database. RAG contexts appear in the next tab.</p>
+        </div>
+
+        <div class="card">
+          <h2 style="margin-top:0">Create Figure</h2>
+          <form id="createFigureForm" novalidate>
+            <label for="cf_name">Name</label>
+            <input id="cf_name" required />
+
+            <label for="cf_slug">Slug</label>
+            <input id="cf_slug" required placeholder="katherine-parr" />
+
+            <label for="cf_era">Era</label>
+            <input id="cf_era" />
+
+            <label for="cf_image">Image URL</label>
+            <input id="cf_image" type="url" />
+
+            <label for="cf_short">Short summary</label>
+            <textarea id="cf_short"></textarea>
+
+            <label for="cf_long">Long bio</label>
+            <textarea id="cf_long"></textarea>
+
+            <label for="cf_quote">Quote (optional)</label>
+            <textarea id="cf_quote"></textarea>
+
+            <div class="pill">
+              <input id="cf_verified" type="checkbox" />
+              <label for="cf_verified" style="margin:0;cursor:pointer">Verified</label>
+            </div>
+
+            <div class="right" style="margin-top:12px">
+              <button id="cf_submit" type="submit">Create</button>
+            </div>
+          </form>
+          <p class="muted">Minimal required fields: <b>Name</b> and <b>Slug</b>. On create, two starter contexts (persona/quote) are inserted automatically.</p>
+        </div>
       </div>
     </section>
 
+    <!-- RAG -->
     <section id="tab-rag" aria-labelledby="tab-rag-label">
       <h2 id="tab-rag-label" class="sr">RAG Sources</h2>
       <div class="row">
@@ -127,29 +197,16 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script>
-    const tabs = document.querySelectorAll('.tab');
-    const sections = document.querySelectorAll('section');
-    tabs.forEach(t => {
-      t.addEventListener('click', () => {
-        tabs.forEach(x => x.classList.remove('active'));
-        sections.forEach(x => x.classList.remove('active'));
-        t.classList.add('active');
-        document.getElementById(t.dataset.target).classList.add('active');
-        if (t.dataset.target === 'tab-rag') refreshRag();
-      });
-    });
-
+    // ---- helpers
     function getToken() {
       return sessionStorage.getItem('access_token') || localStorage.getItem('access_token') || '';
     }
-
     async function apiGet(path) {
       const res = await fetch(path, { headers: { 'Authorization': 'Bearer ' + getToken() } });
       if (res.status === 401 || res.status === 403) throw new Error('Unauthorized');
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
     }
-
     async function apiPost(path, body) {
       const res = await fetch(path, {
         method: 'POST',
@@ -167,7 +224,19 @@
       }
       return res.json().catch(() => ({}));
     }
-
+    async function apiPatch(path, body) {
+      const res = await fetch(path, {
+        method: 'PATCH',
+        headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (res.status === 401 || res.status === 403) throw new Error('Unauthorized');
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.detail || ('HTTP ' + res.status));
+      }
+      return res.json();
+    }
     function toast(msg, ok=true) {
       const el = document.getElementById('toast');
       el.textContent = msg;
@@ -177,13 +246,120 @@
       el._t = setTimeout(() => { el.style.display = 'none'; }, 2500);
     }
 
+    // ---- TABS
+    const tabs = document.querySelectorAll('.tab');
+    const sections = document.querySelectorAll('section');
+    tabs.forEach(t => {
+      t.addEventListener('click', () => {
+        tabs.forEach(x => x.classList.remove('active'));
+        sections.forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        const target = document.getElementById(t.dataset.target);
+        target.classList.add('active');
+        if (t.dataset.target === 'tab-rag') refreshRag();
+        if (t.dataset.target === 'tab-users') refreshUsers();
+        if (t.dataset.target === 'tab-figures') { refreshFigures(); loadFiguresForSelect(); }
+      });
+    });
+
+    // ---- USERS
+    async function refreshUsers() {
+      try {
+        const list = await apiGet('/admin/users');
+        const tbody = document.querySelector('#usersTable tbody');
+        tbody.innerHTML = '';
+        list.forEach(u => {
+          const tr = document.createElement('tr');
+          const roleSel = document.createElement('select');
+          ['user','admin'].forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r; opt.textContent = r;
+            if (u.role === r) opt.selected = true;
+            roleSel.appendChild(opt);
+          });
+          const saveBtn = document.createElement('button');
+          saveBtn.textContent = 'Save';
+          saveBtn.addEventListener('click', async () => {
+            try {
+              const out = await apiPatch(`/admin/users/${u.id}/role`, { role: roleSel.value });
+              toast(`Updated role for ${out.username} → ${out.role}`);
+              await refreshUsers();
+            } catch (e) { toast(String(e.message || e), false); }
+          });
+          tr.innerHTML = `
+            <td>${u.id}</td>
+            <td>${u.username}</td>
+            <td></td>
+            <td class="right"></td>
+          `;
+          tr.children[2].appendChild(roleSel);
+          tr.children[3].appendChild(saveBtn);
+          tbody.appendChild(tr);
+        });
+      } catch (e) { toast(String(e.message || e), false); }
+    }
+    document.getElementById('refreshUsersBtn').addEventListener('click', refreshUsers);
+
+    // ---- FIGURES
+    async function refreshFigures() {
+      try {
+        const items = await apiGet('/admin/figures');
+        const tbody = document.querySelector('#figuresTable tbody');
+        tbody.innerHTML = '';
+        items.forEach(f => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${f.id}</td>
+            <td>${f.name}<div class="muted">${f.slug}</div></td>
+            <td>${f.era || ''}</td>
+            <td>${f.verified ? '<span class="badge ok">yes</span>' : '<span class="badge">no</span>'}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (e) { toast(String(e.message || e), false); }
+    }
+    document.getElementById('refreshFiguresBtn').addEventListener('click', refreshFigures);
+
+    // Create Figure
+    document.getElementById('createFigureForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('cf_submit');
+      btn.disabled = true;
+      const payload = {
+        name: document.getElementById('cf_name').value.trim(),
+        slug: document.getElementById('cf_slug').value.trim(),
+        era: document.getElementById('cf_era').value.trim() || null,
+        image_url: document.getElementById('cf_image').value.trim() || null,
+        short_summary: document.getElementById('cf_short').value.trim() || null,
+        long_bio: document.getElementById('cf_long').value.trim() || null,
+        quote: document.getElementById('cf_quote').value.trim() || null,
+        verified: document.getElementById('cf_verified').checked ? 1 : 0,
+        # persona_prompt is optional and not exposed here
+      };
+      // Remove nulls
+      Object.keys(payload).forEach(k => { if (payload[k] === null) delete payload[k]; });
+      if (!payload.name || !payload.slug) { toast('Name and Slug are required.', false); btn.disabled = false; return; }
+      try {
+        await apiPost('/admin/figures', payload);
+        toast('Figure created.');
+        // clear
+        ['cf_name','cf_slug','cf_era','cf_image','cf_short','cf_long','cf_quote'].forEach(id => document.getElementById(id).value='');
+        document.getElementById('cf_verified').checked = false;
+        await refreshFigures();
+        // also refresh RAG select for Add Source
+        await loadFiguresForSelect();
+      } catch (e2) {
+        toast(String(e2.message || e2), false);
+      } finally { btn.disabled = false; }
+    });
+
+    // ---- RAG (unchanged logic from previous version)
     function setChromaStatus(collection) {
       const s = document.getElementById('chromaStatus');
       const ok = collection && collection.available;
       const detail = collection && collection.detail ? String(collection.detail) : '';
-      s.innerHTML = `<span class="badge ${ok ? 'ok' : 'err'}">${ok ? 'Chroma: available' : 'Chroma: unavailable'}${detail ? ' — ' + detail : ''}</span>`;
+      s.innerHTML = `<span class="badge ${ok ? 'ok' : ''}">${ok ? 'Chroma: available' : 'Chroma: unavailable'}${detail ? ' — ' + detail : ''}</span>`;
     }
-
     function renderRagTable(figures) {
       const tbody = document.querySelector('#ragTable tbody');
       tbody.innerHTML = '';
@@ -205,31 +381,32 @@
         tbody.appendChild(tr);
       });
     }
-
     async function loadFiguresForSelect() {
       const sel = document.getElementById('figureSelect');
+      if (!sel) return;
       sel.innerHTML = '';
-      const items = await apiGet('/admin/figures');
-      items.forEach(f => {
-        const opt = document.createElement('option');
-        opt.value = f.slug;
-        opt.textContent = f.name + ' (' + f.slug + ')';
-        sel.appendChild(opt);
-      });
+      try {
+        const items = await apiGet('/admin/figures');
+        items.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = f.slug;
+          opt.textContent = f.name + ' (' + f.slug + ')';
+          sel.appendChild(opt);
+        });
+      } catch (e) {
+        // ignore here; may not be on RAG tab yet
+      }
     }
-
     async function refreshRag() {
       try {
         const data = await apiGet('/admin/rag/sources');
         setChromaStatus(data.collection || {});
         renderRagTable(data.figures || []);
-        const hadOptions = document.getElementById('figureSelect').options.length > 0;
-        if (!hadOptions) await loadFiguresForSelect();
-      } catch (e) {
-        toast(String(e.message || e), false);
-      }
+        // populate the select if empty
+        const sel = document.getElementById('figureSelect');
+        if (sel && sel.options.length === 0) await loadFiguresForSelect();
+      } catch (e) { toast(String(e.message || e), false); }
     }
-
     document.getElementById('addSourceForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
@@ -253,19 +430,17 @@
         document.getElementById('sourceUrl').value = '';
         document.getElementById('content').value = '';
         await refreshRag();
-      } catch (e) {
-        toast(String(e.message || e), false);
-      } finally {
-        btn.disabled = false;
-      }
+      } catch (e2) {
+        toast(String(e2.message || e2), false);
+      } finally { btn.disabled = false; }
     });
 
+    // ---- INIT
     (async function init() {
-      if (document.querySelector('.tab.active')?.dataset.target === 'tab-rag') {
-        await refreshRag();
-      } else {
-        try { await apiGet('/admin/health'); } catch(_e) {}
-      }
+      // probe admin scope quickly
+      try { await apiGet('/admin/health'); } catch (_e) {}
+      // initial tab boot
+      refreshUsers();
     })();
   </script>
 </body>
