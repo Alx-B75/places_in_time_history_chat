@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Initial CHANGELOG tracking.
 - Passing tests for:
-  - `/register` and `/login` flow using typed credentials via dependency.
+  - `/auth/register` and `/auth/login` flow using typed credentials via dependency.
   - `/threads` creation returns `thread_id`, `user_id`, `title`.
   - `/download_db` streams figures database file as attachment.
 - New `/threads` endpoint in `chat.py`.
@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - `auth.py` updated to accept JSON or form credentials with typed validation.
-- `main.py` now includes only router-driven `/login` and `/register` (inlined duplicates removed).
+- `main.py` now includes only router-driven `/auth/login` and `/auth/register` (inlined duplicates removed).
 - `chat.py` thread creation uses `schemas.ThreadCreate` to match `crud.create_thread` signature.
 - Tests generate unique usernames to avoid collisions across runs.
 

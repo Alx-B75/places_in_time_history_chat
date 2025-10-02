@@ -25,7 +25,7 @@ from app.database import get_db_chat
 from app.figures_database import FigureBase
 from app.figures_database import SQLALCHEMY_DATABASE_URL as FIGURES_DB_URL
 from app.figures_database import engine as figures_engine
-from app.routers import admin, ask, auth, chat, figures, guest
+from app.routers import admin, ask, auth, chat, data, figures, guest
 from app.settings import get_settings
 from app.utils.security import get_current_user
 
@@ -62,6 +62,7 @@ app.include_router(chat.router)
 app.include_router(figures.router)
 app.include_router(ask.router)
 app.include_router(guest.router)
+app.include_router(data.router)
 app.include_router(admin.router)
 
 
