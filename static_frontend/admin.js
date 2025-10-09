@@ -2,34 +2,36 @@
   const $ = (sel) => document.querySelector(sel);
 
   const state = {
-    userToken: null,      // JWT (scope=user)
-    adminToken: null,     // JWT (scope=admin)
-    password: null,       // plaintext password (memory only; never persisted)
+    userToken: null,      // JWT scope=user
+    adminToken: null,     // JWT scope=admin
+    password: null,       // in-memory only
     adminRefreshTimer: null,
-    autoRefresh: true,    // default ON
+    autoRefresh: true,
   };
 
+  // DOM (works whether login section exists or not)
   const dom = {
-    email: $("#email"),
-    password: $("#password"),
-    loginBtn: $("#loginBtn"),
-    loginStatus: $("#loginStatus"),
-    autoRefresh: $("#autoRefresh"),
+    // header controls
     authStatus: $("#authStatus"),
     adminStatus: $("#adminStatus"),
-    checkHealthBtn: $("#checkHealthBtn"),
-    healthStatus: $("#healthStatus"),
     lockAdminBtn: $("#lockAdminBtn"),
     logoutBtn: $("#logoutBtn"),
+
+    // tabs & panels
     tabs: document.querySelectorAll(".tab"),
     panelUsers: $("#panel-users"),
     panelFigures: $("#panel-figures"),
-    usersBody: $("#usersBody"),
-    usersStatus: $("#usersStatus"),
+    panelRag: $("#panel-rag"),
+
+    // USERS
     refreshUsers: $("#refreshUsers"),
-    figuresBody: $("#figuresBody"),
-    figuresStatus: $("#figuresStatus"),
+    usersStatus: $("#usersStatus"),
+    usersBody: $("#usersBody"),
+
+    // FIGURES
     refreshFigures: $("#refreshFigures"),
+    figuresStatus: $("#figuresStatus"),
+    figuresBody: $("#figuresBody"),
     figName: $("#figName"),
     figSlug: $("#figSlug"),
     figShort: $("#figShort"),
@@ -39,9 +41,27 @@
     figQuote: $("#figQuote"),
     createFigureBtn: $("#createFigureBtn"),
     updateFigureBtn: $("#updateFigureBtn"),
+
+    // RAG
+    refreshRag: $("#refreshRag"),
+    ragStatus: $("#ragStatus"),
+    ragBody: $("#ragBody"),
+    ragName: $("#ragName"),
+    ragType: $("#ragType"),
+    ragUrl: $("#ragUrl"),
+    addRagBtn: $("#addRagBtn"),
+
+    // optional login form (older HTML)
+    email: $("#email"),
+    password: $("#password"),
+    loginBtn: $("#loginBtn"),
+    loginStatus: $("#loginStatus"),
+    autoRefreshChk: $("#autoRefresh"),
+    checkHealthBtn: $("#checkHealthBtn"),
+    healthStatus: $("#healthStatus"),
   };
 
-  // ---------- Helpers ----------
+  // --------------- Auth helpers ---------------
   function setAuthUI() {
     if (state.userToken) {
       dom.authStatus.textContent = "Signed in";
@@ -59,11 +79,8 @@
       dom.adminStatus.textContent = "Admin inactive";
       dom.adminStatus.classList.remove("good");
     }
-    const adminReady = Boolean(state.adminToken);
-    dom.tabs.forEach((t) => {
-      if (adminReady) t.classList.remove("disabled");
-      else t.classList.add("disabled");
-    });
+    const ready = !!state.adminToken;
+    dom.tabs.forEach((t) => t.classList.toggle("disabled", !ready));
   }
 
   function parseJwt(token) {
@@ -71,69 +88,52 @@
       const payload = token.split(".")[1];
       const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
       return JSON.parse(decodeURIComponent(escape(json)));
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   }
-
-  function isValidAdminToken(tok) {
+  function validToken(tok, scope) {
     const p = parseJwt(tok);
-    return p && p.scope === "admin" && p.exp && p.exp * 1000 > Date.now() + 10_000;
+    return p && p.scope === scope && p.exp && p.exp * 1000 > Date.now() + 10_000;
   }
 
-  function isValidUserToken(tok) {
-    const p = parseJwt(tok);
-    return p && p.scope === "user" && p.exp && p.exp * 1000 > Date.now() + 10_000;
-  }
-
-  function saveTokensToSession() {
-    // Only tokens are persisted (sessionStorage); password never persisted.
+  function saveTokens() {
     if (state.userToken) sessionStorage.setItem("user_token", state.userToken);
     else sessionStorage.removeItem("user_token");
-
     if (state.adminToken) sessionStorage.setItem("admin_token", state.adminToken);
     else sessionStorage.removeItem("admin_token");
   }
-
-  function loadTokensFromSession() {
+  function loadTokens() {
     const ut = sessionStorage.getItem("user_token");
     const at = sessionStorage.getItem("admin_token");
-    if (ut && isValidUserToken(ut)) state.userToken = ut;
-    if (at && isValidAdminToken(at)) state.adminToken = at;
+    if (ut && validToken(ut, "user")) state.userToken = ut;
+    if (at && validToken(at, "admin")) state.adminToken = at;
   }
 
   function scheduleAdminRefresh() {
     clearTimeout(state.adminRefreshTimer);
     if (!state.autoRefresh || !state.adminToken || !state.password || !state.userToken) return;
-    const payload = parseJwt(state.adminToken);
-    if (!payload || !payload.exp) return;
-    const msUntilExp = payload.exp * 1000 - Date.now();
-    const bufferMs = 60 * 1000; // refresh 60s early
-    const wait = Math.max(5_000, msUntilExp - bufferMs);
-    state.adminRefreshTimer = setTimeout(async () => {
-      try { await stepUp(); } catch (e) { /* ignore; UI will reflect */ }
-    }, wait);
+    const p = parseJwt(state.adminToken);
+    if (!p?.exp) return;
+    const msLeft = p.exp * 1000 - Date.now();
+    const wait = Math.max(5000, msLeft - 60_000); // refresh 60s early
+    state.adminRefreshTimer = setTimeout(() => { stepUp().catch(()=>{}); }, wait);
   }
 
   async function fetchJSON(path, opts = {}, requireAdmin = false) {
     const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
-    const token = requireAdmin ? state.adminToken : state.userToken;
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const tok = requireAdmin ? state.adminToken : state.userToken;
+    if (tok) headers["Authorization"] = `Bearer ${tok}`;
     let res = await fetch(path, { ...opts, headers });
 
-    // If unauthorized, try to regain admin token automatically.
     if ((res.status === 401 || res.status === 403) && requireAdmin) {
-      // If we still have userToken + password, try step-up.
+      // try auto step-up using stored password
       if (state.userToken && state.password) {
         try {
           await stepUp();
           const headers2 = { ...headers, Authorization: `Bearer ${state.adminToken}` };
           res = await fetch(path, { ...opts, headers: headers2 });
-        } catch {
-          // fall through to interactive recovery
-        }
+        } catch {}
       }
-      // If still unauthorized (or missing user token), prompt for creds.
+      // interactive fallback if still unauthorized
       if (res.status === 401 || res.status === 403) {
         const ok = await interactiveLoginAndStepUp();
         if (ok) {
@@ -154,92 +154,73 @@
 
   const API = {
     login: (username, password) =>
-      fetchJSON("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ username, password }),
-      }),
+      fetchJSON("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
     stepUp: (password) =>
       fetch("/auth/admin/stepup", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${state.userToken}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${state.userToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
       }).then((r) => r.json()),
     health: () => fetchJSON("/admin/health", {}, true),
+
+    // users
     listUsers: () => fetchJSON("/admin/users", {}, true),
-    setUserRole: (id, role) =>
-      fetchJSON(`/admin/users/${id}/role`, { method: "PATCH", body: JSON.stringify({ role }) }, true),
+    setUserRole: (id, role) => fetchJSON(`/admin/users/${id}/role`, { method: "PATCH", body: JSON.stringify({ role }) }, true),
+
+    // figures
     listFigures: () => fetchJSON("/admin/figures", {}, true),
-    createFigure: (payload) =>
-      fetchJSON("/admin/figures", { method: "POST", body: JSON.stringify(payload) }, true),
-    updateFigure: (slug, payload) =>
-      fetchJSON(`/admin/figures/${encodeURIComponent(slug)}`, { method: "PATCH", body: JSON.stringify(payload) }, true),
-    deleteFigure: (slug) =>
-      fetchJSON(`/admin/figures/${encodeURIComponent(slug)}`, { method: "DELETE" }, true),
+    createFigure: (payload) => fetchJSON("/admin/figures", { method: "POST", body: JSON.stringify(payload) }, true),
+    updateFigure: (slug, payload) => fetchJSON(`/admin/figures/${encodeURIComponent(slug)}`, { method: "PATCH", body: JSON.stringify(payload) }, true),
+    deleteFigure: (slug) => fetchJSON(`/admin/figures/${encodeURIComponent(slug)}`, { method: "DELETE" }, true),
+
+    // rag (summary + create-manual)
+    ragSummary: () => fetchJSON("/admin/rag/sources", {}, true),
+    ragCreate: (payload) => fetchJSON("/admin/rag/sources", { method: "POST", body: JSON.stringify(payload) }, true),
   };
 
-  // ---------- Auth flows ----------
-  async function loginAndStepUp() {
-    dom.loginStatus.textContent = "Signing in…";
-    const username = dom.email.value.trim();
-    const password = dom.password.value;
-    if (!username || !password) {
-      dom.loginStatus.innerHTML = `<span class="bad">Email and password required</span>`;
-      return false;
-    }
+  // --------------- Auth flows ---------------
+  async function interactiveLoginAndStepUp() {
+    let username = dom.email?.value?.trim();
+    let pw = dom.password?.value || "";
+    if (!username) username = prompt("Admin email:") || "";
+    if (!pw) pw = prompt("Password:") || "";
+    if (!username || !pw) return false;
+
     try {
-      const login = await API.login(username, password);
+      if (dom.loginStatus) dom.loginStatus.textContent = "Signing in…";
+      const login = await API.login(username, pw);
       if (!login?.access_token) throw new Error("Login failed");
       state.userToken = login.access_token;
-      state.password = password;
-      localStorage.setItem("username", username); // remember email only
+      state.password = pw;
       setAuthUI();
 
-      dom.loginStatus.textContent = "Stepping up to admin…";
-      const r = await API.stepUp(password);
-      if (!r?.admin_access_token) {
-        dom.loginStatus.innerHTML = `<span class="bad">${r?.detail || "Step-up failed"}</span>`;
-        state.adminToken = null;
-        saveTokensToSession();
-        setAuthUI();
-        return false;
-      }
+      if (dom.loginStatus) dom.loginStatus.textContent = "Stepping up…";
+      const r = await API.stepUp(pw);
+      if (!r?.admin_access_token) throw new Error(r?.detail || "Admin step-up failed");
       state.adminToken = r.admin_access_token;
-      saveTokensToSession();
+      saveTokens();
       setAuthUI();
-      dom.loginStatus.innerHTML = `<span class="good">Admin active</span>`;
       scheduleAdminRefresh();
+      if (dom.loginStatus) dom.loginStatus.innerHTML = `<span class="good">Admin active</span>`;
       await hydrate();
       return true;
     } catch (e) {
-      dom.loginStatus.innerHTML = `<span class="bad">${e.message}</span>`;
+      alert(e.message || String(e));
       state.userToken = null;
       state.adminToken = null;
-      saveTokensToSession();
+      state.password = null;
+      saveTokens();
       setAuthUI();
+      if (dom.loginStatus) dom.loginStatus.innerHTML = `<span class="bad">${e.message || e}</span>`;
       return false;
     }
   }
 
-  async function interactiveLoginAndStepUp() {
-    // Minimal prompts only when needed (401/403 and no usable tokens).
-    const defaultUser = localStorage.getItem("username") || "";
-    const u = prompt("Admin email:", defaultUser);
-    if (!u) return false;
-    const p = prompt("Password:");
-    if (!p) return false;
-    dom.email.value = u;           // reflect in UI
-    dom.password.value = p;
-    return await loginAndStepUp();
-  }
-
   async function stepUp() {
-    const r = await API.stepUp(state.password);
+    const r = await API.stepUp(state.password || "");
     if (!r?.admin_access_token) throw new Error(r?.detail || "Step-up failed");
     state.adminToken = r.admin_access_token;
-    saveTokensToSession();
+    saveTokens();
     setAuthUI();
     scheduleAdminRefresh();
   }
@@ -247,30 +228,34 @@
   function lockAdmin() {
     state.adminToken = null;
     clearTimeout(state.adminRefreshTimer);
-    saveTokensToSession();
+    saveTokens();
     setAuthUI();
   }
 
   function logout() {
     state.userToken = null;
     state.adminToken = null;
-    state.password = null; // forget password
+    state.password = null;
     clearTimeout(state.adminRefreshTimer);
-    saveTokensToSession();
+    saveTokens();
     setAuthUI();
-    dom.usersBody.innerHTML = "";
-    dom.figuresBody.innerHTML = "";
-    dom.usersStatus.textContent = "Waiting…";
-    dom.figuresStatus.textContent = "Waiting…";
-    dom.loginStatus.textContent = "Waiting…";
+    if (dom.usersBody) dom.usersBody.innerHTML = "";
+    if (dom.figuresBody) dom.figuresBody.innerHTML = "";
+    if (dom.ragBody) dom.ragBody.innerHTML = "";
+    if (dom.usersStatus) dom.usersStatus.textContent = "Waiting…";
+    if (dom.figuresStatus) dom.figuresStatus.textContent = "Waiting…";
+    if (dom.ragStatus) dom.ragStatus.textContent = "Waiting…";
+    if (dom.loginStatus) dom.loginStatus.textContent = "Waiting…";
   }
 
+  // --------------- Loaders ---------------
   async function hydrate() {
     try { await loadUsers(); } catch {}
     try { await loadFigures(); } catch {}
+    try { await loadRagSummary(); } catch {}
   }
 
-  // ---------- Data loaders ----------
+  // USERS
   async function loadUsers() {
     dom.usersStatus.textContent = "Loading…";
     dom.usersBody.innerHTML = "";
@@ -303,6 +288,7 @@
     });
   }
 
+  // FIGURES
   async function loadFigures() {
     dom.figuresStatus.textContent = "Loading…";
     dom.figuresBody.innerHTML = "";
@@ -344,51 +330,121 @@
     });
   }
 
+  // RAG summary (matches your /admin/rag/sources body)
+  async function loadRagSummary() {
+    dom.ragStatus.textContent = "Loading…";
+    dom.ragBody.innerHTML = "";
+
+    const data = await API.ragSummary();
+    // Expect: { collection: {...}, figures: [...] }
+    const figures = Array.isArray(data?.figures) ? data.figures : [];
+    dom.ragStatus.textContent = `${figures.length} figures`;
+
+    for (const f of figures) {
+      const counts = f.context_counts || {};
+      const countStr = Object.keys(counts).length
+        ? Object.entries(counts).map(([k, v]) => `${k}:${v}`).join(" · ")
+        : "—";
+      const src = f.sources_meta || {};
+      const links = [
+        src.wikipedia ? `<a href="${escapeAttr(src.wikipedia)}" target="_blank" rel="noopener">wikipedia</a>` : "",
+        src.wikidata ? `<a href="${escapeAttr(src.wikidata)}" target="_blank" rel="noopener">wikidata</a>` : "",
+        src.dbpedia ? `<a href="${escapeAttr(src.dbpedia)}" target="_blank" rel="noopener">dbpedia</a>` : "",
+      ].filter(Boolean).join(" | ");
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHTML(f.slug)}</td>
+        <td>${escapeHTML(f.name || "")}</td>
+        <td>${escapeHTML(String(f.total_contexts ?? 0))}${f.has_manual_context ? ' <span class="muted">(manual)</span>' : ''}<br/><span class="muted">${countStr}</span></td>
+        <td>${links || ""}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn" data-act="add-manual" data-slug="${f.slug}">Add manual</button>
+          </div>
+        </td>
+      `;
+      dom.ragBody.appendChild(tr);
+    }
+
+    dom.ragBody.querySelectorAll('button[data-act="add-manual"]').forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const figure_slug = btn.getAttribute("data-slug");
+        try {
+          await addManualSourceFlow(figure_slug);
+          await loadRagSummary();
+        } catch (e) {
+          if (e?.message) alert(e.message);
+        }
+      });
+    });
+  }
+
+  async function addManualSourceFlow(defaultSlug) {
+    const figure_slug = defaultSlug || prompt("Figure slug for this source:") || "";
+    if (!figure_slug) throw new Error("No figure slug provided");
+
+    // Use the small form inputs if present; otherwise prompt.
+    let source_name = dom.ragName?.value?.trim() || "";
+    let content_type = dom.ragType?.value?.trim() || "";
+    let source_url = dom.ragUrl?.value?.trim() || "";
+
+    if (!source_name) source_name = prompt("Source name (e.g., persona, instruction, note):", "manual") || "";
+    if (!content_type) content_type = prompt("Content type (persona, instruction, bio, note, quote, context):", "note") || "";
+    // If content_type is a manual text-bearing type, ask for content.
+    let content = "";
+    if (["persona","instruction","bio","note","quote","context"].includes(content_type)) {
+      content = prompt("Content (plain text):", "") || "";
+    }
+    // If not text type, content may be omitted; backend should tolerate empty.
+
+    if (!source_name || !content_type) throw new Error("Name and Type are required");
+    const payload = { figure_slug, source_name, content_type, source_url: source_url || null, content };
+    dom.ragStatus.textContent = "Adding…";
+    await API.ragCreate(payload);
+    dom.ragStatus.innerHTML = `<span class="good">Added</span>`;
+    if (dom.ragName) dom.ragName.value = "";
+    if (dom.ragType) dom.ragType.value = "";
+    if (dom.ragUrl) dom.ragUrl.value = "";
+  }
+
+  // --------------- Utils ---------------
   function escapeHTML(s) {
     return (s || "")
       .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;").replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
   }
+  function escapeAttr(s) {
+    return String(s || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  }
 
-  // ---------- Tabs ----------
+  // --------------- Tabs & events ---------------
   dom.tabs.forEach((el) => {
     el.addEventListener("click", () => {
-      if (el.classList.contains("disabled")) return;
+      if (el.classList.contains("disabled")) {
+        interactiveLoginAndStepUp().then((ok) => { if (ok) el.click(); });
+        return;
+      }
       dom.tabs.forEach((t) => t.classList.remove("active"));
       el.classList.add("active");
       const tab = el.getAttribute("data-tab");
       dom.panelUsers.style.display = tab === "users" ? "block" : "none";
       dom.panelFigures.style.display = tab === "figures" ? "block" : "none";
+      dom.panelRag.style.display = tab === "rag" ? "block" : "none";
+      if (tab === "users") loadUsers().catch(()=>{});
+      if (tab === "figures") loadFigures().catch(()=>{});
+      if (tab === "rag") loadRagSummary().catch(()=>{});
     });
   });
 
-  // ---------- Events ----------
-  dom.loginBtn.addEventListener("click", loginAndStepUp);
+  dom.lockAdminBtn?.addEventListener("click", lockAdmin);
+  dom.logoutBtn?.addEventListener("click", logout);
+  dom.refreshUsers?.addEventListener("click", () => loadUsers().catch(e => alert(e.message)));
+  dom.refreshFigures?.addEventListener("click", () => loadFigures().catch(e => alert(e.message)));
+  dom.refreshRag?.addEventListener("click", () => loadRagSummary().catch(e => alert(e.message)));
 
-  dom.autoRefresh.checked = true; // default ON
-  dom.autoRefresh.addEventListener("change", () => {
-    state.autoRefresh = dom.autoRefresh.checked;
-    scheduleAdminRefresh();
-  });
-
-  dom.lockAdminBtn.addEventListener("click", lockAdmin);
-  dom.logoutBtn.addEventListener("click", logout);
-
-  dom.checkHealthBtn.addEventListener("click", async () => {
-    dom.healthStatus.textContent = "Checking…";
-    try {
-      const r = await API.health();
-      dom.healthStatus.innerHTML = `<span class="good">OK</span> scope=${r.scope}`;
-    } catch (e) {
-      dom.healthStatus.innerHTML = `<span class="bad">${e.message}</span>`;
-    }
-  });
-
-  dom.refreshUsers.addEventListener("click", loadUsers);
-  dom.refreshFigures.addEventListener("click", loadFigures);
-
-  dom.createFigureBtn.addEventListener("click", async () => {
+  if (dom.createFigureBtn) dom.createFigureBtn.addEventListener("click", async () => {
     dom.figuresStatus.textContent = "Creating…";
     try {
       const payload = {
@@ -411,7 +467,7 @@
     } catch (e) { dom.figuresStatus.innerHTML = `<span class="bad">${e.message}</span>`; }
   });
 
-  dom.updateFigureBtn.addEventListener("click", async () => {
+  if (dom.updateFigureBtn) dom.updateFigureBtn.addEventListener("click", async () => {
     dom.figuresStatus.textContent = "Updating…";
     try {
       const slug = dom.figSlug.value.trim();
@@ -432,25 +488,44 @@
     } catch (e) { dom.figuresStatus.innerHTML = `<span class="bad">${e.message}</span>`; }
   });
 
-  // ---------- Boot ----------
-  (function boot() {
-    // Prefill remembered email; default auto refresh ON.
-    dom.email.value = localStorage.getItem("username") || "";
-    dom.autoRefresh.checked = true;
-    state.autoRefresh = true;
+  // Optional health button in older HTML
+  dom.checkHealthBtn?.addEventListener("click", async () => {
+    dom.healthStatus.textContent = "Checking…";
+    try {
+      const r = await API.health();
+      dom.healthStatus.innerHTML = `<span class="good">OK</span> scope=${r.scope}`;
+    } catch (e) {
+      dom.healthStatus.innerHTML = `<span class="bad">${e.message}</span>`;
+    }
+  });
 
-    // Restore tokens from this tab's sessionStorage (survives soft reloads).
-    loadTokensFromSession();
+  dom.autoRefreshChk?.addEventListener("change", () => {
+    state.autoRefresh = !!dom.autoRefreshChk.checked;
+    scheduleAdminRefresh();
+  });
+
+  if (dom.loginBtn) {
+    dom.loginBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      interactiveLoginAndStepUp().catch(()=>{});
+    });
+  }
+
+  // --------------- Boot ---------------
+  (function boot() {
+    loadTokens();
     setAuthUI();
 
-    // If we already hold a valid admin token (e.g., soft reload), hydrate.
-    if (state.adminToken && isValidAdminToken(state.adminToken)) {
+    // If admin token valid, hydrate silently; otherwise prompt.
+    if (state.adminToken && validToken(state.adminToken, "admin")) {
       scheduleAdminRefresh();
-      (async () => { try { await hydrate(); } catch {} })();
+      hydrate().catch(()=>{});
+    } else {
+      // If the page has a login form, wait for user click; else prompt immediately.
+      if (!dom.loginBtn) interactiveLoginAndStepUp().catch(()=>{});
     }
   })();
 
-  // Never persist password; clear memory on unload.
+  // Never persist password; clear in-memory on unload.
   window.addEventListener("beforeunload", () => { state.password = null; });
-
 })();
