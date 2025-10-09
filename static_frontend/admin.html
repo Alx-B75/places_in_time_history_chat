@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <title>Places in Time — Admin Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="icon" href="/static_frontend/pit-favicon-mark.ico" />
-  <link rel="stylesheet" href="/static_frontend/style.css?v=brand-9" />
+  <link rel="icon" href="/static/pit-favicon-mark.ico" />
+  <link rel="stylesheet" href="/static/style.css?v=brand-9" />
   <style>
     :root {
       --bg: #0f172a;
@@ -117,14 +117,22 @@
         <button class="btn" id="refreshRag">Refresh</button>
         <span class="status" id="ragStatus">Waiting…</span>
         <table class="grid">
-          <thead><tr><th>ID</th><th>Name</th><th>Type</th><th>URL</th><th>Actions</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Slug</th>
+              <th>Name</th>
+              <th>Contexts</th>
+              <th>Source Links</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
           <tbody id="ragBody"></tbody>
         </table>
         <div class="section">
           <h4>Add Source</h4>
-            <label for="ragName"></label><input id="ragName" type="text" placeholder="Name" />
-            <label for="ragType"></label><input id="ragType" type="text" placeholder="Type (wiki, dbpedia, manual)" />
-            <label for="ragUrl"></label><input id="ragUrl" type="text" placeholder="URL" />
+          <label for="ragName"></label><input id="ragName" type="text" placeholder="Name" />
+          <label for="ragType"></label><input id="ragType" type="text" placeholder="Type (wiki, dbpedia, manual)" />
+          <label for="ragUrl"></label><input id="ragUrl" type="text" placeholder="URL" />
           <button class="btn success" id="addRagBtn">Add</button>
         </div>
       </div>
@@ -132,6 +140,7 @@
       <div class="footer-note">Tokens are in-memory only. Reload drops them.</div>
     </div>
   </div>
-  <script src="/static_frontend/admin.js?v=rag-ui-fixed"></script>
+
+  <script src="/static/admin.js?v=rag-ui-fixed"></script>
 </body>
 </html>
