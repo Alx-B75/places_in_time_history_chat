@@ -1,447 +1,137 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Places in Time — Admin</title>
+  <meta charset="utf-8" />
+  <title>Places in Time — Admin Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/static_frontend/pit-favicon-mark.ico" />
+  <link rel="stylesheet" href="/static_frontend/style.css?v=brand-9" />
   <style>
-    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; }
-    body { margin: 0; padding: 0; background: #0b0f14; color: #e7ebf0; }
-    header { padding: 16px 20px; border-bottom: 1px solid #1f2a35; display: flex; align-items: center; gap: 12px; }
-    h1 { font-size: 20px; margin: 0; }
-    .container { padding: 20px; max-width: 1200px; margin: 0 auto; }
-    .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-    .tab { padding: 8px 12px; border: 1px solid #1f2a35; border-radius: 10px; background: #101822; cursor: pointer; user-select: none; }
-    .tab.active { background: #152233; border-color: #2b3a4a; }
-    section { display: none; }
-    section.active { display: block; }
-    .card { border: 1px solid #1f2a35; background: #0e1620; border-radius: 12px; padding: 16px; }
-    .row { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; }
-    table { width: 100%; border-collapse: collapse; margin: 12px 0 24px; }
-    th, td { padding: 10px; border-bottom: 1px solid #1f2a35; vertical-align: top; }
-    th { text-align: left; color: #d0d7e0; }
-    label { display: block; font-size: 14px; margin-bottom: 6px; color: #c2c9d1; }
-    input, select, textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #253243; background: #0a121b; color: #e7ebf0; }
-    textarea { min-height: 120px; }
-    button { padding: 10px 14px; border-radius: 10px; border: 1px solid #2b3a4a; background: #152233; color: #e7ebf0; cursor: pointer; }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .muted { color: #98a3af; font-size: 13px; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid #2b3a4a; background: #122033; font-size: 12px; }
-    .badge.ok { border-color: #184f2e; background: #0f2b1e; color: #9fe7b3; }
-    .right { text-align: right; }
-    .toast { position: fixed; bottom: 16px; right: 16px; background: #0e1620; border: 1px solid #2b3a4a; padding: 12px 14px; border-radius: 10px; display:none; }
-    a { color: #8fc7ff; text-decoration: none; }
-    .sr { position:absolute; left:-10000px; top:auto; width:1px; height:1px; overflow:hidden; }
-    .toolbar { display:flex; gap: 8px; align-items:center; justify-content: space-between; margin-bottom: 8px; }
-    .pill { display:inline-flex; gap:6px; align-items:center; border:1px solid #2b3a4a; background:#101822; border-radius:999px; padding:6px 10px; }
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --muted: #94a3b8;
+      --text: #e5e7eb;
+      --accent: #60a5fa;
+      --accent-2: #34d399;
+      --danger: #ef4444;
+      --panel-2: #1f2937;
+      --border: #273549;
+    }
+    body {
+      background: linear-gradient(180deg, #0b1220, #0f172a 30%, #0b0f1a);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      min-height: 100vh;
+    }
+    .container { max-width: 1100px; margin: 40px auto; padding: 0 16px; }
+    .card {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+      overflow: hidden;
+    }
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 20px; border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02); backdrop-filter: blur(6px);
+    }
+    .title { font-size: 20px; font-weight: 700; }
+    .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .controls { display: flex; gap: 10px; align-items: center; }
+    .pill {
+      padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px;
+      font-size: 12px; color: var(--muted);
+    }
+    .pill.good { color: var(--accent-2); border-color: #14532d; background: rgba(20,83,45,.2); }
+    .pill.bad { color: var(--danger); border-color: #7f1d1d; background: rgba(127,29,29,.2); }
+    .btn {
+      border: 1px solid var(--border); color: var(--text); background: #0e1526;
+      border-radius: 10px; padding: 10px 14px; font-weight: 600; cursor: pointer;
+    }
+    .btn:hover { border-color: var(--accent); }
+    .btn.primary { background: linear-gradient(180deg, #1a2376, #1e40af); }
+    .btn.success { background: linear-gradient(180deg, #0b5f3e, #065f46); }
+    .btn.danger { background: linear-gradient(180deg, #7f1d1d, #991b1b); }
+    .tabs { display: flex; gap: 8px; padding: 14px; border-bottom: 1px solid var(--border); }
+    .tab { padding: 10px 14px; border-radius: 10px; cursor: pointer; color: var(--muted); border: 1px solid transparent; }
+    .tab.active { color: var(--text); border-color: var(--border); background: rgba(255,255,255,0.03); }
+    .tab.disabled { opacity: .35; pointer-events: none; }
+    .panel { padding: 16px; }
+    .grid { width: 100%; border-collapse: collapse; }
+    .grid th, .grid td { border-bottom: 1px solid var(--border); padding: 10px 8px; font-size: 14px; }
+    .grid th { text-align: left; color: var(--muted); }
+    .row-actions { display: flex; gap: 8px; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .status { font-size: 12px; color: var(--muted); }
+    .good { color: var(--accent-2); }
+    .bad { color: var(--danger); }
+    .section { border-top: 1px dashed var(--border); padding-top: 12px; margin-top: 12px; }
   </style>
 </head>
 <body>
-  <header>
-    <img src="/logo.png" alt="Places in Time" style="height:28px;width:auto" />
-    <h1>Admin Dashboard</h1>
-  </header>
-
   <div class="container">
-    <div class="tabs">
-      <div class="tab active" data-target="tab-users">Users</div>
-      <div class="tab" data-target="tab-figures">Figures</div>
-      <div class="tab" data-target="tab-rag">RAG Sources</div>
-    </div>
-
-    <!-- USERS -->
-    <section id="tab-users" class="active" aria-labelledby="tab-users-label">
-      <h2 id="tab-users-label" class="sr">Users</h2>
-      <div class="card">
-        <div class="toolbar">
-          <h2 style="margin:0">Users</h2>
-          <button id="refreshUsersBtn">Refresh</button>
+    <div class="card">
+      <div class="header">
+        <div>
+          <div class="title">Admin Dashboard</div>
+          <div class="subtitle">Users · Figures · RAG Sources</div>
         </div>
-        <table id="usersTable">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th class="right">Actions</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
+        <div class="controls">
+          <div id="authStatus" class="pill bad">Signed out</div>
+          <div id="adminStatus" class="pill">Admin inactive</div>
+          <button class="btn" id="lockAdminBtn">Lock Admin</button>
+          <button class="btn danger" id="logoutBtn">Logout</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="users">Users</div>
+        <div class="tab" data-tab="figures">Figures</div>
+        <div class="tab" data-tab="rag">RAG Sources</div>
+      </div>
+
+      <!-- USERS -->
+      <div class="panel" id="panel-users">
+        <button class="btn" id="refreshUsers">Refresh</button>
+        <span class="status" id="usersStatus">Waiting…</span>
+        <table class="grid">
+          <thead><tr><th>ID</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead>
+          <tbody id="usersBody"></tbody>
         </table>
-        <p class="muted">Change a user’s role and it will be audited server-side.</p>
       </div>
-    </section>
 
-    <!-- FIGURES -->
-    <section id="tab-figures" aria-labelledby="tab-figures-label">
-      <h2 id="tab-figures-label" class="sr">Figures</h2>
-      <div class="row">
-        <div class="card">
-          <div class="toolbar">
-            <h2 style="margin:0">Figures</h2>
-            <button id="refreshFiguresBtn">Refresh</button>
-          </div>
-          <table id="figuresTable">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Name / Slug</th>
-                <th>Era</th>
-                <th>Verified</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-          <p class="muted">These are stored in the <code>figures.db</code> database. RAG contexts appear in the next tab.</p>
-        </div>
+      <!-- FIGURES -->
+      <div class="panel" id="panel-figures" style="display:none;">
+        <button class="btn" id="refreshFigures">Refresh</button>
+        <span class="status" id="figuresStatus">Waiting…</span>
+        <table class="grid">
+          <thead><tr><th>ID</th><th>Name</th><th>Slug</th><th>Era</th><th>Summary</th><th>Actions</th></tr></thead>
+          <tbody id="figuresBody"></tbody>
+        </table>
+      </div>
 
-        <div class="card">
-          <h2 style="margin-top:0">Create Figure</h2>
-          <form id="createFigureForm" novalidate>
-            <label for="cf_name">Name</label>
-            <input id="cf_name" required />
-
-            <label for="cf_slug">Slug</label>
-            <input id="cf_slug" required placeholder="katherine-parr" />
-
-            <label for="cf_era">Era</label>
-            <input id="cf_era" />
-
-            <label for="cf_image">Image URL</label>
-            <input id="cf_image" type="url" />
-
-            <label for="cf_short">Short summary</label>
-            <textarea id="cf_short"></textarea>
-
-            <label for="cf_long">Long bio</label>
-            <textarea id="cf_long"></textarea>
-
-            <label for="cf_quote">Quote (optional)</label>
-            <textarea id="cf_quote"></textarea>
-
-            <div class="pill">
-              <input id="cf_verified" type="checkbox" />
-              <label for="cf_verified" style="margin:0;cursor:pointer">Verified</label>
-            </div>
-
-            <div class="right" style="margin-top:12px">
-              <button id="cf_submit" type="submit">Create</button>
-            </div>
-          </form>
-          <p class="muted">Minimal required fields: <b>Name</b> and <b>Slug</b>. On create, two starter contexts (persona/quote) are inserted automatically.</p>
+      <!-- RAG SOURCES -->
+      <div class="panel" id="panel-rag" style="display:none;">
+        <button class="btn" id="refreshRag">Refresh</button>
+        <span class="status" id="ragStatus">Waiting…</span>
+        <table class="grid">
+          <thead><tr><th>ID</th><th>Name</th><th>Type</th><th>URL</th><th>Actions</th></tr></thead>
+          <tbody id="ragBody"></tbody>
+        </table>
+        <div class="section">
+          <h4>Add Source</h4>
+            <label for="ragName"></label><input id="ragName" type="text" placeholder="Name" />
+            <label for="ragType"></label><input id="ragType" type="text" placeholder="Type (wiki, dbpedia, manual)" />
+            <label for="ragUrl"></label><input id="ragUrl" type="text" placeholder="URL" />
+          <button class="btn success" id="addRagBtn">Add</button>
         </div>
       </div>
-    </section>
 
-    <!-- RAG -->
-    <section id="tab-rag" aria-labelledby="tab-rag-label">
-      <h2 id="tab-rag-label" class="sr">RAG Sources</h2>
-      <div class="row">
-        <div class="card">
-          <h2 style="margin-top:0">Current Sources</h2>
-          <div id="chromaStatus"></div>
-          <table id="ragTable" aria-describedby="ragHelp">
-            <thead>
-              <tr>
-                <th>Figure</th>
-                <th>Total</th>
-                <th>Persona</th>
-                <th>Instruction</th>
-                <th>Bio</th>
-                <th>Note</th>
-                <th>Quote</th>
-                <th>Context</th>
-                <th>Manual?</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-          <div id="ragHelp" class="muted">Counts reflect <code>figure_contexts</code> in the Figures DB. Vector index info is collection-level.</div>
-        </div>
-
-        <div class="card">
-          <h2 style="margin-top:0">Add Manual Source</h2>
-          <form id="addSourceForm" novalidate>
-            <label for="figureSelect">Figure</label>
-            <select id="figureSelect" required></select>
-
-            <label for="sourceName">Source name</label>
-            <input id="sourceName" type="text" maxlength="200" required />
-
-            <label for="contentType">Content type</label>
-            <select id="contentType" required>
-              <option value="persona">persona</option>
-              <option value="instruction">instruction</option>
-              <option value="bio">bio</option>
-              <option value="note">note</option>
-              <option value="quote">quote</option>
-              <option value="context">context</option>
-            </select>
-
-            <label for="sourceUrl">Source URL (optional)</label>
-            <input id="sourceUrl" type="url" placeholder="https://example.org/page" />
-
-            <label for="content">Content</label>
-            <textarea id="content" required></textarea>
-
-            <div class="right" style="margin-top:12px">
-              <button id="submitBtn" type="submit">Add Source</button>
-            </div>
-          </form>
-          <p class="muted">Manual sources are stored as rows in <code>figure_contexts</code> with <code>is_manual=1</code>. Identical duplicates are rejected.</p>
-        </div>
-      </div>
-    </section>
+      <div class="footer-note">Tokens are in-memory only. Reload drops them.</div>
+    </div>
   </div>
-
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <script>
-    // ---- helpers
-    function getToken() {
-      return sessionStorage.getItem('access_token') || localStorage.getItem('access_token') || '';
-    }
-    async function apiGet(path) {
-      const res = await fetch(path, { headers: { 'Authorization': 'Bearer ' + getToken() } });
-      if (res.status === 401 || res.status === 403) throw new Error('Unauthorized');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res.json();
-    }
-    async function apiPost(path, body) {
-      const res = await fetch(path, {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (res.status === 401 || res.status === 403) throw new Error('Unauthorized');
-      if (res.status === 409) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.detail || 'Duplicate');
-      }
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.detail || ('HTTP ' + res.status));
-      }
-      return res.json().catch(() => ({}));
-    }
-    async function apiPatch(path, body) {
-      const res = await fetch(path, {
-        method: 'PATCH',
-        headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (res.status === 401 || res.status === 403) throw new Error('Unauthorized');
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.detail || ('HTTP ' + res.status));
-      }
-      return res.json();
-    }
-    function toast(msg, ok=true) {
-      const el = document.getElementById('toast');
-      el.textContent = msg;
-      el.style.borderColor = ok ? '#184f2e' : '#4f1818';
-      el.style.display = 'block';
-      clearTimeout(el._t);
-      el._t = setTimeout(() => { el.style.display = 'none'; }, 2500);
-    }
-
-    // ---- TABS
-    const tabs = document.querySelectorAll('.tab');
-    const sections = document.querySelectorAll('section');
-    tabs.forEach(t => {
-      t.addEventListener('click', () => {
-        tabs.forEach(x => x.classList.remove('active'));
-        sections.forEach(x => x.classList.remove('active'));
-        t.classList.add('active');
-        const target = document.getElementById(t.dataset.target);
-        target.classList.add('active');
-        if (t.dataset.target === 'tab-rag') refreshRag();
-        if (t.dataset.target === 'tab-users') refreshUsers();
-        if (t.dataset.target === 'tab-figures') { refreshFigures(); loadFiguresForSelect(); }
-      });
-    });
-
-    // ---- USERS
-    async function refreshUsers() {
-      try {
-        const list = await apiGet('/admin/users');
-        const tbody = document.querySelector('#usersTable tbody');
-        tbody.innerHTML = '';
-        list.forEach(u => {
-          const tr = document.createElement('tr');
-          const roleSel = document.createElement('select');
-          ['user','admin'].forEach(r => {
-            const opt = document.createElement('option');
-            opt.value = r; opt.textContent = r;
-            if (u.role === r) opt.selected = true;
-            roleSel.appendChild(opt);
-          });
-          const saveBtn = document.createElement('button');
-          saveBtn.textContent = 'Save';
-          saveBtn.addEventListener('click', async () => {
-            try {
-              const out = await apiPatch(`/admin/users/${u.id}/role`, { role: roleSel.value });
-              toast(`Updated role for ${out.username} → ${out.role}`);
-              await refreshUsers();
-            } catch (e) { toast(String(e.message || e), false); }
-          });
-          tr.innerHTML = `
-            <td>${u.id}</td>
-            <td>${u.username}</td>
-            <td></td>
-            <td class="right"></td>
-          `;
-          tr.children[2].appendChild(roleSel);
-          tr.children[3].appendChild(saveBtn);
-          tbody.appendChild(tr);
-        });
-      } catch (e) { toast(String(e.message || e), false); }
-    }
-    document.getElementById('refreshUsersBtn').addEventListener('click', refreshUsers);
-
-    // ---- FIGURES
-    async function refreshFigures() {
-      try {
-        const items = await apiGet('/admin/figures');
-        const tbody = document.querySelector('#figuresTable tbody');
-        tbody.innerHTML = '';
-        items.forEach(f => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${f.id}</td>
-            <td>${f.name}<div class="muted">${f.slug}</div></td>
-            <td>${f.era || ''}</td>
-            <td>${f.verified ? '<span class="badge ok">yes</span>' : '<span class="badge">no</span>'}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-      } catch (e) { toast(String(e.message || e), false); }
-    }
-    document.getElementById('refreshFiguresBtn').addEventListener('click', refreshFigures);
-
-    // Create Figure
-    document.getElementById('createFigureForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = document.getElementById('cf_submit');
-      btn.disabled = true;
-      const payload = {
-        name: document.getElementById('cf_name').value.trim(),
-        slug: document.getElementById('cf_slug').value.trim(),
-        era: document.getElementById('cf_era').value.trim() || null,
-        image_url: document.getElementById('cf_image').value.trim() || null,
-        short_summary: document.getElementById('cf_short').value.trim() || null,
-        long_bio: document.getElementById('cf_long').value.trim() || null,
-        quote: document.getElementById('cf_quote').value.trim() || null,
-        verified: document.getElementById('cf_verified').checked ? 1 : 0,
-        # persona_prompt is optional and not exposed here
-      };
-      // Remove nulls
-      Object.keys(payload).forEach(k => { if (payload[k] === null) delete payload[k]; });
-      if (!payload.name || !payload.slug) { toast('Name and Slug are required.', false); btn.disabled = false; return; }
-      try {
-        await apiPost('/admin/figures', payload);
-        toast('Figure created.');
-        // clear
-        ['cf_name','cf_slug','cf_era','cf_image','cf_short','cf_long','cf_quote'].forEach(id => document.getElementById(id).value='');
-        document.getElementById('cf_verified').checked = false;
-        await refreshFigures();
-        // also refresh RAG select for Add Source
-        await loadFiguresForSelect();
-      } catch (e2) {
-        toast(String(e2.message || e2), false);
-      } finally { btn.disabled = false; }
-    });
-
-    // ---- RAG (unchanged logic from previous version)
-    function setChromaStatus(collection) {
-      const s = document.getElementById('chromaStatus');
-      const ok = collection && collection.available;
-      const detail = collection && collection.detail ? String(collection.detail) : '';
-      s.innerHTML = `<span class="badge ${ok ? 'ok' : ''}">${ok ? 'Chroma: available' : 'Chroma: unavailable'}${detail ? ' — ' + detail : ''}</span>`;
-    }
-    function renderRagTable(figures) {
-      const tbody = document.querySelector('#ragTable tbody');
-      tbody.innerHTML = '';
-      const safe = x => x == null ? 0 : x;
-      figures.forEach(f => {
-        const cc = f.context_counts || {};
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${f.name} <div class="muted">${f.slug}</div></td>
-          <td>${safe(f.total_contexts)}</td>
-          <td>${safe(cc.persona)}</td>
-          <td>${safe(cc.instruction)}</td>
-          <td>${safe(cc.bio)}</td>
-          <td>${safe(cc.note)}</td>
-          <td>${safe(cc.quote)}</td>
-          <td>${safe(cc.context)}</td>
-          <td>${f.has_manual_context ? '<span class="badge ok">yes</span>' : '<span class="badge">no</span>'}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-    async function loadFiguresForSelect() {
-      const sel = document.getElementById('figureSelect');
-      if (!sel) return;
-      sel.innerHTML = '';
-      try {
-        const items = await apiGet('/admin/figures');
-        items.forEach(f => {
-          const opt = document.createElement('option');
-          opt.value = f.slug;
-          opt.textContent = f.name + ' (' + f.slug + ')';
-          sel.appendChild(opt);
-        });
-      } catch (e) {
-        // ignore here; may not be on RAG tab yet
-      }
-    }
-    async function refreshRag() {
-      try {
-        const data = await apiGet('/admin/rag/sources');
-        setChromaStatus(data.collection || {});
-        renderRagTable(data.figures || []);
-        // populate the select if empty
-        const sel = document.getElementById('figureSelect');
-        if (sel && sel.options.length === 0) await loadFiguresForSelect();
-      } catch (e) { toast(String(e.message || e), false); }
-    }
-    document.getElementById('addSourceForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = document.getElementById('submitBtn');
-      btn.disabled = true;
-      const payload = {
-        figure_slug: document.getElementById('figureSelect').value,
-        source_name: document.getElementById('sourceName').value.trim(),
-        content_type: document.getElementById('contentType').value,
-        source_url: document.getElementById('sourceUrl').value.trim() || null,
-        content: document.getElementById('content').value.trim()
-      };
-      if (!payload.figure_slug || !payload.source_name || !payload.content || !payload.content_type) {
-        toast('Please fill in all required fields.', false);
-        btn.disabled = false;
-        return;
-      }
-      try {
-        await apiPost('/admin/rag/sources', payload);
-        toast('Source added.');
-        document.getElementById('sourceName').value = '';
-        document.getElementById('sourceUrl').value = '';
-        document.getElementById('content').value = '';
-        await refreshRag();
-      } catch (e2) {
-        toast(String(e2.message || e2), false);
-      } finally { btn.disabled = false; }
-    });
-
-    // ---- INIT
-    (async function init() {
-      // probe admin scope quickly
-      try { await apiGet('/admin/health'); } catch (_e) {}
-      // initial tab boot
-      refreshUsers();
-    })();
-  </script>
+  <script src="/static_frontend/admin.js?v=rag-ui-fixed"></script>
 </body>
 </html>
