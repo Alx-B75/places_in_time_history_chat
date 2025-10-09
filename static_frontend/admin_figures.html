@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Admin · Figures</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/static/pit-favicon-mark.ico" />
+  <link rel="stylesheet" href="/static/style.css?v=brand-9" />
+  <style>
+    body { background: linear-gradient(180deg, #0b1220, #0f172a 30%, #0b0f1a); color: #e5e7eb; }
+    .container { max-width: 1100px; margin: 32px auto; padding: 0 16px; }
+    .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .btn { border: 1px solid #273549; background: #0e1526; color: #e5e7eb; border-radius: 10px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
+    .btn:hover { border-color: #60a5fa; }
+    .btn.primary { background: linear-gradient(180deg, #1a2376, #1e40af); }
+    .muted { color: #94a3b8; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #273549; padding: 10px 8px; font-size: 14px; vertical-align: top; }
+    th { text-align: left; color: #94a3b8; }
+    .pill { display: inline-block; padding: 4px 8px; border: 1px solid #273549; border-radius: 999px; font-size: 12px; color: #94a3b8; }
+    .actions { display: flex; gap: 8px; }
+    .topbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="head">
+      <h1>Admin · Figures</h1>
+      <div class="actions">
+        <a class="btn primary" href="/admin/figure-ui/new">Add New Figure</a>
+        <a class="btn" href="/admin/ui">Dashboard</a>
+      </div>
+    </div>
+    <div class="topbar">
+      <button id="refreshBtn" class="btn">Refresh</button>
+      <span id="status" class="muted">Waiting…</span>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Name</th><th>Slug</th><th>Era</th><th>Summary</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
+    <div style="margin-top:16px;">
+      <a class="btn primary" href="/admin/figure-ui/new">Add New Figure</a>
+    </div>
+  </div>
+
+  <script src="/static/admin_figures.js?v=figlist-1"></script>
+</body>
+</html>
