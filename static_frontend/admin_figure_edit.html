@@ -2,107 +2,236 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Admin · Figure Edit</title>
+  <title>Admin · Edit Figure</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="/static/pit-favicon-mark.ico" />
   <link rel="stylesheet" href="/static/style.css?v=brand-9" />
   <style>
-    body { background: linear-gradient(180deg, #0b1220, #0f172a 30%, #0b0f1a); color: #e5e7eb; }
-    .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
-    .grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; }
-    .card { background: linear-gradient(180deg, #111827, #1f2937); border:1px solid #273549; border-radius: 16px; padding: 16px; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .row .full { grid-column: 1 / -1; }
-    label { display:block; font-size:12px; color:#94a3b8; margin-bottom:6px; }
-    input, textarea { width:100%; background:#0b1220; border:1px solid #273549; color:#e5e7eb; border-radius:10px; padding:10px 12px; font-size:14px; }
-    textarea { min-height: 120px; }
-    .btn { border: 1px solid #273549; background: #0e1526; color:#e5e7eb; border-radius:10px; padding:10px 14px; font-weight:600; cursor:pointer; }
-    .btn:hover { border-color:#60a5fa; }
-    .btn.primary { background: linear-gradient(180deg, #1a2376, #1e40af); }
-    .btn.success { background: linear-gradient(180deg, #0b5f3e, #065f46); }
-    .btn.danger { background: linear-gradient(180deg, #7f1d1d, #991b1b); }
-    .muted { color:#94a3b8; font-size:12px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border-bottom: 1px solid #273549; padding: 10px 8px; font-size: 14px; vertical-align: top; }
-    th { text-align: left; color: #94a3b8; }
-    .toolbar { display:flex; gap:8px; align-items:center; justify-content: space-between; margin-bottom: 12px; }
-    .right { text-align: right; }
-    .imgpreview { width: 100%; max-width: 320px; border-radius: 10px; border:1px solid #273549; }
-    .pill { display:inline-block; padding: 4px 8px; border: 1px solid #273549; border-radius: 999px; font-size:12px; color:#94a3b8; }
+    :root {
+      --bg:#0f172a; --panel:#111827; --panel-2:#1f2937; --border:#273549;
+      --muted:#94a3b8; --text:#e5e7eb; --accent:#60a5fa; --good:#34d399; --bad:#ef4444;
+    }
+    body{background:linear-gradient(180deg,#0b1220,#0f172a 30%,#0b0f1a);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;min-height:100vh;}
+    .container{max-width:1100px;margin:32px auto;padding:0 16px;}
+    .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.35);overflow:hidden;}
+    .header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border);}
+    .title{font-size:18px;font-weight:700;}
+    .subtitle{color:var(--muted);font-size:12px;}
+    .pill{padding:6px 10px;border:1px solid var(--border);border-radius:999px;font-size:12px;color:var(--muted);}
+    .pill.good{color:var(--good);border-color:#14532d;background:rgba(20,83,45,.2);}
+    .pill.bad{color:var(--bad);border-color:#7f1d1d;background:rgba(127,29,29,.2);}
+    .btn{border:1px solid var(--border);color:var(--text);background:#0e1526;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer;}
+    .btn:hover{border-color:var(--accent);}
+    .btn.primary{background:linear-gradient(180deg,#1a2376,#1e40af);}
+    .btn.success{background:linear-gradient(180deg,#0b5f3e,#065f46);}
+    .btn.danger{background:linear-gradient(180deg,#7f1d1d,#991b1b);}
+    .panel{padding:16px;}
+    .form{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .full{grid-column:1 / -1;}
+    input[type="text"],textarea{
+      width:100%;background:#0b1220;color:var(--text);border:1px solid var(--border);
+      border-radius:10px;padding:10px 12px;font-size:13px;outline:none;
+    }
+    textarea{min-height:140px;resize:vertical;}
+    .muted{color:var(--muted);font-size:12px;}
+    .kicker{color:var(--muted);font-size:12px;margin-bottom:6px;}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .status{font-size:12px;color:var(--muted);}
+    .good{color:var(--good);}
+    .bad{color:var(--bad);}
+    .toolbar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;}
+    .backlink{text-decoration:none;color:#9fb8ff;}
+    .counter{font-size:11px;color:var(--muted);}
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="toolbar">
-      <div>
-        <a class="btn" href="/admin/figures-ui">← Back to list</a>
-        <span id="pageTitle" class="pill">Loading…</span>
-      </div>
-      <div class="right">
-        <button id="saveBtn" class="btn success">Save Figure</button>
-        <button id="deleteBtn" class="btn danger">Delete Figure</button>
-      </div>
-    </div>
-
-    <div class="grid">
-      <!-- Figure fields -->
-      <div class="card">
-        <h2>Figure</h2>
+    <div class="card">
+      <div class="header">
+        <div>
+          <div class="title">Edit Figure</div>
+          <div class="subtitle"><a class="backlink" href="/admin/ui">← Back to Admin</a></div>
+        </div>
         <div class="row">
-          <div>
-            <label>Name</label>
-            <input id="name" type="text" />
-          </div>
-          <div>
-            <label>Slug</label>
-            <input id="slug" type="text" />
-          </div>
-          <div>
-            <label>Era</label>
-            <input id="era" type="text" />
-          </div>
-          <div>
-            <label>Image URL</label>
-            <input id="image_url" type="text" />
-          </div>
-          <div class="full">
-            <label>Short Summary</label>
-            <textarea id="short_summary"></textarea>
-          </div>
-          <div class="full">
-            <label>Long Bio</label>
-            <textarea id="long_bio"></textarea>
-          </div>
-          <div class="full">
-            <label>Quote</label>
-            <textarea id="quote"></textarea>
-          </div>
+          <div id="authStatus" class="pill bad">Signed out</div>
+          <div id="adminStatus" class="pill">Admin inactive</div>
+          <button class="btn" id="lockAdminBtn">Lock Admin</button>
+          <button class="btn danger" id="logoutBtn">Logout</button>
         </div>
-        <div class="muted" id="figStatus">Waiting…</div>
       </div>
 
-      <!-- Preview + RAG -->
-      <div class="card">
-        <h2>Preview</h2>
-        <img id="previewImg" class="imgpreview" src="" alt="" onerror="this.style.display='none'"/>
-        <p class="muted" id="previewSummary"></p>
-
-        <h2 style="margin-top:12px;">RAG Sources</h2>
+      <div class="panel">
         <div class="toolbar">
-          <div>
-            <button class="btn" id="ragRefresh">Refresh</button>
-            <button class="btn primary" id="ragAdd">Add Source</button>
+          <div class="kicker">Sign in</div>
+          <div class="row">
+            <input id="email" type="text" placeholder="Email" style="width:220px;" />
+            <input id="password" type="password" placeholder="Password" style="width:180px;" />
+            <button class="btn primary" id="loginBtn">Sign in & Step Up</button>
+            <span class="status" id="loginStatus">Waiting…</span>
           </div>
-          <span class="muted" id="ragStatus">Waiting…</span>
         </div>
-        <table>
-          <thead><tr><th>ID</th><th>Name</th><th>Type</th><th>URL</th><th>Actions</th></tr></thead>
-          <tbody id="ragBody"></tbody>
-        </table>
+
+        <div class="kicker">Figure basics</div>
+        <div class="form">
+          <div><input id="figName" type="text" placeholder="Name" /></div>
+          <div><input id="figSlug" type="text" placeholder="Slug (read-only)" disabled /></div>
+          <div><input id="figEra" type="text" placeholder="Era" /></div>
+          <div><input id="figImage" type="text" placeholder="Image URL" /></div>
+          <div class="full"><input id="figShort" type="text" placeholder="Short summary" /></div>
+          <div class="full"><textarea id="figLong" placeholder="Long bio"></textarea></div>
+        </div>
+
+        <div class="kicker" style="margin-top:10px;">Persona Prompt</div>
+        <div class="form">
+          <div class="full">
+            <textarea id="personaPrompt" placeholder="Persona prompt used to steer the figure's voice and behavior."></textarea>
+            <div class="row" style="justify-content:space-between;">
+              <span class="muted">This text is sent to the model alongside retrieved RAG context.</span>
+              <span class="counter" id="personaCount">0 chars</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <button class="btn success" id="saveBtn">Save Changes</button>
+          <span class="status" id="saveStatus">Waiting…</span>
+        </div>
       </div>
     </div>
   </div>
 
-  <script src="/static/admin_figure_edit.js?v=figedit-1"></script>
+  <script>
+    (function () {
+      const $ = (s) => document.querySelector(s);
+
+      const state = { userToken: null, adminToken: null, password: null };
+      const dom = {
+        email: $("#email"), password: $("#password"), loginBtn: $("#loginBtn"), loginStatus: $("#loginStatus"),
+        authStatus: $("#authStatus"), adminStatus: $("#adminStatus"), lockAdminBtn: $("#lockAdminBtn"), logoutBtn: $("#logoutBtn"),
+        figName: $("#figName"), figSlug: $("#figSlug"), figEra: $("#figEra"), figImage: $("#figImage"),
+        figShort: $("#figShort"), figLong: $("#figLong"),
+        personaPrompt: $("#personaPrompt"), personaCount: $("#personaCount"),
+        saveBtn: $("#saveBtn"), saveStatus: $("#saveStatus"),
+      };
+
+      const slug = (location.pathname.split("/").pop() || "").trim();
+
+      function setAuthUI() {
+        if (state.userToken) { dom.authStatus.textContent = "Signed in"; dom.authStatus.classList.remove("bad"); dom.authStatus.classList.add("good"); }
+        else { dom.authStatus.textContent = "Signed out"; dom.authStatus.classList.add("bad"); dom.authStatus.classList.remove("good"); }
+        if (state.adminToken) { dom.adminStatus.textContent = "Admin active"; dom.adminStatus.classList.add("good"); }
+        else { dom.adminStatus.textContent = "Admin inactive"; dom.adminStatus.classList.remove("good"); }
+      }
+
+      async function fetchJSON(path, opts = {}, requireAdmin = false) {
+        const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+        const token = requireAdmin ? state.adminToken : state.userToken;
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const res = await fetch(path, { ...opts, headers });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.detail || res.statusText || "Request failed");
+        return data;
+      }
+
+      const API = {
+        login: (username, password) =>
+          fetchJSON("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+        stepUp: (password) =>
+          fetchJSON("/auth/admin/stepup", { method: "POST", body: JSON.stringify({ password }) })
+            .then((r) => { if (!r?.admin_access_token) throw new Error(r?.detail || "Step-up failed"); return r; }),
+        listFigures: () => fetchJSON("/admin/figures", {}, true),                     // admin list (summary)
+        updateFigure: (slug, payload) =>                                             // admin update (detail response)
+          fetchJSON(`/admin/figures/${encodeURIComponent(slug)}`, { method: "PATCH", body: JSON.stringify(payload) }, true),
+        publicFigure: (slug) => fetchJSON(`/figures/${encodeURIComponent(slug)}`),   // public read (if available)
+      };
+
+      async function loginAndStepUp() {
+        dom.loginStatus.textContent = "Signing in…";
+        const username = dom.email.value.trim();
+        const password = dom.password.value;
+        if (!username || !password) { dom.loginStatus.innerHTML = `<span class="bad">Email and password required</span>`; return; }
+        try {
+          const login = await API.login(username, password);
+          state.userToken = login.access_token; state.password = password; setAuthUI();
+          dom.loginStatus.textContent = "Stepping up…";
+          const r = await API.stepUp(password);
+          state.adminToken = r.admin_access_token; setAuthUI();
+          dom.loginStatus.innerHTML = `<span class="good">Admin active</span>`;
+          await loadFigure();
+        } catch (e) {
+          dom.loginStatus.innerHTML = `<span class="bad">${e.message}</span>`;
+          state.userToken = null; state.adminToken = null; setAuthUI();
+        }
+      }
+
+      function lockAdmin(){ state.adminToken = null; setAuthUI(); }
+      function logout(){ state.userToken = null; state.adminToken = null; state.password = null; setAuthUI(); }
+
+      function updatePersonaCounter(){ dom.personaCount.textContent = `${(dom.personaPrompt.value || "").length} chars`; }
+
+      async function loadFigure() {
+        dom.saveStatus.textContent = "Loading…";
+        try {
+          // 1) Get summary from admin list (always available)
+          const rows = await API.listFigures();
+          const f = rows.find((x) => (x.slug || "") === slug);
+          if (!f) throw new Error("Figure not found");
+          dom.figName.value = f.name || "";
+          dom.figSlug.value = f.slug || "";
+          dom.figEra.value = f.era || "";
+          dom.figImage.value = f.image_url || "";
+          dom.figShort.value = f.short_summary || "";
+
+          // 2) Try public detail (if router exposes it) to populate long_bio/persona_prompt
+          try {
+            const pub = await API.publicFigure(slug);
+            if (pub?.long_bio != null) dom.figLong.value = pub.long_bio || "";
+            if (pub?.persona_prompt != null) dom.personaPrompt.value = pub.persona_prompt || "";
+          } catch { /* ignore if not available */ }
+
+          updatePersonaCounter();
+          dom.saveStatus.textContent = "Ready";
+        } catch (e) {
+          dom.saveStatus.innerHTML = `<span class="bad">${e.message}</span>`;
+        }
+      }
+
+      async function save() {
+        dom.saveStatus.textContent = "Saving…";
+        try {
+          const payload = {};
+          if (dom.figName.value.trim())  payload["name"] = dom.figName.value.trim();
+          if (dom.figEra.value.trim())   payload["era"] = dom.figEra.value.trim();
+          if (dom.figImage.value.trim()) payload["image_url"] = dom.figImage.value.trim();
+          if (dom.figShort.value.trim()) payload["short_summary"] = dom.figShort.value.trim();
+          if (dom.figLong.value.trim())  payload["long_bio"] = dom.figLong.value.trim();
+          payload["persona_prompt"] = dom.personaPrompt.value; // allow empty to clear
+
+          const r = await API.updateFigure(slug, payload);
+          // refresh from server response (expects detail with persona_prompt included)
+          dom.figName.value = r.name || "";
+          dom.figEra.value = r.era || "";
+          dom.figImage.value = r.image_url || "";
+          dom.figShort.value = r.short_summary || "";
+          dom.figLong.value = r.long_bio || "";
+          dom.personaPrompt.value = r.persona_prompt || "";
+          updatePersonaCounter();
+          dom.saveStatus.innerHTML = `<span class="good">Saved</span>`;
+        } catch (e) {
+          dom.saveStatus.innerHTML = `<span class="bad">${e.message}</span>`;
+        }
+      }
+
+      // Wire up
+      $("#loginBtn").addEventListener("click", loginAndStepUp);
+      $("#lockAdminBtn").addEventListener("click", lockAdmin);
+      $("#logoutBtn").addEventListener("click", logout);
+      $("#personaPrompt").addEventListener("input", updatePersonaCounter);
+      $("#saveBtn").addEventListener("click", save);
+
+      setAuthUI();
+      // After authenticating (Sign in & Step Up), click "Save Changes" to persist edits.
+    })();
+  </script>
 </body>
 </html>

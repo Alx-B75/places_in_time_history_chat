@@ -123,6 +123,7 @@ class HistoricalFigure(FigureBase):
             "sources": json.loads(self.sources) if self.sources else {},
             "wiki_links": json.loads(self.wiki_links) if self.wiki_links else {},
             "quote": self.quote,
+            "persona_prompt": self.persona_prompt,
             "birth_year": self.birth_year,
             "death_year": self.death_year,
             "verified": bool(self.verified),
@@ -145,6 +146,7 @@ class HistoricalFigure(FigureBase):
         self.sources = json.dumps(data.get("sources", {}))
         self.wiki_links = json.dumps(data.get("wiki_links", {}))
         self.quote = data.get("quote")
+        self.persona_prompt = data.get("persona_prompt")
         self.birth_year = data.get("birth_year")
         self.death_year = data.get("death_year")
         self.verified = 1 if data.get("verified") else 0

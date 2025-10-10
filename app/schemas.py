@@ -165,6 +165,7 @@ class FigureContextRead(BaseModel):
 class HistoricalFigureRead(BaseModel):
     """
     Summary schema for listing historical figures.
+    NOTE: includes persona_prompt (optional) so the admin editor can load it without a separate detail GET.
     """
 
     id: int
@@ -174,6 +175,7 @@ class HistoricalFigureRead(BaseModel):
     roles: Optional[str] = None
     image_url: Optional[str] = None
     short_summary: Optional[str] = None
+    persona_prompt: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -219,6 +221,7 @@ class HistoricalFigureDetail(HistoricalFigureRead):
 
     model_config = {"from_attributes": True}
 
+
 class HistoricalFigureUpdate(BaseModel):
     """Schema for partial updates to a historical figure."""
 
@@ -238,6 +241,7 @@ class HistoricalFigureUpdate(BaseModel):
     sources: Optional[str] = None
     wiki_links: Optional[str] = None
     verified: Optional[int] = None
+    persona_prompt: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -257,5 +261,3 @@ class AuditLogRead(BaseModel):
     ip: Optional[str] = None
 
     model_config = {"from_attributes": True}
-
-
