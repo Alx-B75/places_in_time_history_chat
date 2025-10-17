@@ -6,21 +6,18 @@ flow and exercise role-based authorization. All endpoints require an admin-
 scoped bearer token via the admin_required dependency.
 """
 
-from typing import Generator, List
 
+from typing import Generator, List
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from app.config.llm_config import llm_config, LLMRuntimeConfig
-from app.services.llm_client import LLMClient
+from app.services.llm_client import llm_client
+from app.utils.security import admin_required
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
-# Minimal admin dependency for LLM endpoints (does not affect existing admin_required)
-def require_admin():
-    return True
-
 # PATCH /admin/llm for runtime LLM config
 @router.patch("/llm")
-def admin_update_llm(cfg: LLMRuntimeConfig, _: bool = Depends(require_admin)):
+def admin_update_llm(cfg: LLMRuntimeConfig, _: str = Depends(admin_required)):
     llm_config.provider = cfg.provider or llm_config.provider
     llm_config.model = cfg.model or llm_config.model
     llm_config.api_key = cfg.api_key or llm_config.api_key
@@ -30,15 +27,24 @@ def admin_update_llm(cfg: LLMRuntimeConfig, _: bool = Depends(require_admin)):
     llm_config.max_tokens = cfg.max_tokens if cfg.max_tokens is not None else llm_config.max_tokens
     return {"status": "ok", "active": llm_config.dict()}
 
-from sqlalchemy.orm import Session
+# --- LLM Health Endpoint ---
+@router.get("/llm/health")
+def llm_health(_: str = Depends(admin_required)):
+    """
+    Check active LLM provider connectivity and return status.
+    """
+    try:
+        messages = [{"role": "system", "content": "ping"}]
+        response = llm_client.generate(messages=messages, temperature=0.0, max_tokens=5)
+        return {"ok": True, "provider": getattr(llm_client, 'provider', None), "model": getattr(llm_client, 'model', None)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+__all__ = ["router"]
 
+from sqlalchemy.orm import Session
 from app import models, schemas
 from app.database import get_db_chat
 from app.figures_database import FigureSessionLocal
-from app.utils.security import admin_required
-
-
-router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
 def get_figure_db() -> Generator[Session, None, None]:
