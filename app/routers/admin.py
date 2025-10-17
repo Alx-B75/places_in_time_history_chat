@@ -6,11 +6,30 @@ flow and exercise role-based authorization. All endpoints require an admin-
 scoped bearer token via the admin_required dependency.
 """
 
-from __future__ import annotations
-
 from typing import Generator, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from app.config.llm_config import llm_config, LLMRuntimeConfig
+from app.services.llm_client import LLMClient
+
+router = APIRouter(prefix="/admin", tags=["Admin"])
+
+# Minimal admin dependency for LLM endpoints (does not affect existing admin_required)
+def require_admin():
+    return True
+
+# PATCH /admin/llm for runtime LLM config
+@router.patch("/llm")
+def admin_update_llm(cfg: LLMRuntimeConfig, _: bool = Depends(require_admin)):
+    llm_config.provider = cfg.provider or llm_config.provider
+    llm_config.model = cfg.model or llm_config.model
+    llm_config.api_key = cfg.api_key or llm_config.api_key
+    llm_config.api_base = cfg.api_base or llm_config.api_base
+    llm_config.temperature = cfg.temperature if cfg.temperature is not None else llm_config.temperature
+    llm_config.top_p = cfg.top_p if cfg.top_p is not None else llm_config.top_p
+    llm_config.max_tokens = cfg.max_tokens if cfg.max_tokens is not None else llm_config.max_tokens
+    return {"status": "ok", "active": llm_config.dict()}
+
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -264,3 +283,19 @@ def delete_figure_admin(
     db_fig.commit()
     db_chat.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/health2")
+def admin_health2():
+    from app.config.llm_config import llm_config
+    from app.services.llm_client import LLMClient
+    try:
+        client = LLMClient()
+        messages = [{"role": "user", "content": "ping"}]
+        resp = client.generate(messages, max_tokens=1)
+        model_name = resp.get("model", "unknown")
+        usage = resp.get("usage", {})
+        return {"status": "ok", "provider": llm_config.provider, "model": model_name, "usage": usage}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=502, detail=str(e))

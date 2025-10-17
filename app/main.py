@@ -215,6 +215,11 @@ def serve_favicon_svg() -> Response:
     return Response(status_code=status.HTTP_404_NOT_FOUND)
 
 
+@app.get("/debug/routes")
+def debug_routes():
+    return [route.path for route in app.routes]
+
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 

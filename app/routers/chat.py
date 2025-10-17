@@ -8,7 +8,7 @@ from typing import Dict, Generator, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Form, Request, status
 from fastapi.responses import RedirectResponse
-from openai import OpenAI
+from app.services.llm_client import LLMClient
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -23,7 +23,7 @@ from app.utils.security import get_current_user
 router = APIRouter(tags=["Chat"])
 
 _settings = get_settings()
-_client = OpenAI(api_key=_settings.openai_api_key)
+llm_client = LLMClient()
 
 
 class ThreadCreatePayload(BaseModel):
@@ -333,8 +333,8 @@ def chat_complete(
     user_msg = schemas.ChatMessageCreate(user_id=user_id, role="user", message=message, thread_id=thread_id)
     crud.create_chat_message(db, user_msg)
 
-    response = _client.chat.completions.create(model="gpt-4o-mini", messages=messages, temperature=0.3)
-    answer = response.choices[0].message.content.strip() if response.choices else ""
+    response = llm_client.generate(messages=messages, model="gpt-4o-mini", temperature=0.3)
+    answer = response["choices"][0]["message"]["content"].strip() if response.get("choices") else ""
 
     assistant_msg = schemas.ChatMessageCreate(user_id=user_id, role="assistant", message=answer, thread_id=thread_id)
     crud.create_chat_message(db, assistant_msg)
