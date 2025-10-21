@@ -1,0 +1,17 @@
+body { font-family: Arial, Helvetica, sans-serif; margin:0; }
+.app { display:flex; height:100vh }
+.sidebar { width:200px; background:#222; color:#fff; padding:16px }
+.sidebar h2{ margin-top:0 }
+.sidebar a{ color:#9cf; text-decoration:none }
+.sidebar ul{ list-style:none; padding:0 }
+.sidebar li{ margin:8px 0 }
+.main{ flex:1; padding:16px }
+.login-page{ display:flex; align-items:center; justify-content:center; height:100vh }
+.login-form{ width:320px; padding:16px; border:1px solid #ddd }
+.login-form input{ width:100%; padding:8px; margin:8px 0 }
+button{ padding:8px 12px }
+.llm-admin-form{ max-width:400px; margin:24px auto; padding:16px; border:1px solid #eee; background:#fafafa }
+.form-row{ margin-bottom:12px }
+.form-row label{ display:block; margin-bottom:4px }
+.form-row input{ width:100%; padding:6px }
+.msg{ margin:8px 0; color:#007a00 }

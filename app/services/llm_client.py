@@ -3,6 +3,8 @@ import logging
 from typing import List, Dict, Any
 from app.config.llm_config import llm_config
 
+
+
 class LLMClient:
     def generate(
         self,
@@ -20,11 +22,11 @@ class LLMClient:
         use_max = llm_config.max_tokens if max_tokens is None else max_tokens
 
         if provider in ("openai", "openrouter"):
-            import openai
-            api_base = llm_config.api_base or (
+            from openai import OpenAI
+            base_url = llm_config.api_base or (
                 "https://openrouter.ai/api/v1" if provider == "openrouter" else "https://api.openai.com/v1"
             )
-            client = openai.OpenAI(api_key=llm_config.api_key, base_url=api_base)
+            client = OpenAI(api_key=llm_config.api_key, base_url=base_url)
             resp_obj = client.chat.completions.create(
                 model=active_model,
                 messages=messages,
@@ -47,3 +49,13 @@ class LLMClient:
             provider, active_model, latency_ms, usage
         )
         return resp
+
+
+# Singleton instance for use throughout the app
+llm_client = LLMClient()
+
+# Singleton instance for use throughout the app
+llm_client = LLMClient()
+
+# Singleton instance for use throughout the app
+llm_client = LLMClient()

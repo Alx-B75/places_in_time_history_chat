@@ -14,8 +14,8 @@ from typing import List
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
@@ -59,7 +59,22 @@ async def lifespan(_: FastAPI):
     yield
 
 
+
 app = FastAPI(redirect_slashes=True, lifespan=lifespan)
+
+# CORS for Vite dev
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -69,14 +84,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers
+# Routers (ensure included once)
+app.include_router(admin.router)
+app.include_router(ask.router)
 app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(figures.router)
-app.include_router(ask.router)
 app.include_router(guest.router)
-app.include_router(admin.router)
 app.include_router(admin_rag.router)  # per-figure RAG context CRUD
+
+# Mount SPA only if static_frontend exists
+static_dir = (Path(__file__).resolve().parent.parent / "static_frontend")
+
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
+
+    from fastapi import Request
+    from fastapi.responses import FileResponse
+
+    # Catch-all for SPA routes
+    @app.get("/admin", include_in_schema=False)
+    @app.get("/admin/{path:path}", include_in_schema=False)
+    @app.get("/", include_in_schema=False)
+    @app.get("/{path:path}", include_in_schema=False)
+    async def spa_catchall(request: Request, path: str = ""):
+        """
+        Serve index.html for SPA client routing (/, /admin, /admin/*, etc).
+        """
+        index_path = static_dir / "index.html"
+        if index_path.exists():
+            return FileResponse(str(index_path))
+        return Response(content="<h1>index.html not found</h1>", media_type="text/html", status_code=404)
 
 
 @app.get("/health")

@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any, Dict, Generator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from openai import OpenAI
+from app.services.llm_client import LLMClient
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
@@ -24,7 +24,7 @@ from app.utils.security import get_current_user
 router = APIRouter(tags=["Ask"])
 
 _settings = get_settings()
-_client = OpenAI(api_key=_settings.openai_api_key)
+llm_client = LLMClient()
 
 
 def get_figure_db() -> Generator[Session, None, None]:
@@ -117,18 +117,13 @@ def ask(
     )
 
     model_name = payload.model_used or "gpt-4o-mini"
-    response = _client.chat.completions.create(
-        model=model_name,
-        messages=messages,
-        temperature=0.3,
-    )
-    answer = response.choices[0].message.content.strip() if response.choices else ""
-
-    usage = {
-        "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
-        "completion_tokens": getattr(response.usage, "completion_tokens", 0),
-        "total_tokens": getattr(response.usage, "total_tokens", 0),
-    }
+    response = llm_client.generate(messages=messages, model=model_name, temperature=0.3)
+    answer = response["choices"][0]["message"]["content"].strip() if response.get("choices") else ""
+    usage = response.get("usage", {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+    })
 
     assistant_msg = schemas.ChatMessageCreate(
         user_id=current_user.id,

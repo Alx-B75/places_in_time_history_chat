@@ -36,9 +36,32 @@ def llm_health(_: str = Depends(admin_required)):
     try:
         messages = [{"role": "system", "content": "ping"}]
         response = llm_client.generate(messages=messages, temperature=0.0, max_tokens=5)
-        return {"ok": True, "provider": getattr(llm_client, 'provider', None), "model": getattr(llm_client, 'model', None)}
+        model_name = response.get("model", None)
+        usage = response.get("usage", {})
+        return {
+            "ok": True,
+            "provider": llm_config.provider,
+            "model": llm_config.model,
+            "api_key": llm_config.api_key,
+            "api_base": llm_config.api_base,
+            "temperature": llm_config.temperature,
+            "top_p": llm_config.top_p,
+            "max_tokens": llm_config.max_tokens,
+            "live_model": model_name,
+            "usage": usage,
+        }
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {
+            "ok": False,
+            "provider": llm_config.provider,
+            "model": llm_config.model,
+            "api_key": llm_config.api_key,
+            "api_base": llm_config.api_base,
+            "temperature": llm_config.temperature,
+            "top_p": llm_config.top_p,
+            "max_tokens": llm_config.max_tokens,
+            "error": str(e),
+        }
 __all__ = ["router"]
 
 from sqlalchemy.orm import Session

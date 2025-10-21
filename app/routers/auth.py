@@ -121,6 +121,7 @@ async def register_user(
     return {"user_id": user.id, "username": user.username, "access_token": access_token, "token_type": "bearer"}
 
 
+
 @router.post("/admin/stepup")
 async def admin_stepup(
     payload: AdminStepUpRequest,

@@ -10,4 +10,8 @@ class LLMRuntimeConfig(BaseModel):
     top_p: float = 1.0
     max_tokens: int = 1024
 
-llm_config = LLMRuntimeConfig()
+import os
+llm_config = LLMRuntimeConfig(
+    api_key=os.environ.get("OPENAI_API_KEY"),
+    api_base=os.environ.get("OPENAI_API_BASE")
+)

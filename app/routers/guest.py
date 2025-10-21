@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Generator, List, Optional
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
-from openai import OpenAI
+from app.services.llm_client import LLMClient
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, selectinload
 
@@ -27,7 +27,7 @@ from app.utils.security import get_current_user
 router = APIRouter(prefix="/guest", tags=["Guest"])
 
 _settings = get_settings()
-_client = OpenAI(api_key=_settings.openai_api_key)
+llm_client = LLMClient()
 
 
 def get_figure_db() -> Generator[Session, None, None]:
@@ -255,18 +255,13 @@ def guest_ask(
     )
 
     model_name = payload.model_used or "gpt-4o-mini"
-    resp = _client.chat.completions.create(
-        model=model_name,
-        messages=messages,
-        temperature=0.2,
-    )
-    answer = resp.choices[0].message.content.strip() if resp.choices else ""
-
-    usage = {
-        "prompt_tokens": getattr(resp.usage, "prompt_tokens", None),
-        "completion_tokens": getattr(resp.usage, "completion_tokens", None),
-        "total_tokens": getattr(resp.usage, "total_tokens", None),
-    }
+    resp = llm_client.generate(messages=messages, model=model_name, temperature=0.2)
+    answer = resp["choices"][0]["message"]["content"].strip() if resp.get("choices") else ""
+    usage = resp.get("usage", {
+        "prompt_tokens": None,
+        "completion_tokens": None,
+        "total_tokens": None,
+    })
 
     db.add(models.GuestMessage(session_id=session.id, role="user", message=payload.message, model_used=model_name))
     db.add(models.GuestMessage(session_id=session.id, role="assistant", message=answer, model_used=model_name))

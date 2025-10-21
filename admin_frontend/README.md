@@ -1,0 +1,1 @@
+ - All `/admin/*` routes are protected and redirect to `/admin/ui` (login page) when no `adminToken` in sessionStorage.
