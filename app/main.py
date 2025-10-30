@@ -1,11 +1,11 @@
+from __future__ import annotations
+from fastapi.routing import APIRoute
 """
 Main FastAPI application entry point for Places in Time History Chat.
 
 This module configures the API, static frontend, CORS, startup tasks, and
 provides a health endpoint that verifies configuration and RAG availability.
 """
-
-from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
+from app.models_llm_profile import LlmProfile  # ensure LlmProfile is registered on ChatBase  # noqa: F401
 from app.database import Base as ChatBase
 from app.database import SQLALCHEMY_DATABASE_URL as CHAT_DB_URL
 from app.database import engine as chat_engine
@@ -50,7 +51,7 @@ async def lifespan(_: FastAPI):
     """
     App lifecycle: create DBs and run idempotent figures ingest at startup.
     """
-    _ = models  # ensure model metadata is imported
+    # models import ensures table registration
     ChatBase.metadata.create_all(bind=chat_engine)
     FigureBase.metadata.create_all(bind=figures_engine)
     from app.startup_ingest import maybe_ingest_seed_csv
@@ -60,7 +61,15 @@ async def lifespan(_: FastAPI):
 
 
 
+
 app = FastAPI(redirect_slashes=True, lifespan=lifespan)
+
+@app.get("/admin/ui", response_class=FileResponse)
+def serve_admin_ui() -> FileResponse:
+    """
+    Serve the Admin Dashboard UI (landing/overview).
+    """
+    return FileResponse(STATIC_DIR / "admin.html", media_type="text/html")
 
 # CORS for Vite dev
 app.add_middleware(
@@ -95,22 +104,41 @@ app.include_router(admin_rag.router)  # per-figure RAG context CRUD
 
 # Mount SPA only if static_frontend exists
 static_dir = (Path(__file__).resolve().parent.parent / "static_frontend")
-
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
 
+# ... keep your router includes here (admin, ask, auth, chat, figures, guest) ...
+# app.include_router(admin.router)
+# app.include_router(ask.router)
+# etc.
+
+
+# Temporary debug route to list all registered routes
+from fastapi.routing import APIRoute
+
+@app.get("/_debug/routes", include_in_schema=False)
+def _debug_routes():
+    out = []
+    for r in app.routes:
+        if isinstance(r, APIRoute):
+            out.append({
+                "path": r.path,
+                "methods": sorted(list(r.methods or [])),
+                "endpoint": getattr(r.endpoint, "__name__", str(r.endpoint)),
+            })
+    out.sort(key=lambda x: (x["path"], ",".join(x["methods"])))
+    return out
+
+# Place the SPA catch-all LAST and EXCLUDE /admin so admin API/UI are untouched
+if static_dir.exists():
     from fastapi import Request
     from fastapi.responses import FileResponse
-
-    # Catch-all for SPA routes
-    @app.get("/admin", include_in_schema=False)
-    @app.get("/admin/{path:path}", include_in_schema=False)
     @app.get("/", include_in_schema=False)
     @app.get("/{path:path}", include_in_schema=False)
     async def spa_catchall(request: Request, path: str = ""):
-        """
-        Serve index.html for SPA client routing (/, /admin, /admin/*, etc).
-        """
+        # If path starts with 'admin', don't serve SPA here (let /admin routes handle it)
+        if path.startswith("admin"):
+            return Response(status_code=404)
         index_path = static_dir / "index.html"
         if index_path.exists():
             return FileResponse(str(index_path))
@@ -163,7 +191,11 @@ def list_user_threads(
     """
     # consume param to satisfy linters (value is used by path binding)
     _ = user_id
-    if current_user.id != user_id:
+    # Defensive: get the actual value, not the SQLAlchemy column
+    user_id_val = getattr(current_user, 'id', None)
+    if hasattr(user_id_val, 'expression'):  # SQLAlchemy InstrumentedAttribute
+        user_id_val = current_user.__dict__.get('id', None)
+    if user_id_val is None or int(user_id_val) != int(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access these threads")
     return crud.get_threads_by_user(db, user_id)
 
@@ -192,12 +224,7 @@ def serve_figures_ui() -> FileResponse:
     return FileResponse(STATIC_DIR / "figures.html", media_type="text/html")
 
 
-@app.get("/admin/ui", response_class=FileResponse)
-def serve_admin_ui() -> FileResponse:
-    """
-    Serve the Admin Dashboard UI (landing/overview).
-    """
-    return FileResponse(STATIC_DIR / "admin.html", media_type="text/html")
+## Removed duplicate serve_admin_ui
 
 
 @app.get("/admin/figures-ui", response_class=FileResponse, include_in_schema=False)
@@ -255,7 +282,7 @@ def serve_favicon_svg() -> Response:
 
 @app.get("/debug/routes")
 def debug_routes():
-    return [route.path for route in app.routes]
+    return [getattr(route, 'path', None) for route in app.routes if hasattr(route, 'path')]
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

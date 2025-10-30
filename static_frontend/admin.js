@@ -21,7 +21,8 @@
     tabs: document.querySelectorAll(".tab"),
     panelUsers: $("#panel-users"),
     panelFigures: $("#panel-figures"),
-    panelRag: $("#panel-rag"),
+  panelRag: $("#panel-rag"),
+  panelLlm: $("#panel-llm"),
 
     // USERS
     refreshUsers: $("#refreshUsers"),
@@ -49,7 +50,26 @@
     ragName: $("#ragName"),
     ragType: $("#ragType"),
     ragUrl: $("#ragUrl"),
-    addRagBtn: $("#addRagBtn"),
+
+  // LLM
+  llmProfileSelect: $("#llm-profile-select"),
+  llmProfileActivate: $("#llm-profile-activate"),
+  llmProfileName: $("#llm-profile-name"),
+  llmProvider: $("#llm-provider"),
+  llmModel: $("#llm-model"),
+  llmApiBase: $("#llm-api-base"),
+  llmTemp: $("#llm-temp"),
+  llmTopP: $("#llm-topp"),
+  llmMax: $("#llm-max"),
+  llmProfileSave: $("#llm-profile-save"),
+  llmProviderDirect: $("#llm-provider-direct"),
+  llmModelDirect: $("#llm-model-direct"),
+  llmApiBaseDirect: $("#llm-api-base-direct"),
+  llmTempDirect: $("#llm-temp-direct"),
+  llmTopPDirect: $("#llm-topp-direct"),
+  llmMaxDirect: $("#llm-max-direct"),
+  llmDirectSave: $("#llm-direct-save"),
+  llmHealth: $("#llm-health"),
 
     // optional login form (older HTML)
     email: $("#email"),
@@ -173,9 +193,16 @@
     updateFigure: (slug, payload) => fetchJSON(`/admin/figures/${encodeURIComponent(slug)}`, { method: "PATCH", body: JSON.stringify(payload) }, true),
     deleteFigure: (slug) => fetchJSON(`/admin/figures/${encodeURIComponent(slug)}`, { method: "DELETE" }, true),
 
-    // rag (summary + create-manual)
-    ragSummary: () => fetchJSON("/admin/rag/sources", {}, true),
-    ragCreate: (payload) => fetchJSON("/admin/rag/sources", { method: "POST", body: JSON.stringify(payload) }, true),
+  // rag (summary + create-manual)
+  ragSummary: () => fetchJSON("/admin/rag/sources", {}, true),
+  ragCreate: (payload) => fetchJSON("/admin/rag/sources", { method: "POST", body: JSON.stringify(payload) }, true),
+
+  // llm
+  llmProfiles: () => fetchJSON("/admin/llm/profiles", {}, true),
+  llmProfileSave: (name, config) => fetchJSON("/admin/llm/profiles", { method: "POST", body: JSON.stringify({ name, config }) }, true),
+  llmActivate: (name) => fetchJSON("/admin/llm/profile/activate", { method: "PATCH", body: JSON.stringify({ name }) }, true),
+  llmHealth: () => fetchJSON("/admin/llm/health", {}, true),
+  llmPatch: (cfg) => fetchJSON("/admin/llm", { method: "PATCH", body: JSON.stringify(cfg) }, true),
   };
 
   // --------------- Auth flows ---------------
@@ -253,6 +280,7 @@
     try { await loadUsers(); } catch {}
     try { await loadFigures(); } catch {}
     try { await loadRagSummary(); } catch {}
+    // LLM health/profiles are loaded lazily when LLM tab is opened
   }
 
   // USERS
@@ -432,9 +460,11 @@
       dom.panelUsers.style.display = tab === "users" ? "block" : "none";
       dom.panelFigures.style.display = tab === "figures" ? "block" : "none";
       dom.panelRag.style.display = tab === "rag" ? "block" : "none";
+      dom.panelLlm.style.display = tab === "llm" ? "block" : "none";
       if (tab === "users") loadUsers().catch(()=>{});
       if (tab === "figures") loadFigures().catch(()=>{});
       if (tab === "rag") loadRagSummary().catch(()=>{});
+      if (tab === "llm") { loadLLMProfiles().catch(()=>{}); loadLLMHealth().catch(()=>{}); }
     });
   });
 
@@ -442,7 +472,48 @@
   dom.logoutBtn?.addEventListener("click", logout);
   dom.refreshUsers?.addEventListener("click", () => loadUsers().catch(e => alert(e.message)));
   dom.refreshFigures?.addEventListener("click", () => loadFigures().catch(e => alert(e.message)));
-  dom.refreshRag?.addEventListener("click", () => loadRagSummary().catch(e => alert(e.message)));
+
+  // LLM events
+  dom.llmProfileActivate?.addEventListener("click", async () => {
+    try {
+      const name = dom.llmProfileSelect.value;
+      if (!name) return alert("Select a profile to activate.");
+      await API.llmActivate(name);
+      await Promise.all([loadLLMProfiles(), loadLLMHealth()]);
+    } catch (e) { alert(e.message); }
+  });
+
+  dom.llmProfileSave?.addEventListener("click", async () => {
+    try {
+      const name = (dom.llmProfileName.value || "").trim();
+      if (!name) return alert("Profile name is required.");
+      const config = {
+        provider: (dom.llmProvider.value || "").trim(),
+        model: (dom.llmModel.value || "").trim(),
+        api_base: (dom.llmApiBase.value || "").trim() || null,
+        temperature: dom.llmTemp.value ? Number(dom.llmTemp.value) : null,
+        top_p: dom.llmTopP.value ? Number(dom.llmTopP.value) : null,
+        max_tokens: dom.llmMax.value ? Number(dom.llmMax.value) : null,
+      };
+      await API.llmProfileSave(name, config);
+      await loadLLMProfiles();
+    } catch (e) { alert(e.message); }
+  });
+
+  dom.llmDirectSave?.addEventListener("click", async () => {
+    try {
+      const cfg = {};
+      const pv = (dom.llmProviderDirect.value || "").trim(); if (pv) cfg.provider = pv;
+      const mv = (dom.llmModelDirect.value || "").trim(); if (mv) cfg.model = mv;
+      const ab = (dom.llmApiBaseDirect.value || "").trim(); if (ab) cfg.api_base = ab;
+      if (dom.llmTempDirect.value !== "") cfg.temperature = Number(dom.llmTempDirect.value);
+      if (dom.llmTopPDirect.value !== "") cfg.top_p = Number(dom.llmTopPDirect.value);
+      if (dom.llmMaxDirect.value !== "") cfg.max_tokens = Number(dom.llmMaxDirect.value);
+      await API.llmPatch(cfg);
+      await loadLLMHealth();
+      alert("Runtime updated.");
+    } catch (e) { alert(e.message); }
+  });
 
   if (dom.createFigureBtn) dom.createFigureBtn.addEventListener("click", async () => {
     dom.figuresStatus.textContent = "Creating…";
@@ -528,4 +599,32 @@
 
   // Never persist password; clear in-memory on unload.
   window.addEventListener("beforeunload", () => { state.password = null; });
+
+  // --------------- LLM helpers ---------------
+  async function loadLLMProfiles() {
+    const data = await API.llmProfiles();
+    // populate select
+    if (dom.llmProfileSelect) {
+      dom.llmProfileSelect.innerHTML = "";
+      (data.profiles || []).forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.name;
+        opt.textContent = p.is_active ? `${p.name} (active)` : p.name;
+        dom.llmProfileSelect.appendChild(opt);
+      });
+      if (data.active) dom.llmProfileSelect.value = data.active;
+    }
+  }
+
+  async function loadLLMHealth() {
+    const h = await API.llmHealth();
+    if (dom.llmHealth) dom.llmHealth.textContent = JSON.stringify(h, null, 2);
+    // prefill direct-edit fields as a convenience
+    if (dom.llmProviderDirect) dom.llmProviderDirect.value = h.provider || "";
+    if (dom.llmModelDirect) dom.llmModelDirect.value = h.model || "";
+    if (dom.llmApiBaseDirect) dom.llmApiBaseDirect.value = h.api_base || "";
+    if (dom.llmTempDirect) dom.llmTempDirect.value = h.temperature ?? "";
+    if (dom.llmTopPDirect) dom.llmTopPDirect.value = h.top_p ?? "";
+    if (dom.llmMaxDirect) dom.llmMaxDirect.value = h.max_tokens ?? "";
+  }
 })();

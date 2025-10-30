@@ -1,0 +1,13 @@
+.pit-modal-overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,.55);
+  display:flex; align-items:center; justify-content:center;
+  z-index:10000;  /* above anything else */
+}
+.pit-modal-card{
+  width:min(92vw,520px); background:#0f172a; color:#e5e7eb;
+  border:1px solid rgba(255,255,255,.08); border-radius:14px;
+  box-shadow:0 20px 60px rgba(0,0,0,.45); padding:18px;
+}
+.pit-modal-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:14px; }
+.pit-btn{ padding:10px 14px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:#111827; color:#e5e7eb; cursor:pointer;}
+.pit-btn.primary{ background:#1e40af; border-color:#334155;}

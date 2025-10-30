@@ -1,19 +1,92 @@
+
+
 """
 Admin API v1 (guarded by admin step-up tokens).
-
-This router provides a minimal set of endpoints to validate the admin step-up
-flow and exercise role-based authorization. All endpoints require an admin-
-scoped bearer token via the admin_required dependency.
+This router provides a minimal set of endpoints to validate the admin step-up flow and exercise role-based authorization. All endpoints require an admin-scoped bearer token via the admin_required dependency.
 """
 
 
-from typing import Generator, List
+from typing import List, Generator
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+router = APIRouter(prefix="/admin", tags=["Admin"])
+
+# Define router at the top so all endpoints use the same instance
 from app.config.llm_config import llm_config, LLMRuntimeConfig
 from app.services.llm_client import llm_client
 from app.utils.security import admin_required
+from sqlalchemy.orm import Session
+from app.database import get_db_chat
 
-router = APIRouter(prefix="/admin", tags=["Admin"])
+from app.services.llm_profiles import list_profiles, upsert_profile, activate_profile
+
+# LLM Profile Endpoints (ensure registered to correct router)
+@router.get("/llm/profiles")
+def admin_list_llm_profiles(
+    _: str = Depends(admin_required),
+    db: Session = Depends(get_db_chat),
+):
+    active, rows = list_profiles(db)
+    return {
+        "active": active,
+        "profiles": [
+            {
+                "name": r.name,
+                "provider": r.provider,
+                "model": r.model,
+                "temperature": r.temperature,
+                "top_p": r.top_p,
+                "max_tokens": r.max_tokens,
+                "api_base": r.api_base,
+                "is_active": r.is_active,
+            } for r in rows
+        ],
+    }
+
+@router.post("/llm/profiles")
+def admin_save_llm_profile(
+    body: dict,
+    _: str = Depends(admin_required),
+    db: Session = Depends(get_db_chat),
+):
+    name = body.get("name")
+    config = body.get("config") or {}
+    if not name:
+        raise HTTPException(status_code=422, detail="name is required")
+    row = upsert_profile(db, name, config)
+    db.commit()
+    return {"ok": True, "name": row.name}
+
+@router.patch("/llm/profile/activate")
+def admin_activate_llm_profile(
+    body: dict,
+    _: str = Depends(admin_required),
+    db: Session = Depends(get_db_chat),
+):
+    name = body.get("name")
+    if not name:
+        raise HTTPException(status_code=422, detail="name is required")
+    row = activate_profile(db, name)
+    if not row:
+        raise HTTPException(status_code=404, detail="profile not found")
+    # Apply to runtime (mirror PATCH /admin/llm; do NOT set api_key here)
+    # Use actual values, not SQLAlchemy Column objects
+    values = row.__dict__
+    llm_config.provider = values.get("provider") or llm_config.provider
+    llm_config.model = values.get("model") or llm_config.model
+    llm_config.api_base = values.get("api_base") or llm_config.api_base
+    temp = values.get("temperature")
+    if temp is not None:
+        llm_config.temperature = float(temp)
+    top_p = values.get("top_p")
+    if top_p is not None:
+        llm_config.top_p = float(top_p)
+    max_tokens = values.get("max_tokens")
+    if max_tokens is not None:
+        llm_config.max_tokens = int(max_tokens)
+
+    db.commit()
+    return {"ok": True, "active": row.name, "runtime": llm_config.dict()}
 
 # PATCH /admin/llm for runtime LLM config
 @router.patch("/llm")
@@ -42,7 +115,6 @@ def llm_health(_: str = Depends(admin_required)):
             "ok": True,
             "provider": llm_config.provider,
             "model": llm_config.model,
-            "api_key": llm_config.api_key,
             "api_base": llm_config.api_base,
             "temperature": llm_config.temperature,
             "top_p": llm_config.top_p,
@@ -55,7 +127,6 @@ def llm_health(_: str = Depends(admin_required)):
             "ok": False,
             "provider": llm_config.provider,
             "model": llm_config.model,
-            "api_key": llm_config.api_key,
             "api_base": llm_config.api_base,
             "temperature": llm_config.temperature,
             "top_p": llm_config.top_p,
@@ -97,7 +168,8 @@ def list_users(
     """
     List all users for administration.
     """
-    return db_chat.query(models.User).order_by(models.User.id.asc()).all()
+    users = db_chat.query(models.User).order_by(models.User.id.asc()).all()
+    return [schemas.UserRead.from_orm(u) for u in users]
 
 
 @router.patch("/users/{user_id}/role", response_model=schemas.UserRead)
@@ -115,7 +187,7 @@ def update_user_role(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     previous = user.role
-    user.role = payload.role
+    setattr(user, "role", payload.role)
     db_chat.add(user)
     db_chat.add(
         models.AuditLog(
@@ -129,7 +201,7 @@ def update_user_role(
     )
     db_chat.commit()
     db_chat.refresh(user)
-    return user
+    return schemas.UserRead.from_orm(user)
 
 
 @router.get("/figures", response_model=List[schemas.HistoricalFigureRead])
@@ -140,7 +212,8 @@ def list_figures_admin(
     """
     List all historical figures for administration.
     """
-    return db_fig.query(models.HistoricalFigure).order_by(models.HistoricalFigure.id.asc()).all()
+    figures = db_fig.query(models.HistoricalFigure).order_by(models.HistoricalFigure.id.asc()).all()
+    return [schemas.HistoricalFigureRead.from_orm(f) for f in figures]
 
 
 @router.post("/figures", response_model=schemas.HistoricalFigureDetail, status_code=status.HTTP_201_CREATED)
@@ -317,9 +390,9 @@ def delete_figure_admin(
 @router.get("/health2")
 def admin_health2():
     from app.config.llm_config import llm_config
-    from app.services.llm_client import LLMClient
+    from app.services.llm_client import LlmClient
     try:
-        client = LLMClient()
+        client = LlmClient()
         messages = [{"role": "user", "content": "ping"}]
         resp = client.generate(messages, max_tokens=1)
         model_name = resp.get("model", "unknown")

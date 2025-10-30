@@ -8,7 +8,7 @@ from typing import Dict, Generator, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Form, Request, status
 from fastapi.responses import RedirectResponse
-from app.services.llm_client import LLMClient
+from app.services.llm_client import LlmClient
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -23,7 +23,7 @@ from app.utils.security import get_current_user
 router = APIRouter(tags=["Chat"])
 
 _settings = get_settings()
-llm_client = LLMClient()
+llm_client = LlmClient()
 
 
 class ThreadCreatePayload(BaseModel):

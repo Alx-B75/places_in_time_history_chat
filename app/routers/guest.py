@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Generator, List, Optional
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
-from app.services.llm_client import LLMClient
+from app.services.llm_client import LlmClient
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, selectinload
 
@@ -27,7 +27,7 @@ from app.utils.security import get_current_user
 router = APIRouter(prefix="/guest", tags=["Guest"])
 
 _settings = get_settings()
-llm_client = LLMClient()
+llm_client = LlmClient()
 
 
 def get_figure_db() -> Generator[Session, None, None]:

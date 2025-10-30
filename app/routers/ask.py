@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any, Dict, Generator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.services.llm_client import LLMClient
+from app.services.llm_client import LlmClient
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
@@ -24,7 +24,7 @@ from app.utils.security import get_current_user
 router = APIRouter(tags=["Ask"])
 
 _settings = get_settings()
-llm_client = LLMClient()
+llm_client = LlmClient()
 
 
 def get_figure_db() -> Generator[Session, None, None]:
