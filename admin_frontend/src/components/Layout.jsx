@@ -18,6 +18,7 @@ export default function Layout() {
             <li><Link to="/admin/figures">Figures</Link></li>
             <li><Link to="/admin/rag">RAG</Link></li>
             <li><Link to="/admin/ab">A/B</Link></li>
+            <li><Link to="/dashboard">Dashboard</Link></li>
             <li><button onClick={logout}>Logout</button></li>
           </ul>
         </nav>

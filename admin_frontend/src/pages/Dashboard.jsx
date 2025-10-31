@@ -1,0 +1,85 @@
+import React from 'react'
+import { useInteraction } from '../contexts/InteractionContext'
+
+const TOPICS = ['Ancient Egypt','World Wars','Industrial Revolution','Renaissance','Space Age']
+
+function SectionCard({title, children}){
+  return (
+    <div style={{background:'#fff',padding:16,borderRadius:12,boxShadow:'0 2px 10px rgba(0,0,0,0.06)',marginBottom:12}}>
+      <h3 style={{margin:'0 0 8px 0'}}>{title}</h3>
+      <div>{children}</div>
+    </div>
+  )
+}
+
+export default function Dashboard(){
+  // stub user for now
+  const user = { name: 'Alex' }
+  const { mode, setMode } = useInteraction()
+
+  const modes = [
+    { key: 'Young Learner', label: 'Young Learner (5–11)' },
+    { key: 'Young Adult', label: 'Young Adult (11–16)' },
+    { key: 'Student', label: 'Student (16–21)' },
+    { key: 'Master', label: 'Master' },
+  ]
+
+  return (
+    <div style={{padding:12, maxWidth:980, margin:'0 auto'}}>
+      <header style={{marginBottom:18}}>
+        <h1 style={{margin:0,fontSize:'1.8rem'}}>Welcome back, {user.name} 👋</h1>
+        <p style={{color:'#666',marginTop:6}}>Your personalized dashboard</p>
+      </header>
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 320px',gap:16}}>
+        <div>
+          <SectionCard title="Your Figures">
+            <div style={{padding:12,color:'#666'}}>No favorites yet — when you favorite figures they will appear here.</div>
+          </SectionCard>
+
+          <SectionCard title="History & Topics">
+            <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+              {TOPICS.map(t => (
+                <div key={t} style={{background:'#f7f9fc',padding:'8px 12px',borderRadius:8}}>{t}</div>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
+
+        <aside>
+          <SectionCard title="Interaction Style">
+            <p style={{color:'#666',marginTop:0}}>Choose how the assistant should speak to you.</p>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {modes.map(m => (
+                <button
+                  key={m.key}
+                  onClick={() => setMode(m.key)}
+                  className={mode === m.key ? 'btn btn-primary' : 'btn'}
+                  style={{textAlign:'left'}}
+                >
+                  <div style={{fontWeight:600}}>{m.label}</div>
+                  {mode === m.key ? <small style={{color:'#9cf'}}> Selected</small> : null}
+                </button>
+              ))}
+            </div>
+
+            <div style={{marginTop:12,color:'#666'}}>Current: <strong>{mode}</strong></div>
+          </SectionCard>
+
+          <SectionCard title="Quick Actions">
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              <button className="btn">Start a new conversation</button>
+              <button className="btn">View saved threads</button>
+            </div>
+          </SectionCard>
+        </aside>
+      </div>
+
+      <style>{`
+        @media (max-width: 800px) {
+          div[style*="gridTemplateColumns"]{ grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+    </div>
+  )
+}
