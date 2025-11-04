@@ -21,8 +21,16 @@ export default function RequireAuth({ children }){
       return m ? decodeURIComponent(m[2]) : null
     }catch(_){ return null }
   }
-  const cookieToken = readCookie('pit_access_token') || readCookie('access_token')
+  const cookieToken = readCookie('pit_access_token') || readCookie('access_token') || readCookie('pit_access_token_localhost')
   const effectiveToken = token || cookieToken
+
+  // Helpful debug logs (dev only) to diagnose why tokens may not be visible.
+  try{
+    if(window && window.location && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')){
+      // eslint-disable-next-line no-console
+      console.debug('[RequireAuth] token sources:', { sessionToken: sessionStorage.getItem('userToken'), localToken: localStorage.getItem('access_token'), cookieToken });
+    }
+  }catch(_){ }
   if(!effectiveToken){
     // redirect unauthenticated users to a safe public page
     return <Navigate to="/guest/guy-fawkes" replace />

@@ -35,6 +35,11 @@
       // running on different ports (Vite on :5173) can read the token.
       // This is non-httpOnly and intended for local dev only.
       document.cookie = `pit_access_token=${data.access_token}; path=/`;
+      // Try to set common local host variants to improve visibility across
+      // 'localhost' and '127.0.0.1' dev hosts. These may silently fail in some
+      // browsers but are harmless attempts for convenience.
+      try{ document.cookie = `pit_access_token=${data.access_token}; path=/; domain=localhost`; }catch(_){}
+      try{ document.cookie = `pit_access_token=${data.access_token}; path=/; domain=127.0.0.1`; }catch(_){}
     }catch(e){ /* ignore when not in browser */ }
   }
 
