@@ -30,6 +30,12 @@
     localStorage.setItem("access_token", data.access_token);
     if (data.user_id != null) localStorage.setItem("user_id", String(data.user_id));
     if (data.username) localStorage.setItem("username", data.username);
+    try{
+      // Development helper: also set a host-scoped cookie so dev frontends
+      // running on different ports (Vite on :5173) can read the token.
+      // This is non-httpOnly and intended for local dev only.
+      document.cookie = `pit_access_token=${data.access_token}; path=/`;
+    }catch(e){ /* ignore when not in browser */ }
   }
 
   function validEmail(email) {

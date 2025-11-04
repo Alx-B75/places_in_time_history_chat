@@ -11,15 +11,27 @@ export default function RequireAuth({ children }){
   // 3. localStorage 'access_token'
   // 4. localStorage 'user_token'
   const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('user_token') || localStorage.getItem('access_token') || localStorage.getItem('user_token') || null
-  if(!token){
+
+  // Also accept a host-scoped cookie set by the static frontend during dev.
+  // Cookies are host-scoped (not port-scoped), so this enables token sharing
+  // between 127.0.0.1:8000 (backend) and 127.0.0.1:5173 (Vite dev server).
+  function readCookie(name){
+    try{
+      const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
+      return m ? decodeURIComponent(m[2]) : null
+    }catch(_){ return null }
+  }
+  const cookieToken = readCookie('pit_access_token') || readCookie('access_token')
+  const effectiveToken = token || cookieToken
+  if(!effectiveToken){
     // redirect unauthenticated users to a safe public page
     return <Navigate to="/guest/guy-fawkes" replace />
   }
   // Optional normalization: ensure sessionStorage has a value for other code that
   // reads sessionStorage.userToken. We avoid overwriting an existing session value.
   try{
-    if(!sessionStorage.getItem('userToken') && localStorage.getItem('access_token')){
-      sessionStorage.setItem('userToken', localStorage.getItem('access_token'))
+    if(!sessionStorage.getItem('userToken') && effectiveToken){
+      sessionStorage.setItem('userToken', effectiveToken)
     }
   }catch(_){ /* ignore storage permission errors */ }
 
