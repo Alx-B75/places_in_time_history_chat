@@ -34,6 +34,9 @@
     if (data.user_id != null) localStorage.setItem("user_id", String(data.user_id));
     if (data.username) localStorage.setItem("username", data.username);
     try{
+      // debug log to ensure we reached the client-side store flow
+      // eslint-disable-next-line no-console
+      console.debug('[static_frontend] storeAuth setting token for user_id=', data.user_id);
       // Development helper: also set a host-scoped cookie so dev frontends
       // running on different ports (Vite on :5173) can read the token.
       // This is non-httpOnly and intended for local dev only.
@@ -112,7 +115,8 @@
       passwordEl.focus();
       return;
     }
-    if (!gdprConsent || !aiAck) {
+    // Only enforce GDPR / AI acknowledgement if the checkboxes exist on the page.
+    if ((gdprEl && !gdprConsent) || (aiAckEl && !aiAck)) {
       showError("Please accept the GDPR consent and AI disclosure to register.");
       return;
     }
