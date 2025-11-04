@@ -1,11 +1,14 @@
 (function () {
-  const form = document.getElementById("login-form");
+  // Support both login and register pages. The login page uses id="login-form",
+  // while the register page uses id="register-form" and may use 'username' input.
+  const form = document.getElementById("login-form") || document.getElementById("register-form");
   if (!form) return;
 
-  const emailEl = document.getElementById("email");
+  const emailEl = document.getElementById("email") || document.getElementById("username");
   const passwordEl = document.getElementById("password");
   const loginBtn = document.getElementById("login-btn");
-  const registerBtn = document.getElementById("register-btn");
+  // If register button is not explicitly present, fall back to the form's submit button
+  const registerBtn = document.getElementById("register-btn") || form.querySelector('button[type="submit"]');
   const msgEl = document.getElementById("message");
   const gdprEl = document.getElementById("gdpr-consent");
   const aiAckEl = document.getElementById("ai-ack");
@@ -141,6 +144,14 @@
     }
   }
 
-  loginBtn.addEventListener("click", (e) => { e.preventDefault(); login(); });
-  registerBtn.addEventListener("click", (e) => { e.preventDefault(); register(); });
+  if (loginBtn) loginBtn.addEventListener("click", (e) => { e.preventDefault(); login(); });
+  if (registerBtn) registerBtn.addEventListener("click", (e) => { e.preventDefault(); register(); });
+
+  // Also handle direct form submit (covers register pages where the button has no id)
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (form.id === 'register-form') return register();
+    return login();
+  });
 })();
+
