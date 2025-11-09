@@ -261,7 +261,7 @@ def serve_index() -> FileResponse:
 
 
 @app.get("/user/{user_id}/threads", response_class=FileResponse)
-def serve_threads_page(user_id: int, current_user: models.User = Depends(get_current_user)) -> FileResponse:
+def serve_threads_page(user_id: int, current_user: models.User = Depends(get_current_user_loose)) -> FileResponse:
     if int(getattr(current_user, 'id', -1)) != int(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     return FileResponse(STATIC_DIR / "threads.html", media_type="text/html")

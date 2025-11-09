@@ -12,17 +12,37 @@
 
     <main class="form-box">
         <h1>Register</h1>
-        <form id="register-form" method="post" action="#" novalidate>
-            <label for="username">Username:</label>
-            <input id="username" name="username" type="text" required />
+                <form id="register-form" method="post" action="#" novalidate>
+                        <label for="username">Email:</label>
+                        <input id="username" name="username" type="email" autocomplete="email" required />
 
-            <label for="password">Password:</label>
-            <input id="password" name="password" type="password" required />
+                        <label for="password">Password:</label>
+                        <input id="password" name="password" type="password" autocomplete="new-password" required />
 
-            <button type="submit">Register</button>
-        </form>
+                        <section style="margin-top:16px; padding:12px; background:#0e1526; border-radius:8px; font-size:14px; line-height:1.4;">
+                            <h2 style="margin:0 0 8px 0; font-size:16px;">Data & AI Disclosures</h2>
+                            <p style="margin:0 0 8px 0; color:#cbd5e1;">We store minimal account data (email, hashed password) and keep conversation history to improve your experience. You can request deletion at any time. We use AI models which may generate imperfect or historically inaccurate statements; always verify important facts.</p>
+                            <ul style="margin:0 0 12px 18px; padding:0; color:#94a3b8;">
+                                <li>No advertising tracking cookies.</li>
+                                <li>Conversation logs may be reviewed to enhance quality.</li>
+                                <li>Models sometimes fabricate citations and dates.</li>
+                            </ul>
+                            <div style="display:flex; flex-direction:column; gap:6px;">
+                                <label style="display:flex; align-items:center; gap:8px;">
+                                    <input id="gdpr-consent" type="checkbox" required />
+                                    <span>I consent to processing my data under GDPR.</span>
+                                </label>
+                                <label style="display:flex; align-items:center; gap:8px;">
+                                    <input id="ai-ack" type="checkbox" required />
+                                    <span>I understand AI responses may be inaccurate.</span>
+                                </label>
+                            </div>
+                        </section>
 
-        <p>
+                        <button id="register-btn" type="submit" style="margin-top:16px;">Create Account</button>
+                </form>
+
+        <p style="margin-top:16px;">
             <a href="/">Already have an account? Login</a>
         </p>
         <div class="error-message" id="message"></div>

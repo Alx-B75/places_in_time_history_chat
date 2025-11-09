@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Header, Cookie
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -123,3 +123,37 @@ def get_admin_user(current_user: models.User = Depends(get_current_user)) -> mod
     if getattr(current_user, "role", None) != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
     return current_user
+
+
+def get_current_user_loose(
+    authorization: str | None = Header(None),
+    pit_cookie: str | None = Cookie(None, alias="pit_access_token"),
+    alt_cookie: str | None = Cookie(None, alias="access_token"),
+    db: Session = Depends(database.get_db_chat),
+) -> models.User:
+    """Authenticate using either a Bearer header or a host-scoped cookie.
+
+    This is intended for static page GET routes where the browser performs a
+    direct navigation without attaching the Authorization header, but the
+    login/register script previously stored a non-httpOnly cookie.
+    """
+    token: str | None = None
+    # Prefer explicit Bearer header
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    # Fall back to cookies set by the static frontend script
+    if not token:
+        token = pit_cookie or alt_cookie
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    try:
+        payload = _decode_token(token)
+        username = payload.get("sub")
+        if not username:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    user = crud.get_user_by_username(db, username=username)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
