@@ -1,8 +1,12 @@
 import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import GuestChat from "./routes/GuestChat.jsx";
 import Dashboard from './pages/Dashboard.jsx'
+import UserLogin from './pages/UserLogin.jsx'
 import RequireAuth from './components/RequireAuth.jsx'
+import Home from './pages/Home.jsx'
+import Threads from './pages/Threads.jsx'
+import ThreadView from './pages/ThreadView.jsx'
 
 function NotFound() {
   return <div style={{textAlign:'center',marginTop:'4em',fontSize:'1.5em'}}>404 – Page Not Found</div>;
@@ -11,10 +15,13 @@ function NotFound() {
 export default function App() {
   return (
     <Routes>
-      {/* Safe default: point "/" to a public/guest page */}
-      <Route path="/" element={<Navigate to="/guest/guy-fawkes" replace />} />
+      {/* Neutral default: simple home/placeholder */}
+      <Route path="/" element={<Home />} />
       <Route path="/guest/:slug" element={<GuestChat />} />
+  <Route path="/login" element={<UserLogin />} />
       <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+      <Route path="/threads" element={<RequireAuth><Threads /></RequireAuth>} />
+      <Route path="/thread/:id" element={<RequireAuth><ThreadView /></RequireAuth>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

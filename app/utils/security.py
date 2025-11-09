@@ -113,3 +113,13 @@ def admin_required(authorization: Optional[str] = Header(None)) -> str:
     if expected and authorization == f"Bearer {expected}":
         return "admin"
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+
+def get_admin_user(current_user: models.User = Depends(get_current_user)) -> models.User:
+    """Require that the authenticated user has role=admin.
+
+    This enforces role-based access using normal user tokens.
+    """
+    if getattr(current_user, "role", None) != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
+    return current_user

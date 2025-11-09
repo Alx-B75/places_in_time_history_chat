@@ -12,9 +12,12 @@ export default defineConfig({
     proxy: {
       '/auth': 'http://localhost:8000',
       '/admin': 'http://localhost:8000',
+      '/static': 'http://localhost:8000',
       '/guest/start': 'http://localhost:8000',
       '/guest/ask': 'http://localhost:8000',
-      '/figures': 'http://localhost:8000'
+      '/figures': 'http://localhost:8000',
+      '/threads': 'http://localhost:8000',
+      '/ask': 'http://localhost:8000'
     },
     fs: { allow: [".."] },
     historyApiFallback: true

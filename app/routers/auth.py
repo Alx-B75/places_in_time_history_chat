@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
-from app import crud, schemas
+from app import crud, schemas, models
 from app.database import get_db_chat
 from app.routers.deps import get_credentials
 from app.settings import get_settings
@@ -144,3 +144,17 @@ async def admin_stepup(
 
     admin_token = create_access_token(data={"sub": user.username}, scope="admin")
     return {"user_id": user.id, "username": user.username, "admin_access_token": admin_token, "token_type": "bearer"}
+
+
+@router.get("/me")
+async def auth_me(current_user: models.User = Depends(get_current_user)) -> dict:
+    """Return the current authenticated user's basic profile.
+
+    This leverages the standard user-scoped bearer token produced by /auth/login or /auth/register.
+    Response kept intentionally slim for dashboard header display.
+    """
+    return {
+        "user_id": current_user.id,
+        "username": current_user.username,
+        "role": getattr(current_user, "role", None),
+    }

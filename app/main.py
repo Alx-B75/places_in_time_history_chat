@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -27,10 +27,10 @@ from app.database import get_db_chat
 from app.figures_database import FigureBase
 from app.figures_database import SQLALCHEMY_DATABASE_URL as FIGURES_DB_URL
 from app.figures_database import engine as figures_engine
-from app.routers import admin, ask, auth, chat, figures, guest
+from app.routers import admin, ask, auth, chat, figures, guest, data
 from app.routers import admin_rag  # new contexts CRUD router
 from app.settings import get_settings
-from app.utils.security import get_current_user
+from app.utils.security import get_current_user, get_admin_user
 
 
 _settings = get_settings()
@@ -55,8 +55,26 @@ async def lifespan(_: FastAPI):
     ChatBase.metadata.create_all(bind=chat_engine)
     FigureBase.metadata.create_all(bind=figures_engine)
     from app.startup_ingest import maybe_ingest_seed_csv
-
     maybe_ingest_seed_csv(None)
+    # Ensure at least one admin and one sample user exist for fresh rebuilds.
+    from sqlalchemy.orm import Session as _Session
+    seed_db: _Session = next(get_db_chat())
+    try:
+        # Admin user
+        if not crud.get_user_by_username(seed_db, username="admin@example.com"):
+            from app.utils.security import hash_password
+            admin_user = schemas.UserCreate(username="admin@example.com", hashed_password=hash_password("Admin!123"))
+            u = crud.create_user(seed_db, admin_user)
+            u.role = "admin"
+            seed_db.add(u)
+        # Sample user for smoke tests
+        if not crud.get_user_by_username(seed_db, username="sample@example.com"):
+            from app.utils.security import hash_password
+            sample_user = schemas.UserCreate(username="sample@example.com", hashed_password=hash_password("Sample!123"))
+            crud.create_user(seed_db, sample_user)
+        seed_db.commit()
+    finally:
+        seed_db.close()
     yield
 
 
@@ -66,10 +84,16 @@ app = FastAPI(redirect_slashes=True, lifespan=lifespan)
 
 @app.get("/admin/ui", response_class=FileResponse)
 def serve_admin_ui() -> FileResponse:
+    """Serve the Admin Dashboard UI shell.
+
+    Authorization is enforced by the admin API endpoints this UI calls. Serving
+    the HTML itself without auth avoids 401s on initial navigation while still
+    keeping admin operations protected.
     """
-    Serve the Admin Dashboard UI (landing/overview).
-    """
-    return FileResponse(STATIC_DIR / "admin.html", media_type="text/html")
+    path = STATIC_DIR / "admin.html"
+    if not path.exists():
+        return Response(content="<html><body><h1>Admin UI</h1><p>admin.html not found in static_frontend.</p></body></html>", media_type="text/html")
+    return FileResponse(path, media_type="text/html")
 
 # CORS for Vite dev
 app.add_middleware(
@@ -100,6 +124,7 @@ app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(figures.router)
 app.include_router(guest.router)
+app.include_router(data.router)
 app.include_router(admin_rag.router)  # per-figure RAG context CRUD
 
 # Mount SPA only if static_frontend exists
@@ -129,20 +154,7 @@ def _debug_routes():
     out.sort(key=lambda x: (x["path"], ",".join(x["methods"])))
     return out
 
-# Place the SPA catch-all LAST and EXCLUDE /admin so admin API/UI are untouched
-if static_dir.exists():
-    from fastapi import Request
-    from fastapi.responses import FileResponse
-    @app.get("/", include_in_schema=False)
-    @app.get("/{path:path}", include_in_schema=False)
-    async def spa_catchall(request: Request, path: str = ""):
-        # If path starts with 'admin', don't serve SPA here (let /admin routes handle it)
-        if path.startswith("admin"):
-            return Response(status_code=404)
-        index_path = static_dir / "index.html"
-        if index_path.exists():
-            return FileResponse(str(index_path))
-        return Response(content="<h1>index.html not found</h1>", media_type="text/html", status_code=404)
+# Removed broad SPA catch-all which could intercept API routes like /health
 
 
 @app.get("/health")
@@ -176,6 +188,49 @@ def health() -> JSONResponse:
     }
     return JSONResponse(payload)
 
+# Compatibility endpoints for tests expecting /register and /login at root
+@app.post("/register")
+def compat_register(payload: dict = Body(...), db: Session = Depends(get_db_chat)):
+    username = (payload.get("username") or "").strip()
+    password = payload.get("password") or ""
+    if not username or not password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="username and password are required")
+    from app.utils.security import hash_password, create_access_token
+    user = crud.get_user_by_username(db, username=username)
+    if not user:
+        user = crud.create_user(db, schemas.UserCreate(username=username, hashed_password=hash_password(password)))
+    token = create_access_token(data={"sub": user.username})
+    return {"user_id": user.id, "username": user.username, "access_token": token, "token_type": "bearer"}
+
+
+@app.post("/login")
+def compat_login(payload: dict = Body(...), db: Session = Depends(get_db_chat)):
+    username = (payload.get("username") or "").strip()
+    password = payload.get("password") or ""
+    if not username or not password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="username and password are required")
+    from app.utils.security import verify_password, create_access_token
+    user = crud.get_user_by_username(db, username=username)
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    token = create_access_token(data={"sub": user.username})
+    return {"user_id": user.id, "username": user.username, "access_token": token, "token_type": "bearer"}
+
+# Optional convenience routes to serve static login/register pages on GET
+@app.get("/login", response_class=FileResponse)
+def serve_login_page() -> FileResponse:
+    path = STATIC_DIR / "login.html"
+    if not path.exists():
+        return Response(content="<html><body><h1>Login</h1><p>Static login page not found. Use the API POST /login from the app UI.</p></body></html>", media_type="text/html")
+    return FileResponse(path, media_type="text/html")
+
+@app.get("/register", response_class=FileResponse)
+def serve_register_page() -> FileResponse:
+    path = STATIC_DIR / "register.html"
+    if not path.exists():
+        return Response(content="<html><body><h1>Register</h1><p>Static register page not found. Use the app UI to register.</p></body></html>", media_type="text/html")
+    return FileResponse(path, media_type="text/html")
+
 
 @app.get(
     "/threads/user/{user_id}",
@@ -206,9 +261,9 @@ def serve_index() -> FileResponse:
 
 
 @app.get("/user/{user_id}/threads", response_class=FileResponse)
-def serve_threads_page(user_id: int) -> FileResponse:
-    # consume for linter; file is static
-    _ = user_id
+def serve_threads_page(user_id: int, current_user: models.User = Depends(get_current_user)) -> FileResponse:
+    if int(getattr(current_user, 'id', -1)) != int(user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     return FileResponse(STATIC_DIR / "threads.html", media_type="text/html")
 
 
@@ -228,12 +283,12 @@ def serve_figures_ui() -> FileResponse:
 
 
 @app.get("/admin/figures-ui", response_class=FileResponse, include_in_schema=False)
-def serve_admin_figures_ui() -> FileResponse:
+def serve_admin_figures_ui(_: models.User = Depends(get_admin_user)) -> FileResponse:
     return FileResponse(STATIC_DIR / "admin_figures.html", media_type="text/html")
 
 
 @app.get("/admin/figure-ui/{slug}", response_class=FileResponse, include_in_schema=False)
-def serve_admin_figure_edit_ui(slug: str) -> FileResponse:
+def serve_admin_figure_edit_ui(slug: str, _: models.User = Depends(get_admin_user)) -> FileResponse:
     _ = slug  # consumed for path binding; page is static
     return FileResponse(STATIC_DIR / "admin_figure_edit.html", media_type="text/html")
 

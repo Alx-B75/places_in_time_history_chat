@@ -1,9 +1,11 @@
 import React from 'react'
 import { Navigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext.jsx'
 
 // Simple route guard: checks for a `userToken` in sessionStorage.
 // This is a stubbed auth check for now; replace with real auth logic later.
 export default function RequireAuth({ children }){
+  const { user, loading } = useAuth()
   // Accept multiple token locations used across the project while auth is
   // being unified. Priority order:
   // 1. sessionStorage 'userToken'
@@ -31,9 +33,12 @@ export default function RequireAuth({ children }){
       console.debug('[RequireAuth] token sources:', { sessionToken: sessionStorage.getItem('userToken'), localToken: localStorage.getItem('access_token'), cookieToken });
     }
   }catch(_){ }
-  if(!effectiveToken){
-    // redirect unauthenticated users to a safe public page
-    return <Navigate to="/guest/guy-fawkes" replace />
+  if(loading){
+    return <div style={{padding:24}}>Loading…</div>
+  }
+  if(!effectiveToken && !user){
+    // redirect unauthenticated users to neutral home
+    return <Navigate to="/" replace />
   }
   // Optional normalization: ensure sessionStorage has a value for other code that
   // reads sessionStorage.userToken. We avoid overwriting an existing session value.

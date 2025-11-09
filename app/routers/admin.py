@@ -14,16 +14,16 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 # Define router at the top so all endpoints use the same instance
 from app.config.llm_config import llm_config, LLMRuntimeConfig
 from app.services.llm_client import llm_client
-from app.utils.security import admin_required
+from app.utils.security import admin_required, get_admin_user
 from sqlalchemy.orm import Session
 from app.database import get_db_chat
-
+from app import models, schemas  # <-- ensure models is imported before use in dependency annotations
 from app.services.llm_profiles import list_profiles, upsert_profile, activate_profile
 
 # LLM Profile Endpoints (ensure registered to correct router)
 @router.get("/llm/profiles")
 def admin_list_llm_profiles(
-    _: str = Depends(admin_required),
+    _: models.User = Depends(get_admin_user),
     db: Session = Depends(get_db_chat),
 ):
     active, rows = list_profiles(db)
@@ -46,7 +46,7 @@ def admin_list_llm_profiles(
 @router.post("/llm/profiles")
 def admin_save_llm_profile(
     body: dict,
-    _: str = Depends(admin_required),
+    _: models.User = Depends(get_admin_user),
     db: Session = Depends(get_db_chat),
 ):
     name = body.get("name")
@@ -60,7 +60,7 @@ def admin_save_llm_profile(
 @router.patch("/llm/profile/activate")
 def admin_activate_llm_profile(
     body: dict,
-    _: str = Depends(admin_required),
+    _: models.User = Depends(get_admin_user),
     db: Session = Depends(get_db_chat),
 ):
     name = body.get("name")
@@ -90,7 +90,7 @@ def admin_activate_llm_profile(
 
 # PATCH /admin/llm for runtime LLM config
 @router.patch("/llm")
-def admin_update_llm(cfg: LLMRuntimeConfig, _: str = Depends(admin_required)):
+def admin_update_llm(cfg: LLMRuntimeConfig, _: models.User = Depends(get_admin_user)):
     llm_config.provider = cfg.provider or llm_config.provider
     llm_config.model = cfg.model or llm_config.model
     llm_config.api_key = cfg.api_key or llm_config.api_key
@@ -102,7 +102,7 @@ def admin_update_llm(cfg: LLMRuntimeConfig, _: str = Depends(admin_required)):
 
 # --- LLM Health Endpoint ---
 @router.get("/llm/health")
-def llm_health(_: str = Depends(admin_required)):
+def llm_health(_: models.User = Depends(get_admin_user)):
     """
     Check active LLM provider connectivity and return status.
     """
@@ -133,11 +133,13 @@ def llm_health(_: str = Depends(admin_required)):
             "max_tokens": llm_config.max_tokens,
             "error": str(e),
         }
+
+# Back-compat alias for tests expecting /admin/health/llm
+@router.get("/health/llm")
+def llm_health_alias(_: models.User = Depends(get_admin_user)):
+    return llm_health(_)  # delegate to the same implementation
 __all__ = ["router"]
 
-from sqlalchemy.orm import Session
-from app import models, schemas
-from app.database import get_db_chat
 from app.figures_database import FigureSessionLocal
 
 
@@ -153,7 +155,7 @@ def get_figure_db() -> Generator[Session, None, None]:
 
 
 @router.get("/health")
-def admin_health(_: models.User = Depends(admin_required)) -> dict:
+def admin_health(_: models.User = Depends(get_admin_user)) -> dict:
     """
     Return a simple health payload to confirm admin access.
     """
@@ -162,7 +164,7 @@ def admin_health(_: models.User = Depends(admin_required)) -> dict:
 
 @router.get("/users", response_model=List[schemas.UserRead])
 def list_users(
-    _: models.User = Depends(admin_required),
+    _: models.User = Depends(get_admin_user),
     db_chat: Session = Depends(get_db_chat),
 ) -> List[schemas.UserRead]:
     """
@@ -177,7 +179,7 @@ def update_user_role(
     user_id: int,
     payload: schemas.UserRoleUpdate,
     request: Request,
-    admin_user: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_chat: Session = Depends(get_db_chat),
 ) -> schemas.UserRead:
     """
@@ -206,7 +208,7 @@ def update_user_role(
 
 @router.get("/figures", response_model=List[schemas.HistoricalFigureRead])
 def list_figures_admin(
-    _: models.User = Depends(admin_required),
+    _: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ) -> List[schemas.HistoricalFigureRead]:
     """
@@ -220,7 +222,7 @@ def list_figures_admin(
 def create_figure_admin(
     data: schemas.HistoricalFigureDetail,
     request: Request,
-    admin_user: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
     db_chat: Session = Depends(get_db_chat),
 ) -> schemas.HistoricalFigureDetail:

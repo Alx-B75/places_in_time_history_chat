@@ -22,7 +22,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 
 from sqlalchemy.orm import Session
 
@@ -210,7 +210,7 @@ def _coerce_int(raw: Optional[str]) -> Optional[int]:
         return None
 
 
-def _normalize_row(row: Dict[str, str]) -> Dict[str, str]:
+def _normalize_row(row: Dict[str, str]) -> Dict[str, Any]:
     """
     Normalize a CSV row to the HistoricalFigure schema keys.
 
@@ -245,7 +245,7 @@ def _normalize_row(row: Dict[str, str]) -> Dict[str, str]:
     }
 
 
-def _upsert_figure(db: Session, data: Dict[str, str]) -> Tuple[bool, bool]:
+def _upsert_figure(db: Session, data: Dict[str, Any]) -> Tuple[bool, bool]:
     """
     Upsert a single figure by slug.
 
@@ -343,7 +343,22 @@ def maybe_ingest_seed_csv(logger) -> Tuple[bool, str]:
     current_sum = _file_sha256(csv_path)
     previous_sum = _read_stamp(stamp_path)
     if previous_sum == current_sum:
-        return False, "No changes detected in figures CSV"
+        # Guard against the scenario where the checksum stamp exists but the
+        # database is empty (e.g. a reset of figures.db without removing the
+        # stamp). In that case we still want to ingest.
+        db_empty = False
+        _check = FigureSessionLocal()
+        try:
+            try:
+                db_empty = _check.query(models.HistoricalFigure).count() == 0
+            except Exception:
+                # If the table doesn't exist yet, treat as empty forcing ingest.
+                db_empty = True
+        finally:
+            _check.close()
+        if not db_empty:
+            return False, "No changes detected in figures CSV (rows already present)"
+        # Fall through to ingestion despite matching checksum because DB is empty.
 
     rows = _load_csv_rows(csv_path)
     created = 0

@@ -1,5 +1,7 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useInteraction } from '../contexts/InteractionContext'
+import { useAuth } from '../contexts/AuthContext.jsx'
+import { useNavigate } from 'react-router-dom'
 
 const TOPICS = ['Ancient Egypt','World Wars','Industrial Revolution','Renaissance','Space Age']
 
@@ -13,9 +15,11 @@ function SectionCard({title, children}){
 }
 
 export default function Dashboard(){
-  // stub user for now
-  const user = { name: 'Alex' }
+  const { user, loading } = useAuth()
   const { mode, setMode } = useInteraction()
+  const navigate = useNavigate()
+  const [creating, setCreating] = useState(false)
+  const [err, setErr] = useState('')
 
   const modes = [
     { key: 'Young Learner', label: 'Young Learner (5–11)' },
@@ -27,8 +31,8 @@ export default function Dashboard(){
   return (
     <div style={{padding:12, maxWidth:980, margin:'0 auto'}}>
       <header style={{marginBottom:18}}>
-        <h1 style={{margin:0,fontSize:'1.8rem'}}>Welcome back, {user.name} 👋</h1>
-        <p style={{color:'#666',marginTop:6}}>Your personalized dashboard</p>
+        <h1 style={{margin:0,fontSize:'1.8rem'}}>Welcome back{user?.username ? `, ${user.username}` : ''} 👋</h1>
+        <p style={{color:'#666',marginTop:6}}>{loading ? 'Loading your profile…' : 'Your personalized dashboard'}</p>
       </header>
 
       <div style={{display:'grid',gridTemplateColumns:'1fr 320px',gap:16}}>
@@ -67,9 +71,34 @@ export default function Dashboard(){
           </SectionCard>
 
           <SectionCard title="Quick Actions">
+            {err ? <div style={{color:'crimson', marginBottom:8}}>{err}</div> : null}
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
-              <button className="btn">Start a new conversation</button>
-              <button className="btn">View saved threads</button>
+              <button
+                className="btn btn-primary"
+                disabled={creating || !user}
+                onClick={async () => {
+                  if(!user) return
+                  setErr('')
+                  setCreating(true)
+                  try{
+                    const token = sessionStorage.getItem('userToken') || localStorage.getItem('access_token')
+                    const res = await fetch('/threads', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                      },
+                      body: JSON.stringify({ user_id: user.id, title: 'New thread' })
+                    })
+                    if(!res.ok) throw new Error(await res.text())
+                    const data = await res.json()
+                    const newId = data.thread_id || data.id
+                    navigate(`/thread/${newId}`)
+                  }catch(e){ setErr(e.message || 'Failed to create thread') }
+                  finally{ setCreating(false) }
+                }}
+              >{creating ? 'Creating…' : 'Start a new conversation'}</button>
+              <button className="btn" onClick={() => navigate('/threads')}>View saved threads</button>
             </div>
           </SectionCard>
         </aside>
