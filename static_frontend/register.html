@@ -6,12 +6,16 @@
     <title>Places in Time – Register</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
-<body class="register-page">
-<div class="centered-form">
-    <img src="/static/logo.png" alt="Places in Time Logo" class="logo" />
-
-    <main class="form-box">
-        <h1>Register</h1>
+<body>
+<div class="wrap-page" style="display:flex;align-items:center;justify-content:center;min-height:100vh;">
+    <main class="form-box card" style="max-width:520px;width:100%;padding:22px;border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow);background:var(--card)">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+            <div class="brand-mark"><img src="/static/logo.png" alt="Places in Time Logo" /></div>
+            <div class="brand-title">
+                <h1 style="margin:0;font-size:1.3rem">Create your account</h1>
+                <div class="muted">Start conversations with historical figures</div>
+            </div>
+        </div>
                 <form id="register-form" method="post" action="#" novalidate>
                         <label for="username">Email:</label>
                         <input id="username" name="username" type="email" autocomplete="email" required />
@@ -39,11 +43,11 @@
                             </div>
                         </section>
 
-                        <button id="register-btn" type="submit" style="margin-top:16px;">Create Account</button>
+                        <button id="register-btn" type="submit" class="btn btn-primary" style="margin-top:16px;width:100%;">Create Account</button>
                 </form>
 
-        <p style="margin-top:16px;">
-            <a href="/">Already have an account? Login</a>
+        <p style="margin-top:16px;text-align:center;">
+            Already have an account? <a href="/login">Login</a>
         </p>
         <div class="error-message" id="message"></div>
     </main>

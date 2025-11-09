@@ -1,18 +1,19 @@
-import React from 'react'
-import { Navigate } from 'react-router-dom'
+import React, { useEffect } from 'react'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
 // Simple route guard: checks for a `userToken` in sessionStorage.
 // This is a stubbed auth check for now; replace with real auth logic later.
 export default function RequireAuth({ children }){
   const { user, loading } = useAuth()
+  const location = useLocation()
   // Accept multiple token locations used across the project while auth is
   // being unified. Priority order:
   // 1. sessionStorage 'userToken'
   // 2. sessionStorage 'user_token'
   // 3. localStorage 'access_token'
   // 4. localStorage 'user_token'
-  const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('user_token') || localStorage.getItem('access_token') || localStorage.getItem('user_token') || null
+  const tokenFromStorage = sessionStorage.getItem('userToken') || sessionStorage.getItem('user_token') || localStorage.getItem('access_token') || localStorage.getItem('user_token') || null
 
   // Also accept a host-scoped cookie set by the static frontend during dev.
   // Cookies are host-scoped (not port-scoped), so this enables token sharing
@@ -24,7 +25,7 @@ export default function RequireAuth({ children }){
     }catch(_){ return null }
   }
   const cookieToken = readCookie('pit_access_token') || readCookie('access_token') || readCookie('pit_access_token_localhost')
-  const effectiveToken = token || cookieToken
+  const effectiveToken = tokenFromStorage || cookieToken
 
   // Helpful debug logs (dev only) to diagnose why tokens may not be visible.
   try{
@@ -36,9 +37,13 @@ export default function RequireAuth({ children }){
   if(loading){
     return <div style={{padding:24}}>Loading…</div>
   }
+  // If no token yet but we are on a protected route, we can delay redirect very slightly
+  // to allow AuthContext second-pass discovery to populate.
+  if(loading){
+    return <div style={{padding:24}}>Loading…</div>
+  }
   if(!effectiveToken && !user){
-    // redirect unauthenticated users to neutral home
-    return <Navigate to="/" replace />
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />
   }
   // Optional normalization: ensure sessionStorage has a value for other code that
   // reads sessionStorage.userToken. We avoid overwriting an existing session value.

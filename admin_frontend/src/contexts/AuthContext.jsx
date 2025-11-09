@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useState, useRef } from 'react'
 
 function readCookie(name){
   try{
@@ -14,18 +14,29 @@ export function AuthProvider({ children }){
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const initTried = useRef(false)
 
   // Discover token from multiple places (sessionStorage, localStorage, dev cookie)
   useEffect(() => {
-    try{
-      const t = sessionStorage.getItem('userToken')
-        || localStorage.getItem('access_token')
-        || localStorage.getItem('user_token')
-        || readCookie('pit_access_token')
-        || readCookie('access_token')
-      if(t) setToken(t)
-    }catch(_){ /* ignore */ }
-    setLoading(false)
+    // Attempt initial discovery only once; if login page sets storage slightly AFTER mount,
+    // we re-check after a short delay to catch race conditions.
+    if(initTried.current) return
+    initTried.current = true
+    function discover(){
+      try{
+        const t = sessionStorage.getItem('userToken')
+          || localStorage.getItem('access_token')
+          || localStorage.getItem('user_token')
+          || readCookie('pit_access_token')
+          || readCookie('access_token')
+        if(t) setToken(prev => prev || t)
+      }catch(_){ /* ignore */ }
+      setLoading(false)
+    }
+    discover()
+    // second pass after 150ms to capture freshly written sessionStorage from redirect
+    const id = setTimeout(discover, 150)
+    return () => clearTimeout(id)
   }, [])
 
   // Fetch /auth/me when we have a token
@@ -49,7 +60,19 @@ export function AuthProvider({ children }){
     return () => { cancelled = true }
   }, [token])
 
-  const value = useMemo(() => ({ token, setToken, user, setUser, loading, error }), [token, user, loading, error])
+  // Provide an explicit refresh method so login page can force /auth/me fetch post-navigation
+  async function refresh(){
+    if(!token) return
+    try{
+      setLoading(true)
+      const res = await fetch('/auth/me', { headers: { 'Authorization': `Bearer ${token}` } })
+      if(!res.ok) return
+      const data = await res.json()
+      setUser({ id: data.user_id, username: data.username, role: data.role })
+    }finally{ setLoading(false) }
+  }
+
+  const value = useMemo(() => ({ token, setToken, user, setUser, loading, error, refresh }), [token, user, loading, error])
 
   return (
     <AuthContext.Provider value={value}>

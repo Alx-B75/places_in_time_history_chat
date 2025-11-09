@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Places in Time – Login</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="wrap-page" style="display:flex;align-items:center;justify-content:center;min-height:100vh;">
+    <main class="form-box card" style="max-width:520px;width:100%;padding:22px;border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow);background:var(--card)">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+        <div class="brand-mark"><img src="/static/logo.png" alt="Places in Time Logo" /></div>
+        <div class="brand-title">
+          <h1 style="margin:0;font-size:1.3rem">Welcome back</h1>
+          <div class="muted">Sign in to continue</div>
+        </div>
+      </div>
+
+      <form id="login-form" method="post" action="#" novalidate>
+        <label for="email">Email:</label>
+        <input id="email" name="email" type="email" autocomplete="email" required />
+
+        <label for="password">Password:</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+
+        <button id="login-btn" type="submit" class="btn btn-primary" style="margin-top:16px;width:100%;">Login</button>
+      </form>
+
+      <p style="margin-top:16px;text-align:center;">
+        New here? <a href="/register">Create an account</a>
+      </p>
+      <div class="error-message" id="message"></div>
+    </main>
+  </div>
+
+  <script src="/static/main.js" defer></script>
+</body>
+</html>

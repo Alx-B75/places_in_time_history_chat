@@ -34,6 +34,8 @@
     if (data.user_id != null) localStorage.setItem("user_id", String(data.user_id));
     if (data.username) localStorage.setItem("username", data.username);
     try{
+      // help the SPA discover tokens consistently during dev
+      sessionStorage.setItem("userToken", data.access_token);
       // debug log to ensure we reached the client-side store flow
       // eslint-disable-next-line no-console
       console.debug('[static_frontend] storeAuth setting token for user_id=', data.user_id);
@@ -91,8 +93,14 @@
       }
       const data = await res.json();
       storeAuth(data);
-      const uid = data.user_id ?? localStorage.getItem("user_id");
-      window.location.href = `/user/${uid}/threads`;
+      const dev = (location.hostname === '127.0.0.1' || location.hostname === 'localhost') && location.port === '8000'
+      if (dev) {
+        // send to Vite SPA dashboard in dev
+        window.location.href = `http://127.0.0.1:5173/dashboard`;
+      } else {
+        // SPA route when served behind the frontend build
+        window.location.href = `/dashboard`;
+      }
     } catch {
       showError("Network error during login.");
     }
@@ -141,8 +149,12 @@
       }
       const data = await res.json();
       storeAuth(data);
-      const uid = data.user_id ?? localStorage.getItem("user_id");
-      window.location.href = `/user/${uid}/threads`;
+      const dev = (location.hostname === '127.0.0.1' || location.hostname === 'localhost') && location.port === '8000'
+      if (dev) {
+        window.location.href = `http://127.0.0.1:5173/dashboard`;
+      } else {
+        window.location.href = `/dashboard`;
+      }
     } catch {
       showError("Network error during registration.");
     }

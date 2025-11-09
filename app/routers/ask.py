@@ -27,6 +27,22 @@ _settings = get_settings()
 llm_client = LlmClient()
 
 
+def generate_answer(context: list[dict], prompt: str, *, model: str = "gpt-4o-mini", temperature: float = 0.3):
+    """
+    Thin wrapper to generate an answer from the LLM and return (answer, usage).
+
+    Exposed at module scope so tests can monkeypatch this function for
+    deterministic results without touching the LlmClient internals.
+    """
+    response = llm_client.generate(messages=context, model=model, temperature=temperature)
+    answer = response["choices"][0]["message"]["content"].strip() if response.get("choices") else ""
+    usage = response.get(
+        "usage",
+        {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+    )
+    return answer, usage
+
+
 def get_figure_db() -> Generator[Session, None, None]:
     """
     Yield a SQLAlchemy session bound to the figures database.
@@ -117,13 +133,7 @@ def ask(
     )
 
     model_name = payload.model_used or "gpt-4o-mini"
-    response = llm_client.generate(messages=messages, model=model_name, temperature=0.3)
-    answer = response["choices"][0]["message"]["content"].strip() if response.get("choices") else ""
-    usage = response.get("usage", {
-        "prompt_tokens": 0,
-        "completion_tokens": 0,
-        "total_tokens": 0,
-    })
+    answer, usage = generate_answer(messages, payload.message, model=model_name, temperature=0.3)
 
     assistant_msg = schemas.ChatMessageCreate(
         user_id=current_user.id,

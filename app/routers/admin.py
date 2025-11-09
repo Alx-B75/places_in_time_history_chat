@@ -90,7 +90,7 @@ def admin_activate_llm_profile(
 
 # PATCH /admin/llm for runtime LLM config
 @router.patch("/llm")
-def admin_update_llm(cfg: LLMRuntimeConfig, _: models.User = Depends(get_admin_user)):
+def admin_update_llm(cfg: LLMRuntimeConfig, _: str = Depends(admin_required)):
     llm_config.provider = cfg.provider or llm_config.provider
     llm_config.model = cfg.model or llm_config.model
     llm_config.api_key = cfg.api_key or llm_config.api_key
@@ -102,7 +102,7 @@ def admin_update_llm(cfg: LLMRuntimeConfig, _: models.User = Depends(get_admin_u
 
 # --- LLM Health Endpoint ---
 @router.get("/llm/health")
-def llm_health(_: models.User = Depends(get_admin_user)):
+def llm_health(_: str = Depends(admin_required)):
     """
     Check active LLM provider connectivity and return status.
     """
@@ -136,7 +136,7 @@ def llm_health(_: models.User = Depends(get_admin_user)):
 
 # Back-compat alias for tests expecting /admin/health/llm
 @router.get("/health/llm")
-def llm_health_alias(_: models.User = Depends(get_admin_user)):
+def llm_health_alias(_: str = Depends(admin_required)):
     return llm_health(_)  # delegate to the same implementation
 __all__ = ["router"]
 

@@ -15,7 +15,7 @@ import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
@@ -30,7 +30,7 @@ from app.figures_database import engine as figures_engine
 from app.routers import admin, ask, auth, chat, figures, guest, data
 from app.routers import admin_rag  # new contexts CRUD router
 from app.settings import get_settings
-from app.utils.security import get_current_user, get_admin_user
+from app.utils.security import get_current_user, get_admin_user, get_current_user_loose
 
 
 _settings = get_settings()
@@ -95,23 +95,16 @@ def serve_admin_ui() -> FileResponse:
         return Response(content="<html><body><h1>Admin UI</h1><p>admin.html not found in static_frontend.</p></body></html>", media_type="text/html")
     return FileResponse(path, media_type="text/html")
 
-# CORS for Vite dev
+# Single CORS middleware combining dev and configured origins to avoid double-wrapping
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
+    allow_origins=list({
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:5174",
         "http://127.0.0.1:5174",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_allowed_origins(),
+        *(_allowed_origins() or []),
+    }),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -217,15 +210,22 @@ def compat_login(payload: dict = Body(...), db: Session = Depends(get_db_chat)):
     return {"user_id": user.id, "username": user.username, "access_token": token, "token_type": "bearer"}
 
 # Optional convenience routes to serve static login/register pages on GET
-@app.get("/login", response_class=FileResponse)
-def serve_login_page() -> FileResponse:
+@app.get("/login")
+def serve_login_page() -> Response:
+    # In dev, steer to the Vite SPA login to avoid confusion with static page
+    import os
+    if os.getenv("ENVIRONMENT", "dev").lower() == "dev":
+        return RedirectResponse(url="http://127.0.0.1:5173/login", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
     path = STATIC_DIR / "login.html"
     if not path.exists():
-        return Response(content="<html><body><h1>Login</h1><p>Static login page not found. Use the API POST /login from the app UI.</p></body></html>", media_type="text/html")
+        return Response(content="<html><body><h1>Login</h1><p>Static login page not found. Use the app UI.</p></body></html>", media_type="text/html")
     return FileResponse(path, media_type="text/html")
 
-@app.get("/register", response_class=FileResponse)
-def serve_register_page() -> FileResponse:
+@app.get("/register")
+def serve_register_page() -> Response:
+    import os
+    if os.getenv("ENVIRONMENT", "dev").lower() == "dev":
+        return RedirectResponse(url="http://127.0.0.1:5173/register", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
     path = STATIC_DIR / "register.html"
     if not path.exists():
         return Response(content="<html><body><h1>Register</h1><p>Static register page not found. Use the app UI to register.</p></body></html>", media_type="text/html")

@@ -16,12 +16,14 @@ def test_ask_returns_answer_and_persists() -> None:
     reg = client.post("/register", json={"username": "ask_user_ok", "password": "pw"})
     assert reg.status_code == 200, reg.text
     user_id = reg.json()["user_id"]
+    access_token = reg.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access_token}"}
 
     t = client.post("/threads", json={"user_id": user_id, "title": "Ask Thread"})
     assert t.status_code == 201, t.text
     thread_id = t.json()["thread_id"]
 
-    def fake_generate_answer(context, prompt):
+    def fake_generate_answer(context, prompt, *, model="gpt-4o-mini", temperature=0.3):
         return "Hello from test", {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
 
     import app.routers.ask as ask_module
@@ -35,7 +37,7 @@ def test_ask_returns_answer_and_persists() -> None:
             "message": "Who are you?",
             "model_used": "gpt-4o-mini",
         }
-        r = client.post("/ask", json=payload)
+        r = client.post("/ask", json=payload, headers=headers)
     finally:
         ask_module.generate_answer = original
 

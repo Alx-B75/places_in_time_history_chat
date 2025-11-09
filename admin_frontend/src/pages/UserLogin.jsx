@@ -1,26 +1,34 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext.jsx'
 
 export default function UserLogin(){
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [err, setErr] = useState('')
   const nav = useNavigate()
+  const { setToken, refresh } = useAuth()
 
   async function submit(e){
     e.preventDefault()
     setErr('')
     try{
-      const body = new URLSearchParams({ username: email, password })
-      const res = await fetch('/auth/login', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body })
+  const res = await fetch('/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: email, password }) })
       if(!res.ok) throw new Error(await res.text())
       const data = await res.json()
       const token = data.access_token
       try{
         sessionStorage.setItem('userToken', token)
         localStorage.setItem('access_token', token)
+        // also set a host-scoped cookie for cross-port dev access
+        document.cookie = `pit_access_token=${token}; path=/`
       }catch(_){ }
-      nav('/dashboard', { replace: true })
+      // update context immediately so downstream routes see authenticated state
+      try{ setToken(token) }catch(_){ }
+      // Ensure AuthContext detects token fetch and navigates to dashboard
+  // Trigger refresh first so dashboard has user data immediately.
+  try{ await refresh() }catch(_){ }
+  nav('/dashboard', { replace: true })
     }catch(e){ setErr(e.message || 'Login failed') }
   }
 

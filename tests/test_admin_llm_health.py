@@ -1,6 +1,10 @@
 import os
 from fastapi.testclient import TestClient
 from app.main import app
+
+# Ensure dev environment bypass is active for admin_required
+import os
+os.environ.setdefault("ENVIRONMENT", "dev")
 from app.config.llm_config import llm_config
 
 def test_admin_llm_health(monkeypatch):
