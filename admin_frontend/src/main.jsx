@@ -7,8 +7,10 @@ import "./styles.css";
 import { InteractionProvider } from './contexts/InteractionContext'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 
+const Wrapper = import.meta.env.PROD ? React.StrictMode : React.Fragment;
+
 ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
+  <Wrapper>
     <BrowserRouter>
       <AuthProvider>
         <InteractionProvider>
@@ -16,5 +18,5 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         </InteractionProvider>
       </AuthProvider>
     </BrowserRouter>
-  </React.StrictMode>
+  </Wrapper>
 );

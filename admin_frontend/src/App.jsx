@@ -3,6 +3,7 @@ import { Routes, Route } from "react-router-dom";
 import GuestChat from "./routes/GuestChat.jsx";
 import Dashboard from './pages/Dashboard.jsx'
 import UserLogin from './pages/UserLogin.jsx'
+import UserRegister from './pages/UserRegister.jsx'
 import RequireAuth from './components/RequireAuth.jsx'
 import Home from './pages/Home.jsx'
 import Threads from './pages/Threads.jsx'
@@ -19,6 +20,7 @@ export default function App() {
       <Route path="/" element={<Home />} />
       <Route path="/guest/:slug" element={<GuestChat />} />
   <Route path="/login" element={<UserLogin />} />
+      <Route path="/register" element={<UserRegister />} />
       <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
       <Route path="/threads" element={<RequireAuth><Threads /></RequireAuth>} />
       <Route path="/thread/:id" element={<RequireAuth><ThreadView /></RequireAuth>} />

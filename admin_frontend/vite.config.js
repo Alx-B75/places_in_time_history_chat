@@ -15,6 +15,7 @@ export default defineConfig({
       '/static': 'http://localhost:8000',
       '/guest/start': 'http://localhost:8000',
       '/guest/ask': 'http://localhost:8000',
+  '/guest/upgrade': 'http://localhost:8000',
       '/figures': 'http://localhost:8000',
       '/threads': 'http://localhost:8000',
       '/ask': 'http://localhost:8000'

@@ -58,6 +58,8 @@ export default function GuestChat() {
         }
         const startData = await r.json().catch(() => null);
         setBoot("ready");
+        // Mark presence of guest session for later upgrade attempt post-registration
+        try { sessionStorage.setItem('hasGuestSession', '1') } catch(_){ }
         // Fetch figure details for UI (image, name, short summary)
         const figureSlug = startData?.figure_slug || slug;
         try {
@@ -111,6 +113,11 @@ export default function GuestChat() {
       const data = await res.json();
   setMessages((m) => [...m, { role: "assistant", text: data.answer || "(no answer)" }]);
       setQaCount((c) => c + 1);
+      // If quota exhausted on this question, flag upgrade hint
+      try {
+        const remaining = (Math.max(0, (3 - (qaCount + 1)))).toString()
+        sessionStorage.setItem('guestRemaining', remaining)
+      }catch(_){ }
       setStatus("");
       setDisabled(false);
       setInput("");

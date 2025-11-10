@@ -8,6 +8,18 @@ export default function UserLogin(){
   const [err, setErr] = useState('')
   const nav = useNavigate()
   const { setToken, refresh } = useAuth()
+  async function attemptGuestUpgrade(bearer){
+    try{
+      const res = await fetch('/guest/upgrade', {
+        method:'POST',
+        headers:{ 'Authorization': `Bearer ${bearer}` },
+        credentials:'include',
+      })
+      if(!res.ok) return null
+      const data = await res.json().catch(()=>null)
+      return data && data.upgraded ? data : null
+    }catch(_){ return null }
+  }
 
   async function submit(e){
     e.preventDefault()
@@ -25,10 +37,15 @@ export default function UserLogin(){
       }catch(_){ }
       // update context immediately so downstream routes see authenticated state
       try{ setToken(token) }catch(_){ }
-      // Ensure AuthContext detects token fetch and navigates to dashboard
-  // Trigger refresh first so dashboard has user data immediately.
-  try{ await refresh() }catch(_){ }
-  nav('/dashboard', { replace: true })
+      // Trigger refresh first so dashboard has user data immediately.
+      try{ await refresh() }catch(_){ }
+      // Try upgrading guest transcript if present
+      const up = await attemptGuestUpgrade(token)
+      if(up && up.thread_id){
+        nav(`/thread/${up.thread_id}`, { replace: true })
+      }else{
+        nav('/dashboard', { replace: true })
+      }
     }catch(e){ setErr(e.message || 'Login failed') }
   }
 
