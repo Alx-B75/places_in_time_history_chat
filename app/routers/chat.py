@@ -333,7 +333,12 @@ def chat_complete(
     user_msg = schemas.ChatMessageCreate(user_id=user_id, role="user", message=message, thread_id=thread_id)
     crud.create_chat_message(db, user_msg)
 
-    response = llm_client.generate(messages=messages, model="gpt-4o-mini", temperature=0.3)
+    from app.config.llm_config import llm_config
+    response = llm_client.generate(
+        messages=messages,
+        model=llm_config.model,
+        temperature=llm_config.temperature,
+    )
     answer = response["choices"][0]["message"]["content"].strip() if response.get("choices") else ""
 
     assistant_msg = schemas.ChatMessageCreate(user_id=user_id, role="assistant", message=answer, thread_id=thread_id)

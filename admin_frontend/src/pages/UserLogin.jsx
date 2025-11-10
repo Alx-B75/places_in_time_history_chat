@@ -42,7 +42,8 @@ export default function UserLogin(){
       // Try upgrading guest transcript if present
       const up = await attemptGuestUpgrade(token)
       if(up && up.thread_id){
-        nav(`/thread/${up.thread_id}`, { replace: true })
+        // Pass state so ThreadView knows this came from a guest upgrade and should send Back to dashboard.
+        nav(`/thread/${up.thread_id}`, { replace: true, state: { fromGuestUpgrade: true } })
       }else{
         nav('/dashboard', { replace: true })
       }

@@ -111,7 +111,7 @@ class ChatCompletionRequest(BaseModel):
 
     user_id: int
     message: str
-    model_used: Optional[str] = "gpt-4o-mini"
+    model_used: Optional[str] = None
     source_page: Optional[str] = None
     thread_id: Optional[int] = None
 
@@ -125,7 +125,7 @@ class AskRequest(BaseModel):
     message: str
     figure_slug: Optional[str] = None
     source_page: Optional[str] = None
-    model_used: Optional[str] = "gpt-4o-mini"
+    model_used: Optional[str] = None
     thread_id: Optional[int] = None
 
 

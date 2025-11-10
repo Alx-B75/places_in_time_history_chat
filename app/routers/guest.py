@@ -58,12 +58,9 @@ class GuestStartResponse(BaseModel):
 
 
 class GuestAskRequest(BaseModel):
-    """
-    Request payload for submitting a guest question.
-    """
-
+    """Request payload for submitting a guest question."""
     message: str
-    model_used: Optional[str] = "gpt-4o-mini"
+    model_used: Optional[str] = None
     source_page: Optional[str] = None
 
 
@@ -254,8 +251,9 @@ def guest_ask(
         debug=_settings.guest_prompt_debug,
     )
 
-    model_name = payload.model_used or "gpt-4o-mini"
-    resp = llm_client.generate(messages=messages, model=model_name, temperature=0.2)
+    from app.config.llm_config import llm_config
+    model_name = payload.model_used or llm_config.model
+    resp = llm_client.generate(messages=messages, model=model_name, temperature=llm_config.temperature)
     answer = resp["choices"][0]["message"]["content"].strip() if resp.get("choices") else ""
     usage = resp.get("usage", {
         "prompt_tokens": None,

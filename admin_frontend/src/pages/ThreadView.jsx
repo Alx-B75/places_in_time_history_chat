@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
 export default function ThreadView(){
   const { id } = useParams()
   const threadId = useMemo(() => parseInt(id, 10), [id])
+  const location = useLocation()
+  const fromGuestUpgrade = location.state && location.state.fromGuestUpgrade === true
   const { user, loading } = useAuth()
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
@@ -51,8 +53,8 @@ export default function ThreadView(){
         user_id: user.id,
         thread_id: threadId,
         figure_slug: figure || undefined,
-        message: text,
-        model_used: 'gpt-4o-mini'
+        message: text
+        // model_used intentionally omitted to allow backend llm_config to decide.
       }
       const token = sessionStorage.getItem('userToken') || localStorage.getItem('access_token')
       const res = await fetch('/ask', {
@@ -81,7 +83,16 @@ export default function ThreadView(){
     <div style={{padding:16, maxWidth:900, margin:'0 auto'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <button className="btn" onClick={() => navigate(-1)}>← Back</button>
+          <button
+            className="btn"
+            onClick={() => {
+              if(fromGuestUpgrade){
+                navigate('/dashboard', { replace: true })
+              }else{
+                navigate(-1)
+              }
+            }}
+          >← Back</button>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
           {editingTitle ? (

@@ -50,7 +50,7 @@ export default function UserRegister(){
       // Try to carry over guest session transcript if present
       const up = await attemptGuestUpgrade(token)
       if(up && up.thread_id){
-        nav(`/thread/${up.thread_id}`, { replace: true })
+        nav(`/thread/${up.thread_id}`, { replace: true, state: { fromGuestUpgrade: true } })
       }else{
         nav('/dashboard', { replace: true })
       }
