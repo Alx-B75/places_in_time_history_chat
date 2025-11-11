@@ -234,7 +234,7 @@ def serve_register_page() -> Response:
 
 @app.get(
     "/threads/user/{user_id}",
-    response_model=List[schemas.ThreadRead],
+    response_model=List[schemas.ThreadReadWithPreview],
 )
 def list_user_threads(
     user_id: int,
@@ -252,7 +252,38 @@ def list_user_threads(
         user_id_val = current_user.__dict__.get('id', None)
     if user_id_val is None or int(user_id_val) != int(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access these threads")
-    return crud.get_threads_by_user(db, user_id)
+    threads = crud.get_threads_by_user(db, user_id)
+    if not threads:
+        return []
+    # Collect first user message per thread in a single query
+    thread_ids = [t.id for t in threads]
+    # Query all chats for these threads where role='user', ordered by timestamp asc
+    chats = (
+        db.query(models.Chat)
+        .filter(models.Chat.thread_id.in_(thread_ids), models.Chat.role == "user")
+        .order_by(models.Chat.thread_id.asc(), models.Chat.timestamp.asc())
+        .all()
+    )
+    first_by_thread: dict[int, models.Chat] = {}
+    for c in chats:
+        if c.thread_id is None:
+            continue
+        if c.thread_id not in first_by_thread:
+            first_by_thread[c.thread_id] = c
+
+    result: list[dict] = []
+    for t in threads:
+        first = first_by_thread.get(t.id)
+        result.append({
+            "id": t.id,
+            "user_id": t.user_id,
+            "title": t.title,
+            "figure_slug": t.figure_slug,
+            "created_at": t.created_at,
+            "first_user_message": first.message if first else None,
+            "first_message_at": first.timestamp if first else None,
+        })
+    return result
 
 
 @app.get("/", response_class=FileResponse)

@@ -18,7 +18,9 @@ export default defineConfig({
   '/guest/upgrade': 'http://localhost:8000',
       '/figures': 'http://localhost:8000',
       '/threads': 'http://localhost:8000',
-      '/ask': 'http://localhost:8000'
+      '/ask': 'http://localhost:8000',
+      // ensure user-scoped routes like /user/favorites proxy to backend in dev
+      '/user': 'http://localhost:8000'
     },
     fs: { allow: [".."] },
     historyApiFallback: true

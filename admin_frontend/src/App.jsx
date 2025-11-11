@@ -8,6 +8,7 @@ import RequireAuth from './components/RequireAuth.jsx'
 import Home from './pages/Home.jsx'
 import Threads from './pages/Threads.jsx'
 import ThreadView from './pages/ThreadView.jsx'
+import FigureSelect from './pages/FigureSelect.jsx'
 
 function NotFound() {
   return <div style={{textAlign:'center',marginTop:'4em',fontSize:'1.5em'}}>404 – Page Not Found</div>;
@@ -24,6 +25,7 @@ export default function App() {
       <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
       <Route path="/threads" element={<RequireAuth><Threads /></RequireAuth>} />
       <Route path="/thread/:id" element={<RequireAuth><ThreadView /></RequireAuth>} />
+  <Route path="/figures" element={<RequireAuth><FigureSelect /></RequireAuth>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

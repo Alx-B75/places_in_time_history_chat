@@ -33,6 +33,7 @@ class ThreadCreatePayload(BaseModel):
 
     user_id: int = Field(...)
     title: Optional[str] = None
+    figure_slug: Optional[str] = None
 
 
 class ThreadTitleUpdate(BaseModel):
@@ -49,6 +50,10 @@ class ThreadFigureUpdate(BaseModel):
     """
 
     figure_slug: Optional[str] = Field(default=None)
+
+
+class FavoriteToggle(BaseModel):
+    figure_slug: str
 
 
 def get_figure_db() -> Generator[Session, None, None]:
@@ -91,9 +96,11 @@ def create_thread(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     title = payload.title or "New thread"
-    thread_in = schemas.ThreadCreate(user_id=payload.user_id, title=title, figure_slug=None)
+    # Normalize slug input (optional)
+    fig_slug = (payload.figure_slug or "").strip() or None
+    thread_in = schemas.ThreadCreate(user_id=payload.user_id, title=title, figure_slug=fig_slug)
     thread = crud.create_thread(db, thread_in)
-    return {"thread_id": thread.id, "user_id": thread.user_id, "title": thread.title}
+    return {"thread_id": thread.id, "user_id": thread.user_id, "title": thread.title, "figure_slug": thread.figure_slug}
 
 
 @router.get("/threads/{thread_id}", response_model=schemas.ThreadRead)
@@ -246,6 +253,38 @@ def get_thread_messages(
     return crud.get_messages_by_thread(db, thread_id, limit=1000)
 
 
+@router.delete("/threads/{thread_id}", status_code=204)
+def delete_thread(
+    thread_id: int,
+    db: Session = Depends(get_db_chat),
+    current_user: models.User = Depends(get_current_user),
+) -> None:
+    """Delete a thread owned by the current user.
+
+    Parameters
+    ----------
+    thread_id : int
+        Target thread id.
+    db : sqlalchemy.orm.Session
+        Chat database session.
+    current_user : app.models.User
+        Authenticated user.
+
+    Returns
+    -------
+    None
+        Returns no content on success.
+    """
+    thread = crud.get_thread_by_id(db, thread_id)
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    if thread.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this thread")
+    # Deletion cascades will remove associated chats due to relationship config.
+    db.delete(thread)
+    db.commit()
+
+
 @router.post("/complete", response_class=RedirectResponse)
 def chat_complete(
     request: Request,
@@ -345,3 +384,52 @@ def chat_complete(
     crud.create_chat_message(db, assistant_msg)
 
     return RedirectResponse(url=f"/user/{user_id}/threads", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# --- User Favorites (alternative stable path) ---
+@router.get("/user/favorites", response_model=List[schemas.FavoriteRead])
+def list_user_favorites(
+    db: Session = Depends(get_db_chat),
+    current_user: models.User = Depends(get_current_user),
+):
+    # Defensive normalization of id to handle SQLAlchemy instrumentation during testing
+    user_id = getattr(current_user, 'id', None)
+    if hasattr(user_id, 'expression'):
+        user_id = current_user.__dict__.get('id', None)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return crud.get_favorites_by_user(db, int(user_id))
+
+
+@router.post("/user/favorites/{figure_slug}", response_model=schemas.FavoriteRead, status_code=status.HTTP_201_CREATED)
+def add_user_favorite(
+    figure_slug: str,
+    db: Session = Depends(get_db_chat),
+    db_fig: Session = Depends(get_figure_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    # ensure figure exists
+    if not crud.get_figure_by_slug(db_fig, slug=figure_slug):
+        raise HTTPException(status_code=404, detail="Figure not found")
+    user_id = getattr(current_user, 'id', None)
+    if hasattr(user_id, 'expression'):
+        user_id = current_user.__dict__.get('id', None)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return crud.add_favorite(db, int(user_id), figure_slug)
+
+
+@router.delete("/user/favorites/{figure_slug}", status_code=204)
+def remove_user_favorite(
+    figure_slug: str,
+    db: Session = Depends(get_db_chat),
+    current_user: models.User = Depends(get_current_user),
+):
+    user_id = getattr(current_user, 'id', None)
+    if hasattr(user_id, 'expression'):
+        user_id = current_user.__dict__.get('id', None)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ok = crud.remove_favorite(db, int(user_id), figure_slug)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Favorite not found")

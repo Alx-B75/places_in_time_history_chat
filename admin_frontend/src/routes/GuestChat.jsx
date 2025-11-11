@@ -128,41 +128,69 @@ export default function GuestChat() {
     }
   }
 
-  if (boot === "error") return <div>Failed to start guest session.</div>;
+  if (boot === "error") return <div style={{padding:24, textAlign:'center'}}>Failed to start guest session.</div>;
 
   return (
-    <div style={{ maxWidth: 720, margin: "24px auto" }}>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
-        {figure?.image_url ? (
-          <img src={figure.image_url} alt={figure.name} style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover" }} />
-        ) : (
-          <div style={{ width: 64, height: 64, borderRadius: 8, background: "#e2e8f0" }} />
-        )}
-        <div>
-          <div style={{ fontWeight: 600 }}>{figure?.name || "Guide"}</div>
-          <div style={{ color: "#64748b", fontSize: 13 }}>{figure?.short_summary || "Ask a question to learn more."}</div>
+    <div className="wrap" style={{ maxWidth: 860 }}>
+      {/* Shared banner with logo for branding consistency */}
+      {/* Logo integrated into a framed card to match page components */}
+      <div
+        className="card panel logo-card"
+        style={{
+          margin:'16px 0',
+          display:'flex',
+          justifyContent:'center',
+          alignItems:'center',
+          padding:'18px',
+          background:'#0f172a',
+          border:'1px solid rgba(255,255,255,.06)',
+          borderRadius:14,
+          boxShadow:'0 12px 24px rgba(0,0,0,.35)'
+        }}
+      >
+        <div className="brand-mark" aria-hidden style={{width:140, height:140, borderRadius:24, overflow:'hidden'}}>
+          <img src="/static/logo.png" alt="Places in Time" style={{width:'100%', height:'100%', objectFit:'cover', borderRadius:'inherit'}}/>
         </div>
-        <div style={{ marginLeft: "auto", color: "#94a3b8" }}>{status}</div>
       </div>
 
-      <div style={{ border: "1px solid #334155", borderRadius: 10, padding: 12, minHeight: 200 }}>
-        {messages.map((m, i) => (
-          <div key={i} style={{ margin: "6px 0" }}>
-            <strong>{m.role === "user" ? "You" : (figure?.name || "Guide")}:</strong> {m.text}
+      {/* Centered figure hero */}
+      <div className="figure-hero card" style={{marginBottom:18, display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', gap:16}}>
+        {figure?.image_url ? (
+          <img src={figure.image_url} alt={figure.name} className="avatar-lg" style={{width:140,height:140,boxShadow:'0 4px 16px rgba(0,0,0,.4)',border:'1px solid rgba(255,255,255,.18)', borderRadius:24, objectFit:'cover'}} />
+        ) : (
+          <div className="avatar-lg" style={{width:140,height:140,background:'#0a1228',border:'1px solid rgba(255,255,255,.18)', borderRadius:24}} />
+        )}
+        <div className="figure-hero-text" style={{maxWidth:720}}>
+          <div className="figure-name-serif" style={{fontSize:'clamp(26px,3.5vw,38px)', fontWeight:600, textAlign:'center'}}>{figure?.name || 'Guide'}</div>
+          <div className="figure-desc-serif" style={{fontSize:'clamp(17px,2.2vw,22px)', lineHeight:1.6, textAlign:'left'}}>{figure?.short_summary || 'Ask a question to learn more.'}</div>
+        </div>
+        <div className="status" style={{textAlign:'center', minHeight:'1.2em'}}>{status}</div>
+      </div>
+
+      <div className="card chat-card" style={{marginBottom:24, overflow:'hidden'}}>
+        <div className="messages" style={{maxHeight:360}}>
+          {messages.length === 0 ? (
+            <div className="muted">No messages yet. Ask your first question.</div>
+          ) : (
+            messages.map((m,i) => (
+              <div key={i} className={m.role === 'user' ? 'msg-user' : 'msg-assistant'}>{m.text}</div>
+            ))
+          )}
+        </div>
+        <form onSubmit={(e)=>{e.preventDefault(); handleSend();}} className="compose" style={{flexDirection:'column',alignItems:'stretch', width:'100%', boxSizing:'border-box'}}>
+          <textarea
+            value={input}
+            onChange={(e)=>setInput(e.target.value)}
+            onKeyDown={(e)=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); handleSend(); } }}
+            placeholder={`Ask ${figure?.name || 'the guide'} a question… (Enter to send)`}
+            disabled={disabled}
+            style={{width:'100%',fontSize:'1rem',padding:'12px 14px',borderRadius:'var(--radius-md)',border:'1px solid var(--border)',background:'#0a1820',color:'var(--text)', boxSizing:'border-box'}}
+            rows={4}
+          />
+          <div style={{display:'flex',justifyContent:'flex-end',width:'100%'}}>
+            <button type="submit" className="send-btn" disabled={disabled}>{disabled ? 'Thinking…' : 'Send'}</button>
           </div>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-          rows={3}
-          style={{ flex: 1 }}
-          placeholder={`Ask ${figure?.name || 'the guide'} a question…`}
-        />
-        <button disabled={disabled} onClick={handleSend}>Send</button>
+        </form>
       </div>
 
       <QuotaModal
@@ -170,9 +198,7 @@ export default function GuestChat() {
         figureName={figure?.name}
         onRegister={() => { window.location.href = `${siteRoot}/register`; }}
         onLater={() => { window.location.href = `${siteRoot}/`; }}
-      >
-        {/* children not used but kept for extensibility */}
-      </QuotaModal>
+      />
     </div>
   );
 }

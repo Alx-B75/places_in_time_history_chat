@@ -123,6 +123,10 @@ def ask(
     )
     crud.create_chat_message(db, user_msg)
 
+    # Optionally skip LLM generation (useful for tests)
+    if payload.skip_llm:
+        return {"answer": "", "sources": [], "thread_id": thread.id, "usage": {"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}
+
     figure = crud.get_figure_by_slug(db_fig, resolved_slug) if resolved_slug else None
     history = crud.get_messages_by_thread(db, thread.id, limit=1000)
     history_dicts = [{"role": m.role, "message": m.message} for m in history]

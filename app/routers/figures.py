@@ -2,11 +2,13 @@
 
 from typing import Generator, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy.orm import Session
 
-from app import crud, schemas
+from app import crud, schemas, models
+from app.utils.security import get_current_user
 from app.figures_database import FigureSessionLocal
+from app.database import get_db_chat
 
 router = APIRouter(prefix="/figures", tags=["Figures"])
 
@@ -48,6 +50,10 @@ def search_figures(
     return crud.search_figures(db, q, limit=limit)
 
 
+# Favorites endpoints BEFORE slug routes to avoid any matching ambiguity
+ 
+
+
 @router.get(
     "/{slug}",
     response_model=schemas.HistoricalFigureDetail,
@@ -77,4 +83,67 @@ def get_figure_bio(
     """
     desc = crud.get_figure_description(db, slug)
     return {"slug": slug, "description": desc}
+
+
+@router.get(
+    "/favorites",
+    response_model=List[schemas.FavoriteRead],
+    status_code=status.HTTP_200_OK,
+)
+def list_favorites(
+    db: Session = Depends(get_db_chat),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Return the authenticated user's favorited figures."""
+    user_id_val = getattr(current_user, 'id', None)
+    if hasattr(user_id_val, 'expression'):
+        user_id_val = current_user.__dict__.get('id', None)
+    if user_id_val is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    return crud.get_favorites_by_user(db, int(user_id_val))
+
+
+@router.post(
+    "/favorites/{figure_slug}",
+    response_model=schemas.FavoriteRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_favorite(
+    figure_slug: str,
+    db: Session = Depends(get_db_chat),  # chat DB for favorites table
+    fig_db: Session = Depends(get_figure_db),  # figures DB for existence check
+    current_user: models.User = Depends(get_current_user),
+):
+    """Add a figure to the authenticated user's favorites."""
+    # Validate figure exists (optional but helpful)
+    fig = crud.get_figure_by_slug(fig_db, slug=figure_slug)
+    if not fig:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Figure not found")
+    user_id_val = getattr(current_user, 'id', None)
+    if hasattr(user_id_val, 'expression'):
+        user_id_val = current_user.__dict__.get('id', None)
+    if user_id_val is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    return crud.add_favorite(db, int(user_id_val), figure_slug)
+
+
+@router.delete(
+    "/favorites/{figure_slug}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_favorite(
+    figure_slug: str,
+    db: Session = Depends(get_db_chat),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Remove a figure from the authenticated user's favorites."""
+    user_id_val = getattr(current_user, 'id', None)
+    if hasattr(user_id_val, 'expression'):
+        user_id_val = current_user.__dict__.get('id', None)
+    if user_id_val is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    ok = crud.remove_favorite(db, int(user_id_val), figure_slug)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Favorite not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 

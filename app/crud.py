@@ -279,7 +279,13 @@ def get_all_figures(db: Session, skip: int = 0, limit: int = 100) -> List[models
     list[app.models.HistoricalFigure]
         Figure rows.
     """
-    return db.query(models.HistoricalFigure).offset(skip).limit(limit).all()
+    return (
+        db.query(models.HistoricalFigure)
+        .order_by(models.HistoricalFigure.name.asc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 def get_figure_by_slug(db: Session, slug: str) -> Optional[models.HistoricalFigure]:
@@ -424,3 +430,36 @@ def search_figures(db: Session, query: str, limit: int = 20) -> List[models.Hist
         .limit(limit)
         .all()
     )
+
+
+# Favorites CRUD
+def get_favorites_by_user(db: Session, user_id: int) -> List[models.Favorite]:
+    return db.query(models.Favorite).filter(models.Favorite.user_id == user_id).all()
+
+
+def add_favorite(db: Session, user_id: int, figure_slug: str) -> models.Favorite:
+    existing = (
+        db.query(models.Favorite)
+        .filter(models.Favorite.user_id == user_id, models.Favorite.figure_slug == figure_slug)
+        .first()
+    )
+    if existing:
+        return existing
+    fav = models.Favorite(user_id=user_id, figure_slug=figure_slug)
+    db.add(fav)
+    db.commit()
+    db.refresh(fav)
+    return fav
+
+
+def remove_favorite(db: Session, user_id: int, figure_slug: str) -> bool:
+    fav = (
+        db.query(models.Favorite)
+        .filter(models.Favorite.user_id == user_id, models.Favorite.figure_slug == figure_slug)
+        .first()
+    )
+    if not fav:
+        return False
+    db.delete(fav)
+    db.commit()
+    return True

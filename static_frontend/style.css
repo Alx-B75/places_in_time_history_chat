@@ -13,6 +13,7 @@
   --ring:rgba(34,211,238,.45);
   --border:rgba(255,255,255,.06);
   --shadow:0 12px 24px rgba(0,0,0,.35);
+  --avatar-lg: 140px;
 }
 
 html,body{height:100%}
@@ -39,11 +40,15 @@ a:hover{text-decoration:underline}
 }
 .brand-side{display:flex;align-items:center;gap:12px}
 .brand-mark{
-  display:flex;align-items:center;justify-content:center;
-  width:52px;height:52px;border-radius:12px;overflow:hidden;
-  background:#0a1228;border:1px solid rgba(255,255,255,.12)
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+  width:var(--avatar-lg);height:var(--avatar-lg);border-radius:24px;
+  background:#0a1228;border:1px solid rgba(255,255,255,.18);
+  box-shadow:0 6px 18px rgba(0,0,0,.45)
 }
-.brand-mark img{width:100%;height:100%;object-fit:cover}
+.brand-mark img{width:100%;height:100%;object-fit:cover;border-radius:inherit}
+
+/* Reusable large avatar size */
+.avatar-lg{width:var(--avatar-lg);height:var(--avatar-lg);border-radius:24px;object-fit:cover}
 .brand-title{display:flex;flex-direction:column}
 .brand-title h1{font-size:1.3rem;line-height:1.2;margin:0}
 .brand-title .muted{font-size:.92rem}
@@ -52,19 +57,27 @@ a:hover{text-decoration:underline}
 
 /* Buttons */
 .btn{
-  padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.12);
+  padding:12px 18px;border-radius:10px;border:1px solid rgba(255,255,255,.12);
   color:var(--text);
   background:
     linear-gradient(180deg, rgba(31,107,117,.35), rgba(31,107,117,.18)),
     linear-gradient(180deg, rgba(34,211,238,.18), rgba(34,211,238,.10));
   backdrop-filter:blur(2px);
-  cursor:pointer;display:inline-flex;align-items:center;gap:8px;
-  transition:transform .06s, box-shadow .12s, border-color .12s
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  transition:transform .06s, box-shadow .12s, border-color .12s;
+  min-height:44px; min-width:130px; font-size:14px; line-height:1;
 }
 .btn:hover{border-color:var(--ring);box-shadow:0 0 0 3px rgba(34,211,238,.08), var(--shadow)}
 .btn:active{transform:translateY(1px)}
 .btn-primary{background:linear-gradient(180deg, var(--brand), var(--brand-strong));border-color:rgba(255,255,255,.18);color:#e6feff}
 .btn-danger{background:linear-gradient(180deg, rgba(239,68,68,.28), rgba(239,68,68,.18));border-color:rgba(239,68,68,.4);color:#fecaca}
+
+/* Spacing between adjacent buttons */
+.btn + .btn { margin-left:8px; }
+.stack .btn + .btn { margin-left:0; margin-top:8px; }
+
+/* Small variant */
+.btn.sm { min-width:100px; min-height:38px; padding:10px 14px; font-size:13px; }
 
 /* Grid layout */
 .grid{display:grid;grid-template-columns:360px 1fr;gap:18px;margin-top:14px}

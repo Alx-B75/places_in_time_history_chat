@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
+import LogoCard from '../components/LogoCard.jsx'
 
 export default function UserLogin(){
   const [email, setEmail] = useState('')
@@ -51,16 +52,21 @@ export default function UserLogin(){
   }
 
   return (
-    <div style={{padding:24, maxWidth:420, margin:'40px auto'}}>
-      <h2>User Login</h2>
-      <form onSubmit={submit}>
-        <label>Email</label>
-        <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" />
-        <label>Password</label>
-        <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" />
-        <button type="submit">Sign in</button>
-        {err ? <div style={{color:'crimson', marginTop:8}}>{err}</div> : null}
-      </form>
+    <div className="wrap" style={{maxWidth:560}}>
+      <LogoCard />
+      <div className="banner" style={{margin:'8px 0'}}>
+        <div className="brand-title"><h1 style={{margin:0}}>Sign in</h1><div className="muted">Access your dashboard and threads</div></div>
+      </div>
+      <div className="card panel" style={{padding:18}}>
+        <form onSubmit={submit} className="stack">
+          <label>Email</label>
+          <input className="pit-input" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" />
+          <label>Password</label>
+          <input className="pit-input" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" />
+          <button className="btn btn-primary" type="submit">Sign in</button>
+          {err ? <div className="muted" style={{color:'#fca5a5'}}>{err}</div> : null}
+        </form>
+      </div>
     </div>
   )
 }

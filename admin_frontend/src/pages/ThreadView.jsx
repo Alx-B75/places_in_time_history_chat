@@ -1,58 +1,72 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
+import LogoCard from '../components/LogoCard.jsx'
 
-export default function ThreadView(){
+export default function ThreadView() {
   const { id } = useParams()
   const threadId = useMemo(() => parseInt(id, 10), [id])
   const location = useLocation()
   const fromGuestUpgrade = location.state && location.state.fromGuestUpgrade === true
+  const navigate = useNavigate()
   const { user, loading } = useAuth()
+
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
-  const [figure, setFigure] = useState('')
+  // Figure selection removed for existing threads (will be used only at creation time)
+  const [figures] = useState([])
   const [err, setErr] = useState('')
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleInput, setTitleInput] = useState('')
-  const [figures, setFigures] = useState([])
   const [sending, setSending] = useState(false)
-  const navigate = useNavigate()
+  const [figure, setFigure] = useState(null)
+  const inputRef = useRef(null)
 
   useEffect(() => {
-    if(loading || !user || !threadId) return
-    ;(async () => {
-      try{
+    if (loading || !user || !threadId) return
+    ; (async () => {
+      try {
         const token = sessionStorage.getItem('userToken') || localStorage.getItem('access_token')
-        const [threadRes, msgsRes, figsRes] = await Promise.all([
+        const [threadRes, msgsRes] = await Promise.all([
           fetch(`/threads/${threadId}`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} }),
-          fetch(`/threads/${threadId}/messages`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} }),
-          fetch('/figures')
+          fetch(`/threads/${threadId}/messages`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
         ])
-        if(threadRes.ok){
+        let figureSlug = null
+        if (threadRes.ok) {
           const thread = await threadRes.json()
           setTitleInput(thread.title || `Thread #${threadId}`)
+          figureSlug = thread.figure_slug || null
         }
-        if(!msgsRes.ok) throw new Error(await msgsRes.text())
+        if (!msgsRes.ok) throw new Error(await msgsRes.text())
         const msgs = await msgsRes.json()
         setMessages(msgs || [])
-        if(figsRes.ok){
-          const list = await figsRes.json()
-          setFigures(list || [])
+        // fetch figure details for hero display
+        if (figureSlug) {
+          try{
+            const f = await fetch(`/figures/${encodeURIComponent(figureSlug)}`)
+            if (f.ok){ setFigure(await f.json()) }
+          }catch(_){ /* ignore */ }
         }
-      }catch(e){ setErr(e.message || 'Failed to load thread') }
+        // No figure list needed here; selection moved to creation flow.
+      } catch (e) { setErr(e.message || 'Failed to load thread') }
     })()
   }, [loading, user, threadId])
 
-  async function send(e){
+  useEffect(() => {
+    // autofocus compose area on load
+    if(inputRef.current){ inputRef.current.focus() }
+  }, [inputRef])
+
+  async function send(e) {
     e.preventDefault()
     setErr('')
-    if(!text.trim() || sending) return
-    try{
+    if (!text.trim() || sending) return
+    try {
       setSending(true)
       const payload = {
         user_id: user.id,
         thread_id: threadId,
-        figure_slug: figure || undefined,
+  // figure_slug intentionally omitted in thread view updates.
         message: text
         // model_used intentionally omitted to allow backend llm_config to decide.
       }
@@ -65,41 +79,33 @@ export default function ThreadView(){
         },
         body: JSON.stringify(payload)
       })
-      if(!res.ok) throw new Error(await res.text())
-      // After a successful /ask, re-fetch the authoritative history to avoid duplicates
+      if (!res.ok) throw new Error(await res.text())
       const msgsRes = await fetch(`/threads/${threadId}/messages`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
-      if(!msgsRes.ok) throw new Error(await msgsRes.text())
+      if (!msgsRes.ok) throw new Error(await msgsRes.text())
       const fresh = await msgsRes.json()
       setMessages(fresh || [])
       setText('')
-    }catch(e){ setErr(e.message || 'Ask failed') }
-    finally{ setSending(false) }
+    } catch (e) { setErr(e.message || 'Ask failed') }
+    finally { setSending(false) }
   }
 
-  if(loading) return <div style={{padding:24}}>Loading…</div>
-  if(!user) return <div style={{padding:24}}>Please log in.</div>
+  if (loading) return <div style={{ padding: 24 }}>Loading…</div>
+  if (!user) return <div style={{ padding: 24 }}>Please log in.</div>
 
   return (
-    <div style={{padding:16, maxWidth:900, margin:'0 auto'}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <button
-            className="btn"
-            onClick={() => {
-              if(fromGuestUpgrade){
-                navigate('/dashboard', { replace: true })
-              }else{
-                navigate(-1)
-              }
-            }}
-          >← Back</button>
+    <div className="wrap" style={{ maxWidth: 980 }}>
+      <LogoCard wide />
+      <div className="banner" style={{ margin: '8px 0', justifyContent:'space-between' }}>
+        <div className="brand-title">
+          <h1 style={{ margin: 0 }}>Conversation</h1>
+          <div className="muted">Thread #{threadId}</div>
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <div className="banner-actions">
           {editingTitle ? (
             <form onSubmit={async (e) => {
               e.preventDefault()
               setErr('')
-              try{
+              try {
                 const token = sessionStorage.getItem('userToken') || localStorage.getItem('access_token')
                 const res = await fetch(`/threads/${threadId}/title`, {
                   method: 'PATCH',
@@ -109,45 +115,78 @@ export default function ThreadView(){
                   },
                   body: JSON.stringify({ title: titleInput })
                 })
-                if(!res.ok) throw new Error(await res.text())
-              }catch(e){ setErr(e.message || 'Rename failed') }
-              finally{ setEditingTitle(false) }
-            }} style={{display:'flex',gap:8}}>
-              <input value={titleInput} onChange={e=>setTitleInput(e.target.value)} style={{padding:'6px 10px'}} />
+                if (!res.ok) throw new Error(await res.text())
+              } catch (e) { setErr(e.message || 'Rename failed') }
+              finally { setEditingTitle(false) }
+            }} className="row">
+              <input className="pit-input" value={titleInput} onChange={e => setTitleInput(e.target.value)} placeholder={`Thread #${threadId}`} />
               <button className="btn btn-primary" type="submit">Save</button>
-              <button className="btn" type="button" onClick={()=>{setEditingTitle(false)}}>Cancel</button>
+              <button className="btn" type="button" onClick={() => { setEditingTitle(false) }}>Cancel</button>
             </form>
           ) : (
-            <h2 style={{margin:'8px 0',display:'flex',alignItems:'center',gap:12}}>
-              {titleInput || `Thread #${threadId}`}
-              <button className="btn" type="button" onClick={()=>setEditingTitle(true)} style={{fontSize:12,padding:'4px 8px'}}>Rename</button>
-            </h2>
+            <div className="row" style={{ gap: 12 }}>
+              <button
+                className="btn"
+                onClick={() => {
+                  if (fromGuestUpgrade) {
+                    navigate('/dashboard', { replace: true })
+                  } else {
+                    navigate(-1)
+                  }
+                }}
+              >← Back</button>
+              <h2 style={{ margin: '8px 0' }}>{titleInput || `Thread #${threadId}`}</h2>
+              <button className="btn" type="button" onClick={() => setEditingTitle(true)} style={{ fontSize: 12, padding: '4px 8px' }}>Rename</button>
+            </div>
           )}
         </div>
-        <span style={{flexGrow:1}} />
+        <span style={{ flexGrow: 1 }} />
       </div>
-      {err ? <div style={{color:'crimson'}}>{err}</div> : null}
-      <div style={{border:'1px solid #eee',borderRadius:8,padding:12,minHeight:240,marginBottom:12}}>
-        {messages.length === 0 ? <div style={{color:'#666'}}>No messages yet.</div> : (
-          <div style={{display:'flex',flexDirection:'column',gap:8}}>
-            {messages.map((m,i) => (
-              <div key={i} style={{alignSelf: m.role==='user' ? 'flex-end' : 'flex-start', maxWidth:'75%'}}>
-                <div style={{fontSize:12,color:'#888'}}>{m.role}</div>
-                <div style={{background: m.role==='user' ? '#e8f0ff' : '#f6f6f6', padding:10, borderRadius:10}}>{m.message}</div>
-              </div>
-            ))}
+      {err ? <div className="muted">{err}</div> : null}
+      {/* Figure hero for consistency with guest page */}
+      {figure ? (
+        <div className="figure-hero card" style={{marginBottom:18}}>
+          <div className="figure-row" style={{alignItems:'flex-start', gap:18}}>
+            {figure?.image_url ? (
+              <img src={figure.image_url} alt={figure.name} className="avatar-lg" style={{border:'1px solid rgba(255,255,255,.18)'}} />
+            ) : (
+              <div className="avatar-lg" style={{background:'#0a1228',border:'1px solid rgba(255,255,255,.18)'}} />
+            )}
+            <div className="figure-hero-text" style={{flex:1}}>
+              <div className="figure-name-serif" style={{fontSize:'clamp(22px,3vw,32px)', fontWeight:600}}>{figure?.name}</div>
+              <div className="figure-desc-serif" style={{fontSize:'clamp(16px,2vw,20px)'}}>{figure?.short_summary}</div>
+            </div>
           </div>
-        )}
+        </div>
+      ) : null}
+      {!figure && (
+        <div className="card panel" style={{marginBottom:18, padding:18, textAlign:'center'}}>
+          <p className="muted" style={{margin:0}}>No figure selected. <button className="btn sm" onClick={()=>navigate('/figures')}>Choose a Figure</button></p>
+        </div>
+      )}
+      <div className="card chat-card">
+        <div className="messages">
+          {messages.length === 0 ? <div className="muted">No messages yet.</div> : (
+            messages.map((m, i) => (
+              <div key={i} className={m.role === 'user' ? 'msg-user' : 'msg-assistant'}>{m.message}</div>
+            ))
+          )}
+        </div>
+        <form onSubmit={send} className="compose chat-input-row" style={{flexDirection:'column',alignItems:'stretch'}}>
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(e) } }}
+            placeholder={figure ? `Ask ${figure.name} a question…` : 'Type your message (Enter to send, Shift+Enter for newline)'}
+            disabled={sending}
+            style={{width:'100%', boxSizing:'border-box'}}
+            ref={inputRef}
+          />
+          <div style={{display:'flex',justifyContent:'flex-end'}}>
+            <button className="send-btn" type="submit" disabled={sending}>{sending ? 'Sending…' : 'Send'}</button>
+          </div>
+        </form>
       </div>
-
-      <form onSubmit={send} style={{display:'flex',gap:8,alignItems:'center'}}>
-        <select value={figure} onChange={e=>setFigure(e.target.value)}>
-          <option value="">No figure</option>
-          {figures.map(f => <option key={f.slug} value={f.slug}>{f.name}</option>)}
-        </select>
-        <input style={{flex:1}} value={text} onChange={e=>setText(e.target.value)} placeholder="Type your message" disabled={sending} />
-        <button className="btn btn-primary" type="submit" disabled={sending}>{sending ? 'Sending…' : 'Send'}</button>
-      </form>
     </div>
   )
 }

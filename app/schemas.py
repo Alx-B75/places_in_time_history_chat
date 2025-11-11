@@ -67,6 +67,13 @@ class ThreadRead(ThreadCreate):
     model_config = {"from_attributes": True}
 
 
+class ThreadReadWithPreview(ThreadRead):
+    """Thread response enriched with the first user message for context previews."""
+
+    first_user_message: Optional[str] = None
+    first_message_at: Optional[datetime] = None
+
+
 class ChatMessageCreate(BaseModel):
     """
     Input schema for creating a single message in a conversation.
@@ -127,6 +134,7 @@ class AskRequest(BaseModel):
     source_page: Optional[str] = None
     model_used: Optional[str] = None
     thread_id: Optional[int] = None
+    skip_llm: Optional[bool] = False
 
 
 class AskResponse(BaseModel):
@@ -259,5 +267,17 @@ class AuditLogRead(BaseModel):
     object_id: Optional[str] = None
     diff_json: Optional[str] = None
     ip: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class FavoriteCreate(BaseModel):
+    figure_slug: str
+
+
+class FavoriteRead(BaseModel):
+    id: int
+    user_id: int
+    figure_slug: str
 
     model_config = {"from_attributes": True}

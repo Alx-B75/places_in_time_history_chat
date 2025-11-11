@@ -8,7 +8,7 @@ actions.
 """
 
 import json
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -52,6 +52,7 @@ class User(Base):
     chats = relationship("Chat", back_populates="user", cascade="all, delete")
     threads = relationship("Thread", back_populates="user", cascade="all, delete")
     audit_logs = relationship("AuditLog", back_populates="actor", cascade="all, delete")
+    favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
 
 
 class Thread(Base):
@@ -69,6 +70,24 @@ class Thread(Base):
 
     user = relationship("User", back_populates="threads")
     chats = relationship("Chat", back_populates="thread", cascade="all, delete-orphan")
+
+
+class Favorite(Base):
+    """
+    Stores a user's favorited historical figures by slug.
+    Unique per (user_id, figure_slug).
+    """
+
+    __tablename__ = "favorites"
+    __table_args__ = (
+        UniqueConstraint("user_id", "figure_slug", name="uq_favorite_user_figure"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    figure_slug = Column(String, nullable=False, index=True)
+
+    user = relationship("User", back_populates="favorites")
 
 
 class HistoricalFigure(FigureBase):
