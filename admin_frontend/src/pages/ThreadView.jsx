@@ -20,6 +20,8 @@ export default function ThreadView() {
   const [titleInput, setTitleInput] = useState('')
   const [sending, setSending] = useState(false)
   const [figure, setFigure] = useState(null)
+  const [isFav, setIsFav] = useState(false)
+  const [favBusy, setFavBusy] = useState(false)
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export default function ThreadView() {
         let figureSlug = null
         if (threadRes.ok) {
           const thread = await threadRes.json()
-          setTitleInput(thread.title || `Thread #${threadId}`)
+          setTitleInput(thread.title || `New thread`)
           figureSlug = thread.figure_slug || null
         }
         if (!msgsRes.ok) throw new Error(await msgsRes.text())
@@ -45,6 +47,15 @@ export default function ThreadView() {
           try{
             const f = await fetch(`/figures/${encodeURIComponent(figureSlug)}`)
             if (f.ok){ setFigure(await f.json()) }
+          }catch(_){ /* ignore */ }
+          // Load favorites to set current state
+          try{
+            const favRes = await fetch('/user/favorites', { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
+            if(favRes.ok){
+              const favs = await favRes.json()
+              const slugs = Array.isArray(favs) ? favs.map(x=>x.figure_slug) : []
+              setIsFav(slugs.includes(figureSlug))
+            }
           }catch(_){ /* ignore */ }
         }
         // No figure list needed here; selection moved to creation flow.
@@ -98,7 +109,7 @@ export default function ThreadView() {
       <div className="banner" style={{ margin: '8px 0', justifyContent:'space-between' }}>
         <div className="brand-title">
           <h1 style={{ margin: 0 }}>Conversation</h1>
-          <div className="muted">Thread #{threadId}</div>
+          {/* Hide internal thread id from user */}
         </div>
         <div className="banner-actions">
           {editingTitle ? (
@@ -135,8 +146,8 @@ export default function ThreadView() {
                   }
                 }}
               >← Back</button>
-              <h2 style={{ margin: '8px 0' }}>{titleInput || `Thread #${threadId}`}</h2>
-              <button className="btn" type="button" onClick={() => setEditingTitle(true)} style={{ fontSize: 12, padding: '4px 8px' }}>Rename</button>
+              <h2 style={{ margin: '8px 0' }}>{titleInput || `New thread`}</h2>
+              <button className="btn btn-primary" type="button" onClick={() => setEditingTitle(true)} style={{ fontSize: 12, padding: '6px 10px' }}>Rename</button>
             </div>
           )}
         </div>
@@ -145,16 +156,36 @@ export default function ThreadView() {
       {err ? <div className="muted">{err}</div> : null}
       {/* Figure hero for consistency with guest page */}
       {figure ? (
-        <div className="figure-hero card" style={{marginBottom:18}}>
-          <div className="figure-row" style={{alignItems:'flex-start', gap:18}}>
+        <div className="figure-hero card" style={{marginBottom:18, textAlign:'center'}}>
+          <div className="figure-row" style={{alignItems:'center', justifyContent:'center', gap:18, flexDirection:'column'}}>
             {figure?.image_url ? (
               <img src={figure.image_url} alt={figure.name} className="avatar-lg" style={{border:'1px solid rgba(255,255,255,.18)'}} />
             ) : (
               <div className="avatar-lg" style={{background:'#0a1228',border:'1px solid rgba(255,255,255,.18)'}} />
             )}
-            <div className="figure-hero-text" style={{flex:1}}>
-              <div className="figure-name-serif" style={{fontSize:'clamp(22px,3vw,32px)', fontWeight:600}}>{figure?.name}</div>
-              <div className="figure-desc-serif" style={{fontSize:'clamp(16px,2vw,20px)'}}>{figure?.short_summary}</div>
+            <div className="figure-hero-text" style={{maxWidth:760}}>
+              <div className="figure-name-serif" style={{fontSize:'clamp(22px,3vw,32px)', fontWeight:700, textAlign:'center'}}>{figure?.name}</div>
+              <div className="figure-desc-serif" style={{fontSize:'clamp(16px,2vw,20px)', textAlign:'center', marginTop:6}}>{figure?.short_summary}</div>
+            </div>
+            <div className="row" style={{gap:10, marginTop:6}}>
+              <button
+                className={`btn sm ${isFav ? 'btn-primary' : ''}`}
+                onClick={async ()=>{
+                  if(!figure) return
+                  if(favBusy) return
+                  setFavBusy(true)
+                  try{
+                    const token = sessionStorage.getItem('userToken') || localStorage.getItem('access_token')
+                    if(!token) return
+                    const method = isFav ? 'DELETE' : 'POST'
+                    const res = await fetch(`/user/favorites/${encodeURIComponent(figure.slug)}`, { method, headers: { 'Authorization': `Bearer ${token}` }})
+                    if(!res.ok && !(isFav && res.status===204)) throw new Error(await res.text())
+                    setIsFav(!isFav)
+                  }catch(e){ setErr(e.message || 'Favorite toggle failed') }
+                  finally{ setFavBusy(false) }
+                }}
+                disabled={favBusy}
+              >{isFav ? '★ Favorited' : '☆ Favorite'}</button>
             </div>
           </div>
         </div>

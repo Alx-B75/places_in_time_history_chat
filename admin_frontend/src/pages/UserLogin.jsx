@@ -53,7 +53,7 @@ export default function UserLogin(){
 
   return (
     <div className="wrap" style={{maxWidth:560}}>
-      <LogoCard />
+      <LogoCard wide />
       <div className="banner" style={{margin:'8px 0'}}>
         <div className="brand-title"><h1 style={{margin:0}}>Sign in</h1><div className="muted">Access your dashboard and threads</div></div>
       </div>

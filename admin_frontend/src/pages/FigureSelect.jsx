@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import LogoCard from '../components/LogoCard.jsx'
@@ -11,6 +11,9 @@ export default function FigureSelect(){
   const [creating, setCreating] = useState(false)
   const [favs, setFavs] = useState(new Set())
   const navigate = useNavigate()
+  const [favLoading, setFavLoading] = useState(null) // slug currently toggling
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
 
   useEffect(() => {
     if(loading) return
@@ -70,7 +73,15 @@ export default function FigureSelect(){
     finally{ setCreating(false) }
   }
 
+  function showToast(msg){
+    setToast(msg)
+    if(toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(()=> setToast(null), 2500)
+  }
+
   async function toggleFavorite(slug){
+    if(favLoading) return
+    setFavLoading(slug)
     try{
       const token = sessionStorage.getItem('userToken') || localStorage.getItem('access_token')
       if(!token){
@@ -78,6 +89,7 @@ export default function FigureSelect(){
         const copy = new Set(favs)
         copy.has(slug) ? copy.delete(slug) : copy.add(slug)
         setFavs(copy)
+        showToast(copy.has(slug) ? 'Favorited (local only)' : 'Unfavorited (local only)')
         return
       }
       const isFav = favs.has(slug)
@@ -90,12 +102,14 @@ export default function FigureSelect(){
       const next = new Set(favs)
       isFav ? next.delete(slug) : next.add(slug)
       setFavs(next)
+      showToast(isFav ? 'Removed from favorites' : 'Added to favorites')
     }catch(e){ setErr(e.message || 'Failed to toggle favorite') }
+    finally{ setFavLoading(null) }
   }
 
   return (
     <div className="wrap" style={{maxWidth:1120}}>
-      <LogoCard />
+      <LogoCard wide />
       <div className="banner" style={{margin:'8px 0', justifyContent:'space-between'}}>
         <div className="brand-title">
           <h1 style={{margin:0}}>Choose a Figure</h1>
@@ -135,11 +149,21 @@ export default function FigureSelect(){
             <div className="fig-desc" style={{flex:1}}>{f.short_summary || `About ${f.name} (${f.slug})`}</div>
             <div className="fig-actions">
               <button disabled={creating} className="btn btn-primary sm" onClick={()=>startWith(f.slug)}>{creating ? 'Creating…' : 'Select'}</button>
-              <button className={`btn sm fave-btn ${isFav ? 'active' : ''}`} aria-pressed={isFav} onClick={()=>toggleFavorite(f.slug)}>{isFav ? '★ Favorited' : '☆ Favorite'}</button>
+              <button
+                className={`btn sm fave-btn ${isFav ? 'active' : ''}`}
+                aria-pressed={isFav}
+                onClick={()=>toggleFavorite(f.slug)}
+                disabled={!!favLoading}
+                aria-busy={favLoading === f.slug}
+              >{favLoading === f.slug ? '…' : (isFav ? '★ Favorited' : '☆ Favorite')}</button>
             </div>
           </div>
         )})}
       </div>
+
+      {toast && (
+        <div style={{position:'fixed',bottom:24,right:24,background:'rgba(0,0,0,.8)',color:'#fff',padding:'10px 14px',borderRadius:12,fontSize:'0.85rem',boxShadow:'0 4px 18px rgba(0,0,0,.35)',zIndex:1000}} role="status" aria-live="polite">{toast}</div>
+      )}
 
       <style>{`
         .fig-grid{ display:grid; grid-template-columns: repeat( auto-fit, minmax(260px, 1fr) ); gap:12px; }
@@ -152,6 +176,7 @@ export default function FigureSelect(){
   .fave-btn{ background:linear-gradient(180deg,#c19d00,#a88000); color:#1a1200; border-color:#e8c454; }
   .fave-btn.active{ background:linear-gradient(180deg,#ffd24d,#e5b100); color:#1a1200; border-color:#ffe08a; }
   .fave-btn:hover{ border-color:#f9d86c; box-shadow:0 0 0 3px rgba(255,215,99,.25), var(--shadow); }
+  .fave-btn[disabled]{ opacity:.55; cursor:not-allowed; }
       `}</style>
     </div>
   )

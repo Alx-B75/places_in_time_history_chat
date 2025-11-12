@@ -116,6 +116,7 @@ export default function Dashboard(){
             disabled={creating || !user}
             onClick={() => navigate('/figures')}
           >Start Conversation</button>
+          <button className="btn" onClick={() => navigate('/figures')} disabled={creating}>View Figures</button>
           <button className="btn" onClick={() => navigate('/threads')}>View Threads</button>
           <button className="btn" onClick={logout}>Logout</button>
         </div>
@@ -128,11 +129,19 @@ export default function Dashboard(){
           <div className="card panel" style={{padding:20}}>
             <h2 style={{margin:'0 0 12px', fontSize:'var(--fs-lg)'}}>Quick Start</h2>
             {favDetails.length === 0 ? (
-              <div className="muted" style={{padding:4}}>
-                No favorites yet. Browse figures to add some.
-                <div style={{marginTop:12}}>
-                  <button className="btn btn-primary sm" onClick={()=>navigate('/figures')} disabled={creating}>Browse Figures →</button>
-                </div>
+              <div style={{
+                padding:20,
+                border:'1px dashed var(--border)',
+                borderRadius:12,
+                background:'linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))',
+                display:'flex',
+                flexDirection:'column',
+                alignItems:'flex-start',
+                gap:12
+              }}>
+                <h3 style={{margin:0,fontSize:'0.95rem'}}>No favorites yet</h3>
+                <p className="muted" style={{margin:0,fontSize:'0.8rem',lineHeight:1.3}}>Add favorites to quickly jump into conversations. Explore figures and tap ☆ Favorite on ones you like.</p>
+                <button className="btn btn-primary" onClick={()=>navigate('/figures')} disabled={creating}>Browse Figures →</button>
               </div>
             ) : (
               <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:14}}>
@@ -148,7 +157,6 @@ export default function Dashboard(){
                       )}
                       <div style={{flex:1}}>
                         <div style={{fontWeight:600, fontSize:'0.95rem'}}>{fd.name}</div>
-                        <div className="muted" style={{fontSize:'0.75rem'}}>{fd.slug}</div>
                       </div>
                     </div>
                     <div style={{display:'flex', justifyContent:'flex-start', gap:8}}>
@@ -160,7 +168,7 @@ export default function Dashboard(){
             )}
           </div>
           <div className="card panel" style={{padding:20}}>
-            <h2 style={{margin:'0 0 12px', fontSize:'var(--fs-lg)'}}>History & Topics</h2>
+            <h2 style={{margin:'0 0 12px', fontSize:'var(--fs-lg)'}}>History & Topics <span style={{fontSize:'0.8rem', color:'#9cc3c8', marginLeft:8, padding:'2px 8px', border:'1px solid var(--border)', borderRadius:999}}>Coming soon</span></h2>
             <div style={{display:'flex',flexWrap:'wrap',gap:10}}>
               {TOPICS.map(t => (
                 <div key={t} style={{background:'rgba(148,163,184,.12)',padding:'8px 12px',borderRadius:'var(--radius-md)',fontSize:'var(--fs-sm)',color:'var(--text)'}}>{t}</div>
@@ -170,7 +178,7 @@ export default function Dashboard(){
         </div>
         <aside className="stack" style={{gap:20}}>
           <div className="card panel" style={{padding:20}}>
-            <h2 style={{margin:'0 0 12px', fontSize:'var(--fs-lg)'}}>Interaction Style</h2>
+            <h2 style={{margin:'0 0 12px', fontSize:'var(--fs-lg)'}}>Interaction Style <span style={{fontSize:'0.8rem', color:'#9cc3c8', marginLeft:8, padding:'2px 8px', border:'1px solid var(--border)', borderRadius:999}}>Coming soon</span></h2>
             <p className="muted" style={{marginTop:0,fontSize:'var(--fs-sm)'}}>Choose how the assistant should speak to you.</p>
             <div className="stack" style={{gap:8}}>
               {modes.map(m => (
