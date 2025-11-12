@@ -95,6 +95,19 @@ def serve_admin_ui() -> FileResponse:
         return Response(content="<html><body><h1>Admin UI</h1><p>admin.html not found in static_frontend.</p></body></html>", media_type="text/html")
     return FileResponse(path, media_type="text/html")
 
+
+@app.get("/ops/console", response_class=FileResponse)
+def serve_ops_console() -> FileResponse:
+    """Serve an innocuous admin sign-in page (blank console).
+
+    This page performs an admin-only login via /auth/admin/login and, on success,
+    stores tokens in sessionStorage before redirecting to /admin/ui.
+    """
+    path = STATIC_DIR / "ops_console.html"
+    if not path.exists():
+        return Response(content="<html><body></body></html>", media_type="text/html")
+    return FileResponse(path, media_type="text/html")
+
 # Single CORS middleware combining dev and configured origins to avoid double-wrapping
 app.add_middleware(
     CORSMiddleware,

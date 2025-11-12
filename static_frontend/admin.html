@@ -58,11 +58,12 @@
     .tab { padding: 10px 14px; border-radius: 10px; cursor: pointer; color: var(--muted); border: 1px solid transparent; }
     .tab.active { color: var(--text); border-color: var(--border); background: rgba(255,255,255,0.03); }
     .tab.disabled { opacity: .35; pointer-events: none; }
-    .panel { padding: 16px; }
-    .grid { width: 100%; border-collapse: collapse; }
-    .grid th, .grid td { border-bottom: 1px solid var(--border); padding: 10px 8px; font-size: 14px; }
+  .panel { padding: 16px; overflow-x: auto; }
+  /* Make table allow horizontal scroll when content is wider than panel */
+  .grid { width: max-content; min-width: 100%; border-collapse: collapse; }
+  .grid th, .grid td { border-bottom: 1px solid var(--border); padding: 10px 8px; font-size: 14px; white-space: nowrap; }
     .grid th { text-align: left; color: var(--muted); }
-    .row-actions { display: flex; gap: 8px; }
+  .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .muted { color: var(--muted); font-size: 12px; }
     .status { font-size: 12px; color: var(--muted); }
     .good { color: var(--accent-2); }
@@ -177,6 +178,6 @@
     </div>
   </div>
 
-  <script src="/static/admin.js?v=rag-ui-fixed"></script>
+  <script src="/static/admin.js?v=admin-login"></script>
 </body>
 </html>

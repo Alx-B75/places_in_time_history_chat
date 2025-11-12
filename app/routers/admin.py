@@ -206,6 +206,48 @@ def update_user_role(
     return schemas.UserRead.from_orm(user)
 
 
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(
+    user_id: int,
+    request: Request,
+    admin_user: models.User = Depends(get_admin_user),
+    db_chat: Session = Depends(get_db_chat),
+) -> Response:
+    """
+    Delete a user account.
+
+    Safeguards:
+    - An admin cannot delete their own account.
+    - Prevent deleting the last remaining admin.
+    """
+    target = db_chat.query(models.User).filter(models.User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if int(admin_user.id) == int(target.id):
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+
+    # If deleting an admin, ensure at least one admin remains
+    if (target.role or "user") == "admin":
+        admin_count = db_chat.query(models.User).filter(models.User.role == "admin").count()
+        if admin_count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot delete the last admin user")
+
+    db_chat.delete(target)
+    db_chat.add(
+        models.AuditLog(
+            actor_user_id=admin_user.id,
+            action="user.delete",
+            object_type="user",
+            object_id=str(user_id),
+            diff_json=None,
+            ip=request.client.host if request.client else None,
+        )
+    )
+    db_chat.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/figures", response_model=List[schemas.HistoricalFigureRead])
 def list_figures_admin(
     _: models.User = Depends(get_admin_user),

@@ -28,10 +28,18 @@ def ingest_all_context_chunks():
         for ctx in contexts:
             if ctx.content:
                 embedding = get_embedding(ctx.content)
+                # enrich metadata so admin UI and prompts can show source details
+                meta = {
+                    "figure_slug": ctx.figure_slug,
+                    "source_name": getattr(ctx, "source_name", None),
+                    "source_url": getattr(ctx, "source_url", None),
+                    "content_type": getattr(ctx, "content_type", None),
+                    "is_manual": bool(getattr(ctx, "is_manual", 0)),
+                }
                 collection.add(
                     documents=[ctx.content],
                     embeddings=[embedding],
-                    metadatas=[{"figure_slug": ctx.figure_slug}],
+                    metadatas=[meta],
                     ids=[f"{ctx.figure_slug}-{ctx.id}"]
                 )
                 count += 1

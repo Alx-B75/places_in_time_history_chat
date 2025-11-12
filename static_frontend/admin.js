@@ -173,8 +173,8 @@
   }
 
   const API = {
-    login: (username, password) =>
-      fetchJSON("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+    adminLogin: (username, password) =>
+      fetchJSON("/auth/admin/login", { method: "POST", body: JSON.stringify({ username, password }) }),
     stepUp: (password) =>
       fetch("/auth/admin/stepup", {
         method: "POST",
@@ -185,7 +185,8 @@
 
     // users
     listUsers: () => fetchJSON("/admin/users", {}, true),
-    setUserRole: (id, role) => fetchJSON(`/admin/users/${id}/role`, { method: "PATCH", body: JSON.stringify({ role }) }, true),
+  setUserRole: (id, role) => fetchJSON(`/admin/users/${id}/role`, { method: "PATCH", body: JSON.stringify({ role }) }, true),
+  deleteUser: (id) => fetchJSON(`/admin/users/${id}`, { method: "DELETE" }, true),
 
     // figures
     listFigures: () => fetchJSON("/admin/figures", {}, true),
@@ -214,17 +215,12 @@
     if (!username || !pw) return false;
 
     try {
-      if (dom.loginStatus) dom.loginStatus.textContent = "Signing in…";
-      const login = await API.login(username, pw);
-      if (!login?.access_token) throw new Error("Login failed");
-      state.userToken = login.access_token;
+      if (dom.loginStatus) dom.loginStatus.textContent = "Signing in (admin)…";
+      const login = await API.adminLogin(username, pw);
+      if (!login?.admin_access_token || !login?.access_token) throw new Error("Admin login failed");
+      state.userToken = login.access_token; // kept to allow step-up refresh flow
+      state.adminToken = login.admin_access_token;
       state.password = pw;
-      setAuthUI();
-
-      if (dom.loginStatus) dom.loginStatus.textContent = "Stepping up…";
-      const r = await API.stepUp(pw);
-      if (!r?.admin_access_token) throw new Error(r?.detail || "Admin step-up failed");
-      state.adminToken = r.admin_access_token;
       saveTokens();
       setAuthUI();
       scheduleAdminRefresh();
@@ -299,6 +295,7 @@
           <div class="row-actions">
             <button class="btn" data-act="promote" data-id="${u.id}">Make Admin</button>
             <button class="btn" data-act="demote" data-id="${u.id}">Make User</button>
+            <button class="btn danger" data-act="delete" data-id="${u.id}">Delete</button>
           </div>
         </td>
       `;
@@ -309,7 +306,12 @@
         const id = btn.getAttribute("data-id");
         const act = btn.getAttribute("data-act");
         try {
-          await API.setUserRole(id, act === "promote" ? "admin" : "user");
+          if (act === "delete") {
+            if (!confirm(`Delete user ${id}? This cannot be undone.`)) return;
+            await API.deleteUser(id);
+          } else {
+            await API.setUserRole(id, act === "promote" ? "admin" : "user");
+          }
           await loadUsers();
         } catch (e) { alert(e.message); }
       });

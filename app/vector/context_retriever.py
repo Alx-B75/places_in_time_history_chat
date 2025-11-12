@@ -40,4 +40,11 @@ def search_figure_context(query: str, figure_slug: str, top_k: int = 5) -> List[
     )
     documents = results.get("documents", [[]])[0]
     metadatas = results.get("metadatas", [[]])[0]
-    return [{"content": doc, "metadata": meta} for doc, meta in zip(documents, metadatas)]
+    # Flatten metadata so downstream compaction sees source_name/source_url/etc.
+    out = []
+    for doc, meta in zip(documents, metadatas):
+        flat = {"content": doc}
+        if isinstance(meta, dict):
+            flat.update(meta)
+        out.append(flat)
+    return out

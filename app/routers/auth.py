@@ -46,6 +46,14 @@ class AdminStepUpRequest(BaseModel):
     password: str = Field(min_length=8)
 
 
+class AdminLoginResponse(BaseModel):
+    user_id: int
+    username: str
+    access_token: str
+    admin_access_token: str
+    token_type: str = "bearer"
+
+
 def _validate_password_strength(password: str) -> None:
     """
     Enforce strong password discipline with mixed-case, digits, and symbols.
@@ -144,6 +152,37 @@ async def admin_stepup(
 
     admin_token = create_access_token(data={"sub": user.username}, scope="admin")
     return {"user_id": user.id, "username": user.username, "admin_access_token": admin_token, "token_type": "bearer"}
+
+
+@router.post("/admin/login", response_model=AdminLoginResponse)
+async def admin_login(
+    credentials: schemas.Credentials = Depends(get_credentials),
+    db: Session = Depends(get_db_chat),
+) -> AdminLoginResponse:
+    """
+    Admin-only login that issues both a user-scoped token and an admin-scoped token.
+
+    This avoids exposing the generic user login flow in the Admin UI and ensures
+    only admins can sign in to the dashboard.
+    """
+    user = crud.get_user_by_username(db, username=credentials.username)
+    if not user or user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
+    if not verify_password(credentials.password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+
+    user_token = create_access_token(
+        data={"sub": user.username},
+        minutes=_settings.access_token_expire_minutes,
+        scope="user",
+    )
+    admin_token = create_access_token(data={"sub": user.username}, scope="admin")
+    return AdminLoginResponse(
+        user_id=user.id,
+        username=user.username,
+        access_token=user_token,
+        admin_access_token=admin_token,
+    )
 
 
 @router.get("/me")
