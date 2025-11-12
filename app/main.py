@@ -30,7 +30,12 @@ from app.figures_database import engine as figures_engine
 from app.routers import admin, ask, auth, chat, figures, guest, data
 from app.routers import admin_rag  # new contexts CRUD router
 from app.settings import get_settings
-from app.utils.security import get_current_user, get_admin_user, get_current_user_loose
+from app.utils.security import (
+    get_current_user,
+    get_admin_user,
+    get_current_user_loose,
+    get_admin_user_loose,
+)
 
 
 _settings = get_settings()
@@ -327,12 +332,12 @@ def serve_figures_ui() -> FileResponse:
 
 
 @app.get("/admin/figures-ui", response_class=FileResponse, include_in_schema=False)
-def serve_admin_figures_ui(_: models.User = Depends(get_admin_user)) -> FileResponse:
+def serve_admin_figures_ui(_: models.User = Depends(get_admin_user_loose)) -> FileResponse:
     return FileResponse(STATIC_DIR / "admin_figures.html", media_type="text/html")
 
 
 @app.get("/admin/figure-ui/{slug}", response_class=FileResponse, include_in_schema=False)
-def serve_admin_figure_edit_ui(slug: str, _: models.User = Depends(get_admin_user)) -> FileResponse:
+def serve_admin_figure_edit_ui(slug: str, _: models.User = Depends(get_admin_user_loose)) -> FileResponse:
     _ = slug  # consumed for path binding; page is static
     return FileResponse(STATIC_DIR / "admin_figure_edit.html", media_type="text/html")
 

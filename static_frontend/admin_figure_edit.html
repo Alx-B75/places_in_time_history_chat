@@ -74,11 +74,16 @@
         <div class="kicker">Figure basics</div>
         <div class="form">
           <div><input id="figName" type="text" placeholder="Name" /></div>
-          <div><input id="figSlug" type="text" placeholder="Slug (read-only)" disabled /></div>
+          <div><input id="figSlug" type="text" placeholder="Slug" /></div>
           <div><input id="figEra" type="text" placeholder="Era" /></div>
           <div><input id="figImage" type="text" placeholder="Image URL" /></div>
+          <div class="full" style="display:flex;gap:12px;align-items:flex-start;">
+            <img id="figImagePreview" alt="preview" style="width:180px;height:180px;border-radius:12px;border:1px solid var(--border);object-fit:cover;background:#0b1220" />
+            <div class="muted">Preview updates as you edit the Image URL.</div>
+          </div>
           <div class="full"><input id="figShort" type="text" placeholder="Short summary" /></div>
           <div class="full"><textarea id="figLong" placeholder="Long bio"></textarea></div>
+          <div class="full"><input id="figQuote" type="text" placeholder="Quote" /></div>
         </div>
 
         <div class="kicker" style="margin-top:10px;">Persona Prompt</div>
@@ -104,14 +109,15 @@
     (function () {
       const $ = (s) => document.querySelector(s);
 
-      const state = { userToken: null, adminToken: null, password: null };
+  const state = { userToken: null, adminToken: null, password: null };
       const dom = {
         email: $("#email"), password: $("#password"), loginBtn: $("#loginBtn"), loginStatus: $("#loginStatus"),
         authStatus: $("#authStatus"), adminStatus: $("#adminStatus"), lockAdminBtn: $("#lockAdminBtn"), logoutBtn: $("#logoutBtn"),
         figName: $("#figName"), figSlug: $("#figSlug"), figEra: $("#figEra"), figImage: $("#figImage"),
-        figShort: $("#figShort"), figLong: $("#figLong"),
+        figShort: $("#figShort"), figLong: $("#figLong"), figQuote: $("#figQuote"),
         personaPrompt: $("#personaPrompt"), personaCount: $("#personaCount"),
         saveBtn: $("#saveBtn"), saveStatus: $("#saveStatus"),
+        figImagePreview: $("#figImagePreview"),
       };
 
       const slug = (location.pathname.split("/").pop() || "").trim();
@@ -121,6 +127,8 @@
         else { dom.authStatus.textContent = "Signed out"; dom.authStatus.classList.add("bad"); dom.authStatus.classList.remove("good"); }
         if (state.adminToken) { dom.adminStatus.textContent = "Admin active"; dom.adminStatus.classList.add("good"); }
         else { dom.adminStatus.textContent = "Admin inactive"; dom.adminStatus.classList.remove("good"); }
+        // Disable save when admin isn't active (prevents 401s on PATCH/POST)
+        try { dom.saveBtn.disabled = !state.adminToken; } catch(_){}
       }
 
       async function fetchJSON(path, opts = {}, requireAdmin = false) {
@@ -134,28 +142,24 @@
       }
 
       const API = {
-        login: (username, password) =>
-          fetchJSON("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
-        stepUp: (password) =>
-          fetchJSON("/auth/admin/stepup", { method: "POST", body: JSON.stringify({ password }) })
-            .then((r) => { if (!r?.admin_access_token) throw new Error(r?.detail || "Step-up failed"); return r; }),
+        adminLogin: (username, password) =>
+          fetchJSON("/auth/admin/login", { method: "POST", body: JSON.stringify({ username, password }) }),
         listFigures: () => fetchJSON("/admin/figures", {}, true),                     // admin list (summary)
+        createFigure: (payload) => fetchJSON("/admin/figures", { method: "POST", body: JSON.stringify(payload) }, true),
         updateFigure: (slug, payload) =>                                             // admin update (detail response)
           fetchJSON(`/admin/figures/${encodeURIComponent(slug)}`, { method: "PATCH", body: JSON.stringify(payload) }, true),
         publicFigure: (slug) => fetchJSON(`/figures/${encodeURIComponent(slug)}`),   // public read (if available)
       };
 
       async function loginAndStepUp() {
-        dom.loginStatus.textContent = "Signing in…";
+        dom.loginStatus.textContent = "Signing in (admin)…";
         const username = dom.email.value.trim();
         const password = dom.password.value;
         if (!username || !password) { dom.loginStatus.innerHTML = `<span class="bad">Email and password required</span>`; return; }
         try {
-          const login = await API.login(username, password);
-          state.userToken = login.access_token; state.password = password; setAuthUI();
-          dom.loginStatus.textContent = "Stepping up…";
-          const r = await API.stepUp(password);
-          state.adminToken = r.admin_access_token; setAuthUI();
+          const login = await API.adminLogin(username, password);
+          if (!login?.admin_access_token || !login?.access_token) throw new Error("Admin login failed");
+          state.userToken = login.access_token; state.adminToken = login.admin_access_token; state.password = password; setAuthUI();
           dom.loginStatus.innerHTML = `<span class="good">Admin active</span>`;
           await loadFigure();
         } catch (e) {
@@ -165,13 +169,20 @@
       }
 
       function lockAdmin(){ state.adminToken = null; setAuthUI(); }
-      function logout(){ state.userToken = null; state.adminToken = null; state.password = null; setAuthUI(); }
+  function logout(){ state.userToken = null; state.adminToken = null; state.password = null; setAuthUI(); }
 
       function updatePersonaCounter(){ dom.personaCount.textContent = `${(dom.personaPrompt.value || "").length} chars`; }
 
       async function loadFigure() {
         dom.saveStatus.textContent = "Loading…";
         try {
+          if (slug === 'new') {
+            // Prepare blank form for creation
+            dom.figName.value = ""; dom.figSlug.value = ""; dom.figEra.value = ""; dom.figImage.value = ""; dom.figShort.value = ""; dom.figLong.value = ""; dom.figQuote.value = ""; dom.personaPrompt.value = ""; updatePersonaCounter();
+            dom.saveBtn.textContent = 'Create Figure';
+            dom.saveStatus.textContent = 'Ready to create';
+            return;
+          }
           // 1) Get summary from admin list (always available)
           const rows = await API.listFigures();
           const f = rows.find((x) => (x.slug || "") === slug);
@@ -180,6 +191,7 @@
           dom.figSlug.value = f.slug || "";
           dom.figEra.value = f.era || "";
           dom.figImage.value = f.image_url || "";
+          updateImagePreview();
           dom.figShort.value = f.short_summary || "";
 
           // 2) Try public detail (if router exposes it) to populate long_bio/persona_prompt
@@ -187,6 +199,7 @@
             const pub = await API.publicFigure(slug);
             if (pub?.long_bio != null) dom.figLong.value = pub.long_bio || "";
             if (pub?.persona_prompt != null) dom.personaPrompt.value = pub.persona_prompt || "";
+            if (pub?.quote != null) dom.figQuote.value = pub.quote || "";
           } catch { /* ignore if not available */ }
 
           updatePersonaCounter();
@@ -196,15 +209,63 @@
         }
       }
 
+      function readCookie(name){
+        try{
+          const m = document.cookie.split('; ').find(row => row.startsWith(name + '='));
+          return m ? decodeURIComponent(m.split('=')[1]) : null;
+        }catch(_){ return null }
+      }
+
+      async function bootstrapAuthFromStorage(){
+        try{
+          // Prefer sessionStorage (set by ops console), then localStorage, then cookies
+          state.userToken = sessionStorage.getItem('user_token')
+            || localStorage.getItem('access_token')
+            || readCookie('pit_access_token')
+            || null;
+        }catch(_){ /* noop */ }
+        try{
+          state.adminToken = sessionStorage.getItem('admin_token')
+            || readCookie('pit_admin_token')
+            || null;
+        }catch(_){ /* noop */ }
+        setAuthUI();
+        if(state.userToken){
+          try{ await loadFigure(); }catch(_){ /* handled in loadFigure */ }
+        }
+      }
+
       async function save() {
         dom.saveStatus.textContent = "Saving…";
         try {
+          if (slug === 'new') {
+            const payload = {
+              id: 0,
+              name: dom.figName.value.trim(),
+              slug: dom.figSlug.value.trim(),
+              short_summary: dom.figShort.value.trim() || null,
+              long_bio: dom.figLong.value.trim() || null,
+              era: dom.figEra.value.trim() || null,
+              image_url: dom.figImage.value.trim() || null,
+              quote: dom.figQuote.value.trim() || null,
+              persona_prompt: dom.personaPrompt.value || null,
+            };
+            if (!payload.name || !payload.slug) throw new Error('Name and Slug are required');
+            const created = await API.createFigure(payload);
+            dom.saveStatus.innerHTML = `<span class="good">Created</span>`;
+            // Redirect to real slug page to continue editing
+            const newSlug = created?.slug || payload.slug;
+            location.href = `/admin/figure-ui/${encodeURIComponent(newSlug)}`;
+            return;
+          }
+
           const payload = {};
           if (dom.figName.value.trim())  payload["name"] = dom.figName.value.trim();
           if (dom.figEra.value.trim())   payload["era"] = dom.figEra.value.trim();
           if (dom.figImage.value.trim()) payload["image_url"] = dom.figImage.value.trim();
           if (dom.figShort.value.trim()) payload["short_summary"] = dom.figShort.value.trim();
           if (dom.figLong.value.trim())  payload["long_bio"] = dom.figLong.value.trim();
+          if (dom.figQuote.value.trim() || dom.figQuote.value === "") payload["quote"] = dom.figQuote.value;
           payload["persona_prompt"] = dom.personaPrompt.value; // allow empty to clear
 
           const r = await API.updateFigure(slug, payload);
@@ -212,9 +273,11 @@
           dom.figName.value = r.name || "";
           dom.figEra.value = r.era || "";
           dom.figImage.value = r.image_url || "";
+          updateImagePreview();
           dom.figShort.value = r.short_summary || "";
           dom.figLong.value = r.long_bio || "";
           dom.personaPrompt.value = r.persona_prompt || "";
+          dom.figQuote.value = r.quote || "";
           updatePersonaCounter();
           dom.saveStatus.innerHTML = `<span class="good">Saved</span>`;
         } catch (e) {
@@ -222,15 +285,24 @@
         }
       }
 
+      function updateImagePreview(){
+        const url = (dom.figImage.value || '').trim();
+        if (!url) { dom.figImagePreview.src = ''; dom.figImagePreview.style.visibility='hidden'; return; }
+        dom.figImagePreview.src = url;
+        dom.figImagePreview.style.visibility='visible';
+      }
+
       // Wire up
       $("#loginBtn").addEventListener("click", loginAndStepUp);
       $("#lockAdminBtn").addEventListener("click", lockAdmin);
       $("#logoutBtn").addEventListener("click", logout);
       $("#personaPrompt").addEventListener("input", updatePersonaCounter);
-      $("#saveBtn").addEventListener("click", save);
+  $("#saveBtn").addEventListener("click", save);
+  $("#figImage").addEventListener("input", updateImagePreview);
 
-      setAuthUI();
-      // After authenticating (Sign in & Step Up), click "Save Changes" to persist edits.
+      // Initialize from existing tokens so we don't force a second sign-in if you've already used /ops/console
+      bootstrapAuthFromStorage();
+      // After authenticating, Save will update existing or create new figures depending on slug.
     })();
   </script>
 </body>

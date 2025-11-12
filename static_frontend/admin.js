@@ -293,9 +293,10 @@
         <td>${escapeHTML(u.role || "user")}</td>
         <td>
           <div class="row-actions">
-            <button class="btn" data-act="promote" data-id="${u.id}">Make Admin</button>
-            <button class="btn" data-act="demote" data-id="${u.id}">Make User</button>
-            <button class="btn danger" data-act="delete" data-id="${u.id}">Delete</button>
+            <button class="btn sm" data-act="promote" data-id="${u.id}">Make Admin</button>
+            <button class="btn sm" data-act="demote" data-id="${u.id}">Make User</button>
+            <button class="btn success sm" data-act="contact" data-id="${u.id}" data-email="${escapeAttr(u.username || '')}">Contact</button>
+            <button class="btn danger sm" data-act="delete" data-id="${u.id}">Delete</button>
           </div>
         </td>
       `;
@@ -306,7 +307,12 @@
         const id = btn.getAttribute("data-id");
         const act = btn.getAttribute("data-act");
         try {
-          if (act === "delete") {
+          if (act === "contact") {
+            const email = btn.getAttribute('data-email') || '';
+            if (!email) return alert('No email available for this user.');
+            // Open mail client; wiring to backend can be added later
+            window.location.href = `mailto:${email}?subject=Support`;
+          } else if (act === "delete") {
             if (!confirm(`Delete user ${id}? This cannot be undone.`)) return;
             await API.deleteUser(id);
           } else {
@@ -316,6 +322,33 @@
         } catch (e) { alert(e.message); }
       });
     });
+
+    // Update top scroll width to match table content and sync scroll positions
+    updateUsersScrollSync();
+  }
+
+  function updateUsersScrollSync() {
+    const table = document.getElementById('usersTable');
+    const top = document.getElementById('usersScrollTop');
+    const topInner = document.getElementById('usersScrollTopInner');
+    if (!table || !top || !topInner) return;
+    // Set spacer width to allow top scrollbar
+    topInner.style.width = `${table.scrollWidth}px`;
+    // Sync listeners (one-time; harmless to rebind)
+    let syncing = false;
+    const bottomContainer = table.parentElement; // panel acts as scroll container too, but table is not block-level; rely on parent
+    const onTopScroll = () => {
+      if (syncing) return; syncing = true;
+      bottomContainer.scrollLeft = top.scrollLeft; syncing = false;
+    };
+    const onBottomScroll = () => {
+      if (syncing) return; syncing = true;
+      top.scrollLeft = bottomContainer.scrollLeft; syncing = false;
+    };
+    top.removeEventListener('scroll', onTopScroll);
+    bottomContainer.removeEventListener('scroll', onBottomScroll);
+    top.addEventListener('scroll', onTopScroll);
+    bottomContainer.addEventListener('scroll', onBottomScroll);
   }
 
   // FIGURES
@@ -328,14 +361,14 @@
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${f.id}</td>
-        <td>${escapeHTML(f.name || "")}</td>
+        <td><a href="/admin/figure-ui/${escapeAttr(f.slug || '')}">${escapeHTML(f.name || "")}</a></td>
         <td>${escapeHTML(f.slug || "")}</td>
         <td>${escapeHTML(f.era || "")}</td>
-        <td class="muted">${escapeHTML(f.short_summary || "")}</td>
+        <td class="muted summary-cell" title="${escapeAttr(f.short_summary || '')}">${escapeHTML(f.short_summary || "")}</td>
         <td>
           <div class="row-actions">
-            <button class="btn" data-act="fill" data-slug="${f.slug}">Fill form</button>
-            <button class="btn danger" data-act="del" data-slug="${f.slug}">Delete</button>
+            <button class="btn sm" data-act="fill" data-slug="${f.slug}">Fill form</button>
+            <button class="btn danger sm" data-act="del" data-slug="${f.slug}">Delete</button>
           </div>
         </td>
       `;
@@ -358,6 +391,24 @@
         }
       });
     });
+    // Sync top/bottom scrollbars
+    updateFiguresScrollSync();
+  }
+
+  function updateFiguresScrollSync() {
+    const table = document.getElementById('figuresTable');
+    const top = document.getElementById('figuresScrollTop');
+    const topInner = document.getElementById('figuresScrollTopInner');
+    if (!table || !top || !topInner) return;
+    topInner.style.width = `${table.scrollWidth}px`;
+    let syncing = false;
+    const bottomContainer = table.parentElement;
+    const onTopScroll = () => { if (syncing) return; syncing = true; bottomContainer.scrollLeft = top.scrollLeft; syncing = false; };
+    const onBottomScroll = () => { if (syncing) return; syncing = true; top.scrollLeft = bottomContainer.scrollLeft; syncing = false; };
+    top.removeEventListener('scroll', onTopScroll);
+    bottomContainer.removeEventListener('scroll', onBottomScroll);
+    top.addEventListener('scroll', onTopScroll);
+    bottomContainer.addEventListener('scroll', onBottomScroll);
   }
 
   // RAG summary (matches your /admin/rag/sources body)
@@ -390,7 +441,7 @@
         <td>${links || ""}</td>
         <td>
           <div class="row-actions">
-            <button class="btn" data-act="add-manual" data-slug="${f.slug}">Add manual</button>
+            <button class="btn sm" data-act="add-manual" data-slug="${f.slug}">Add manual</button>
           </div>
         </td>
       `;
@@ -408,6 +459,24 @@
         }
       });
     });
+    // Sync top/bottom scrollbars
+    updateRagScrollSync();
+  }
+
+  function updateRagScrollSync() {
+    const table = document.getElementById('ragTable');
+    const top = document.getElementById('ragScrollTop');
+    const topInner = document.getElementById('ragScrollTopInner');
+    if (!table || !top || !topInner) return;
+    topInner.style.width = `${table.scrollWidth}px`;
+    let syncing = false;
+    const bottomContainer = table.parentElement;
+    const onTopScroll = () => { if (syncing) return; syncing = true; bottomContainer.scrollLeft = top.scrollLeft; syncing = false; };
+    const onBottomScroll = () => { if (syncing) return; syncing = true; top.scrollLeft = bottomContainer.scrollLeft; syncing = false; };
+    top.removeEventListener('scroll', onTopScroll);
+    bottomContainer.removeEventListener('scroll', onBottomScroll);
+    top.addEventListener('scroll', onTopScroll);
+    bottomContainer.addEventListener('scroll', onBottomScroll);
   }
 
   async function addManualSourceFlow(defaultSlug) {

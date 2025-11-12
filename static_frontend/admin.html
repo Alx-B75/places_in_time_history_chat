@@ -59,8 +59,12 @@
     .tab.active { color: var(--text); border-color: var(--border); background: rgba(255,255,255,0.03); }
     .tab.disabled { opacity: .35; pointer-events: none; }
   .panel { padding: 16px; overflow-x: auto; }
-  /* Make table allow horizontal scroll when content is wider than panel */
-  .grid { width: max-content; min-width: 100%; border-collapse: collapse; }
+   /* Make table allow horizontal scroll when content is wider than panel.
+     Force real table layout (override global .grid { display:grid } in site CSS). */
+   .grid { display: table; width: max-content; min-width: 100%; border-collapse: collapse; table-layout: fixed; }
+   .grid thead { display: table-header-group; }
+   .grid tbody { display: table-row-group; }
+   .grid tr { display: table-row; }
   .grid th, .grid td { border-bottom: 1px solid var(--border); padding: 10px 8px; font-size: 14px; white-space: nowrap; }
     .grid th { text-align: left; color: var(--muted); }
   .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -69,6 +73,13 @@
     .good { color: var(--accent-2); }
     .bad { color: var(--danger); }
     .section { border-top: 1px dashed var(--border); padding-top: 12px; margin-top: 12px; }
+  /* Small button variant (approx 50%) */
+  .btn.sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; min-width: 80px; min-height: 30px; }
+  /* Horizontal scroll helpers */
+  .table-scroll-x { overflow-x: auto; overflow-y: hidden; }
+  .table-scroll-spacer { height: 1px; }
+  /* Truncate long summary text */
+  .summary-cell { max-width: 520px; overflow: hidden; text-overflow: ellipsis; }
   </style>
 </head>
 <body>
@@ -98,17 +109,58 @@
       <div class="panel" id="panel-users">
         <button class="btn" id="refreshUsers">Refresh</button>
         <span class="status" id="usersStatus">Waiting…</span>
-        <table class="grid">
+        <!-- top scrollbar -->
+        <div class="table-scroll-x" id="usersScrollTop"><div class="table-scroll-spacer" id="usersScrollTopInner"></div></div>
+        <table class="grid" id="usersTable">
+          <colgroup>
+            <col style="width:60px" />
+            <col style="width:340px" />
+            <col style="width:120px" />
+            <col style="width:360px" />
+          </colgroup>
           <thead><tr><th>ID</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead>
           <tbody id="usersBody"></tbody>
         </table>
+        <!-- bottom scrollbar retains via .panel overflow-x -->
       </div>
 
       <!-- FIGURES -->
       <div class="panel" id="panel-figures" style="display:none;">
         <button class="btn" id="refreshFigures">Refresh</button>
         <span class="status" id="figuresStatus">Waiting…</span>
-        <table class="grid">
+        <div class="section" style="margin-top:10px;">
+          <h4 style="margin:6px 0 8px;">Add / Update Figure</h4>
+          <div class="row" style="flex-wrap:wrap; gap:8px;">
+            <input id="figName" type="text" placeholder="Name" />
+            <input id="figSlug" type="text" placeholder="Slug" />
+            <input id="figEra" type="text" placeholder="Era" />
+            <input id="figImage" type="text" placeholder="Image URL" style="min-width:260px;" />
+          </div>
+          <div class="row" style="flex-wrap:wrap; gap:8px; margin-top:8px;">
+            <input id="figQuote" type="text" placeholder="Quote (optional)" style="min-width:320px;" />
+          </div>
+          <div class="row" style="margin-top:8px; gap:8px;">
+            <input id="figShort" type="text" placeholder="Short summary" style="flex:1 1 420px; min-width:420px;" />
+          </div>
+          <div class="row" style="margin-top:8px; gap:8px;">
+            <input id="figLong" type="text" placeholder="Long bio (optional)" style="flex:1 1 520px; min-width:520px;" />
+          </div>
+          <div class="row" style="margin-top:10px; gap:8px;">
+            <button class="btn sm success" id="createFigureBtn">Create Figure</button>
+            <button class="btn sm" id="updateFigureBtn">Update Figure</button>
+          </div>
+        </div>
+        <!-- top scrollbar -->
+        <div class="table-scroll-x" id="figuresScrollTop"><div class="table-scroll-spacer" id="figuresScrollTopInner"></div></div>
+        <table class="grid" id="figuresTable">
+          <colgroup>
+            <col style="width:60px" />
+            <col style="width:240px" />
+            <col style="width:180px" />
+            <col style="width:140px" />
+            <col style="width:520px" />
+            <col style="width:240px" />
+          </colgroup>
           <thead><tr><th>ID</th><th>Name</th><th>Slug</th><th>Era</th><th>Summary</th><th>Actions</th></tr></thead>
           <tbody id="figuresBody"></tbody>
         </table>
@@ -118,7 +170,16 @@
       <div class="panel" id="panel-rag" style="display:none;">
         <button class="btn" id="refreshRag">Refresh</button>
         <span class="status" id="ragStatus">Waiting…</span>
-        <table class="grid">
+        <!-- top scrollbar -->
+        <div class="table-scroll-x" id="ragScrollTop"><div class="table-scroll-spacer" id="ragScrollTopInner"></div></div>
+        <table class="grid" id="ragTable">
+          <colgroup>
+            <col style="width:220px" />
+            <col style="width:260px" />
+            <col style="width:260px" />
+            <col style="width:280px" />
+            <col style="width:180px" />
+          </colgroup>
           <thead>
             <tr>
               <th>Slug</th>

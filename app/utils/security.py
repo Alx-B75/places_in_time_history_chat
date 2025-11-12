@@ -128,6 +128,7 @@ def get_admin_user(current_user: models.User = Depends(get_current_user)) -> mod
 def get_current_user_loose(
     authorization: str | None = Header(None),
     pit_cookie: str | None = Cookie(None, alias="pit_access_token"),
+    pit_admin_cookie: str | None = Cookie(None, alias="pit_admin_token"),
     alt_cookie: str | None = Cookie(None, alias="access_token"),
     db: Session = Depends(database.get_db_chat),
 ) -> models.User:
@@ -143,7 +144,7 @@ def get_current_user_loose(
         token = authorization.split(" ", 1)[1].strip()
     # Fall back to cookies set by the static frontend script
     if not token:
-        token = pit_cookie or alt_cookie
+        token = pit_cookie or pit_admin_cookie or alt_cookie
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
@@ -157,3 +158,15 @@ def get_current_user_loose(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
+
+
+def get_admin_user_loose(current_user: models.User = Depends(get_current_user_loose)) -> models.User:
+    """Like get_admin_user, but accepts either Bearer header or dev cookie token.
+
+    Useful for static HTML GET routes where the browser doesn't attach the
+    Authorization header automatically during navigation, but our dev login
+    script has set a non-httpOnly cookie (pit_access_token).
+    """
+    if getattr(current_user, "role", None) != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
+    return current_user
