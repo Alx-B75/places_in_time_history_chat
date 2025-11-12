@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v0] - 2025-11-12
+### Added
+- Figure selection flow with alphabetical listing and fallback logo.
+- Favorites: persist per user with `/user/favorites` (GET/POST/DELETE), Dashboard “Quick Start” grid.
+- Thread management: delete with confirm, rename, opening question preview in list.
+- UI: wider banners/logo alignment, consistent thumbnails, textarea containment, better button contrast.
+- Login/Registration pages with even banners and consent checkboxes.
+- Policy pages: `/policy/gdpr` and `/policy/ai` with in-app links from Register.
+- Dev proxy for `/user` to ensure favorites hit backend in dev.
+
+### Changed
+- Thread creation accepts and stores `figure_slug`; ThreadView centers figure hero and hides internal thread id.
+- Consolidated favorites endpoints to stable `/user/favorites` to avoid slug route collisions.
+
+### Tests
+- Added `tests/test_favorites_api.py` covering add/list/remove with compatibility login/register.
+
+### Notes
+- This marks the “Version 0” milestone for the end-to-end user flow: register/login, figure browse, favorite, start thread, chat, and manage threads.
+
 ## [0.1.0] - 2025-08-13
 ### Added
 - Initial CHANGELOG tracking.
