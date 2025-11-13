@@ -43,6 +43,20 @@ _settings = get_settings()
 BASE_DIR = Path(__file__).resolve().parents[1]
 STATIC_DIR = BASE_DIR / "static_frontend"
 
+# Ensure chat DB schema exists early for tests (idempotent)
+try:
+    ChatBase.metadata.create_all(bind=chat_engine)
+    # Lightweight migration: ensure threads.age_profile exists
+    from sqlalchemy import text as _sqltext
+    with chat_engine.begin() as _conn:
+        _cols = _conn.execute(_sqltext("PRAGMA table_info('threads')")).fetchall()
+        _names = {str(r[1]) for r in _cols}
+        if 'age_profile' not in _names:
+            _conn.execute(_sqltext("ALTER TABLE threads ADD COLUMN age_profile TEXT"))
+except Exception:
+    # Non-fatal during import; lifespan will attempt again
+    pass
+
 
 def _allowed_origins() -> List[str]:
     """
@@ -58,6 +72,17 @@ async def lifespan(_: FastAPI):
     """
     # models import ensures table registration
     ChatBase.metadata.create_all(bind=chat_engine)
+    # Lightweight migration: ensure threads.age_profile exists
+    try:
+        from sqlalchemy import text as _sqltext
+        with chat_engine.begin() as conn:
+            cols = conn.execute(_sqltext("PRAGMA table_info('threads')")).fetchall()
+            names = {str(r[1]) for r in cols}
+            if 'age_profile' not in names:
+                conn.execute(_sqltext("ALTER TABLE threads ADD COLUMN age_profile TEXT"))
+    except Exception:
+        # Non-fatal: if migration fails, insert queries should still work on fresh DBs
+        pass
     FigureBase.metadata.create_all(bind=figures_engine)
     from app.startup_ingest import maybe_ingest_seed_csv
     maybe_ingest_seed_csv(None)
@@ -98,6 +123,18 @@ def serve_admin_ui() -> FileResponse:
     path = STATIC_DIR / "admin.html"
     if not path.exists():
         return Response(content="<html><body><h1>Admin UI</h1><p>admin.html not found in static_frontend.</p></body></html>", media_type="text/html")
+    return FileResponse(path, media_type="text/html")
+
+
+@app.get("/admin/figure-rag/{slug}", response_class=FileResponse)
+def serve_figure_rag(slug: str) -> FileResponse:
+    """Serve the per-figure RAG detail page.
+
+    Authorization enforcement is via the admin API endpoints used by this page.
+    """
+    path = STATIC_DIR / "figure_rag.html"
+    if not path.exists():
+        return Response(content="<html><body><h1>Figure RAG</h1><p>figure_rag.html not found.</p></body></html>", media_type="text/html")
     return FileResponse(path, media_type="text/html")
 
 

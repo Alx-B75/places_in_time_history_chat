@@ -39,7 +39,7 @@ def _extract_instruction_text(figure: Optional[models.HistoricalFigure]) -> str:
 
 
 def _build_system_prompt(
-    figure: Optional[models.HistoricalFigure], db_instructions: str = ""
+    figure: Optional[models.HistoricalFigure], db_instructions: str = "", age_profile: Optional[str] = None
 ) -> str:
     """
     Compose the system prompt from persona, fallback text, and DB instructions.
@@ -69,6 +69,24 @@ def _build_system_prompt(
             "You are a helpful and accurate historical guide. "
             "Answer clearly and concisely. If a fact is uncertain, say so."
         )
+    # Adjust tone/content guidance based on age_profile
+    tone = ""
+    ap = (age_profile or "").strip().lower()
+    if ap == "kids":
+        tone = (
+            "\n\nSpeak with simple, friendly language suitable for ages 5–11. "
+            "Avoid sensitive or graphic content, violence, and any profanity."
+        )
+    elif ap == "teen":
+        tone = (
+            "\n\nKeep explanations age-appropriate for teens (11–16). Be clear, avoid graphic detail, "
+            "and keep a respectful, encouraging tone."
+        )
+    elif ap == "general":
+        tone = "\n\nUse clear, respectful language appropriate for a general audience."
+
+    base = f"{base}{tone}"
+
     db_instructions = (db_instructions or "").strip()
     if db_instructions:
         return f"{base}\n\n{db_instructions}"
@@ -182,6 +200,7 @@ def build_prompt(
     max_context_chars: int = 4000,
     use_rag: bool = True,
     debug: bool = False,
+    age_profile: Optional[str] = None,
 ) -> Tuple[List[Dict[str, str]], List[Dict[str, Any]]]:
     """
     Build the full prompt messages and sources for the AI model.
@@ -207,7 +226,7 @@ def build_prompt(
         The formatted messages for the AI and a list of sources.
     """
     instruction_text = _extract_instruction_text(figure)
-    system_prompt = _build_system_prompt(figure, instruction_text)
+    system_prompt = _build_system_prompt(figure, instruction_text, age_profile=age_profile)
 
     contexts: List[Dict[str, Any]] = []
     if use_rag and figure and getattr(figure, "slug", None):

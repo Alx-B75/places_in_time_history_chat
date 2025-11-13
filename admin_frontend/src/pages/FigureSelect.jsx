@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import LogoCard from '../components/LogoCard.jsx'
+import { useInteraction } from '../contexts/InteractionContext.jsx'
 
 export default function FigureSelect(){
   const { user, loading } = useAuth()
+  const { mode } = useInteraction()
   const [figures, setFigures] = useState([])
   const [query, setQuery] = useState('')
   const [err, setErr] = useState('')
@@ -57,13 +59,15 @@ export default function FigureSelect(){
     setErr('')
     try{
       const token = sessionStorage.getItem('userToken') || localStorage.getItem('access_token')
+      const m = (mode || '').toLowerCase()
+      const age_profile = m.startsWith('young learner') ? 'kids' : m.startsWith('young adult') ? 'teen' : 'general'
       const res = await fetch('/threads', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ user_id: user.id, title: 'New thread', figure_slug: slug })
+        body: JSON.stringify({ user_id: user.id, title: 'New thread', figure_slug: slug, age_profile })
       })
       if(!res.ok) throw new Error(await res.text())
       const data = await res.json()

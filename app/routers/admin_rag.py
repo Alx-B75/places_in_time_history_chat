@@ -232,6 +232,81 @@ def rag_sources_summary(
     return RagSummaryResponse(collection=collection_info, figures=figures)
 
 
+class FigureRagDetail(BaseModel):
+    figure: dict
+    sources_meta: dict
+    contexts: list[ContextRead]
+    embeddings: dict
+
+
+@router.get("/figure/{figure_slug}/detail", response_model=FigureRagDetail)
+def rag_figure_detail(
+    figure_slug: str,
+    _: models.User = Depends(admin_required),
+    db_fig: Session = Depends(get_figure_db),
+):
+    """
+    Return a consolidated RAG view for a single figure, including:
+    - figure metadata
+    - known source links (wikipedia/wikidata/dbpedia)
+    - contexts list
+    - embedding info from Chroma (ids and count)
+    """
+    fig = (
+        db_fig.query(models.HistoricalFigure)
+        .filter(models.HistoricalFigure.slug == figure_slug)
+        .first()
+    )
+    if not fig:
+        raise HTTPException(status_code=404, detail="Figure not found")
+
+    # contexts
+    ctx_rows = (
+        db_fig.query(models.FigureContext)
+        .filter(models.FigureContext.figure_slug == figure_slug)
+        .order_by(models.FigureContext.id.asc())
+        .all()
+    )
+    contexts: list[ContextRead] = [ContextRead.model_validate(r) for r in ctx_rows]  # type: ignore[arg-type]
+
+    # sources_meta (wiki links)
+    sources_meta = {}
+    try:
+        import json
+        wiki_links = {}
+        if getattr(fig, "wiki_links", None):
+            wiki_links = json.loads(fig.wiki_links) if isinstance(fig.wiki_links, str) else (fig.wiki_links or {})
+        sources_meta = {
+            "wikipedia": wiki_links.get("wikipedia"),
+            "wikidata": wiki_links.get("wikidata"),
+            "dbpedia": wiki_links.get("dbpedia"),
+        }
+    except Exception:
+        sources_meta = {}
+
+    # embeddings from Chroma
+    emb_info = {"count": 0, "ids": [], "has_more": False}
+    try:
+        from app.vector.chroma_client import get_figure_context_collection
+        coll = get_figure_context_collection()
+        # fetch up to 1000 ids for this figure
+        got = coll.get(where={"figure_slug": figure_slug}, limit=1000)
+        ids = list(got.get("ids", []) or [])
+        emb_info["ids"] = ids
+        emb_info["count"] = len(ids)
+        # naive "has_more": if limit boundary reached
+        emb_info["has_more"] = len(ids) >= 1000
+    except Exception:
+        pass
+
+    return FigureRagDetail(
+        figure=getattr(fig, "to_dict", lambda: {} )(),
+        sources_meta=sources_meta,
+        contexts=contexts,
+        embeddings=emb_info,
+    )
+
+
 @router.post("/sources", response_model=ContextRead, status_code=status.HTTP_201_CREATED)
 def create_manual_source(
     payload: ContextCreate,

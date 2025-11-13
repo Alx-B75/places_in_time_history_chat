@@ -67,6 +67,7 @@ class Thread(Base):
     title = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     figure_slug = Column(String, nullable=True)
+    age_profile = Column(String, nullable=True, index=True, default="general")
 
     user = relationship("User", back_populates="threads")
     chats = relationship("Chat", back_populates="thread", cascade="all, delete-orphan")
