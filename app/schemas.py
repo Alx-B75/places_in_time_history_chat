@@ -96,6 +96,7 @@ class ChatMessageRead(ChatMessageCreate):
 
     id: int
     timestamp: datetime
+    sources_json: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

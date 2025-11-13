@@ -53,6 +53,11 @@ try:
         _names = {str(r[1]) for r in _cols}
         if 'age_profile' not in _names:
             _conn.execute(_sqltext("ALTER TABLE threads ADD COLUMN age_profile TEXT"))
+        # Ensure chats.sources_json exists for per-message citations
+        _c_cols = _conn.execute(_sqltext("PRAGMA table_info('chats')")).fetchall()
+        _c_names = {str(r[1]) for r in _c_cols}
+        if 'sources_json' not in _c_names:
+            _conn.execute(_sqltext("ALTER TABLE chats ADD COLUMN sources_json TEXT"))
 except Exception:
     # Non-fatal during import; lifespan will attempt again
     pass
@@ -80,6 +85,11 @@ async def lifespan(_: FastAPI):
             names = {str(r[1]) for r in cols}
             if 'age_profile' not in names:
                 conn.execute(_sqltext("ALTER TABLE threads ADD COLUMN age_profile TEXT"))
+            # Ensure chats.sources_json exists
+            ccols = conn.execute(_sqltext("PRAGMA table_info('chats')")).fetchall()
+            cnames = {str(r[1]) for r in ccols}
+            if 'sources_json' not in cnames:
+                conn.execute(_sqltext("ALTER TABLE chats ADD COLUMN sources_json TEXT"))
     except Exception:
         # Non-fatal: if migration fails, insert queries should still work on fresh DBs
         pass

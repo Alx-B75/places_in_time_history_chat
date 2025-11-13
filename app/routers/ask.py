@@ -176,6 +176,15 @@ def ask(
         model_used=model_name,
         source_page=payload.source_page,
     )
-    crud.create_chat_message(db, assistant_msg)
+    saved = crud.create_chat_message(db, assistant_msg)
+    # Persist sources for this assistant message (collapsed UI consumes this later)
+    try:
+        import json as _json
+        saved.sources_json = _json.dumps(sources or [])
+        db.add(saved)
+        db.commit()
+        db.refresh(saved)
+    except Exception:
+        db.rollback()
 
     return {"answer": answer, "sources": sources, "thread_id": thread.id, "usage": usage}

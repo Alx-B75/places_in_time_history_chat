@@ -386,7 +386,16 @@ def chat_complete(
     answer = response["choices"][0]["message"]["content"].strip() if response.get("choices") else ""
 
     assistant_msg = schemas.ChatMessageCreate(user_id=user_id, role="assistant", message=answer, thread_id=thread_id)
-    crud.create_chat_message(db, assistant_msg)
+    saved = crud.create_chat_message(db, assistant_msg)
+    # Persist sources used for this assistant response
+    try:
+        import json as _json
+        saved.sources_json = _json.dumps(_sources or [])
+        db.add(saved)
+        db.commit()
+        db.refresh(saved)
+    except Exception:
+        db.rollback()
 
     return RedirectResponse(url=f"/user/{user_id}/threads", status_code=status.HTTP_303_SEE_OTHER)
 

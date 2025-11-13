@@ -176,6 +176,17 @@ def create_chat_message(db: Session, chat: schemas.ChatMessageCreate) -> models.
     app.models.Chat
         Newly created message.
     """
+    # Ensure schema supports chats.sources_json in case migrations haven't run yet (SQLite-safe)
+    try:
+        from sqlalchemy import text as _sqltext
+        cols = db.execute(_sqltext("PRAGMA table_info('chats')")).fetchall()
+        names = {str(r[1]) for r in cols}
+        if 'sources_json' not in names:
+            db.execute(_sqltext("ALTER TABLE chats ADD COLUMN sources_json TEXT"))
+            # Commit will occur with the insert below
+    except Exception:
+        pass
+
     db_chat = models.Chat(
         user_id=chat.user_id,
         role=chat.role,

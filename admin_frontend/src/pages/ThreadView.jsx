@@ -199,7 +199,37 @@ export default function ThreadView() {
         <div className="messages">
           {messages.length === 0 ? <div className="muted">No messages yet.</div> : (
             messages.map((m, i) => (
-              <div key={i} className={m.role === 'user' ? 'msg-user' : 'msg-assistant'}>{m.message}</div>
+              <div key={i} className={m.role === 'user' ? 'msg-user' : 'msg-assistant'}>
+                <div>{m.message}</div>
+                {m.role === 'assistant' && m.sources_json ? (
+                  (() => {
+                    try {
+                      const sources = JSON.parse(m.sources_json) || []
+                      if (!Array.isArray(sources) || !sources.length) return null
+                      const maxShow = Math.min(5, sources.length)
+                      return (
+                        <details style={{marginTop:6}}>
+                          <summary className="muted" style={{cursor:'pointer'}}>View sources ({sources.length})</summary>
+                          <ul style={{margin:'6px 0 0 18px', padding:0, listStyle:'disc'}}>
+                            {sources.slice(0, maxShow).map((s, idx) => (
+                              <li key={idx}>
+                                {s?.source_url ? (
+                                  <a href={s.source_url} target="_blank" rel="noopener noreferrer">{s?.source_name || 'source'}</a>
+                                ) : (
+                                  <span>{s?.source_name || 'source'}</span>
+                                )}
+                              </li>
+                            ))}
+                            {sources.length > maxShow ? (
+                              <div className="muted">+{sources.length - maxShow} more</div>
+                            ) : null}
+                          </ul>
+                        </details>
+                      )
+                    } catch { return null }
+                  })()
+                ) : null}
+              </div>
             ))
           )}
         </div>

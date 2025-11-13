@@ -30,6 +30,7 @@ class Chat(Base):
     source_page = Column(String, nullable=True)
     thread_id = Column(Integer, ForeignKey("threads.id"), nullable=True)
     summary_of = Column(Integer, ForeignKey("chats.id"), nullable=True)
+    sources_json = Column(Text, nullable=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="chats")
