@@ -7,7 +7,6 @@ Supports OpenAI, OpenRouter, and local SentenceTransformer providers.
 import logging
 import os
 from typing import List, Optional
-from sentence_transformers import SentenceTransformer
 from openai import OpenAI
 from app.settings import get_settings
 
@@ -32,7 +31,8 @@ def get_ab_arm(user_id: str = None) -> str:
 class EmbeddingClient:
     def __init__(self):
         self.settings = get_settings()
-        self.provider = "openai" if self.settings.use_openai_embedding else "local"
+        # Prefer OpenAI when an API key is configured unless explicitly disabled
+        self.provider = "openai" if (self.settings.use_openai_embedding or bool(self.settings.openai_api_key)) else "local"
         self.client: Optional[object] = None
         self._init_client()
 
@@ -40,13 +40,24 @@ class EmbeddingClient:
         if self.provider == "openai":
             try:
                 self.client = OpenAI(api_key=self.settings.openai_api_key)
+                return
             except Exception:
                 self.client = None
-        else:
-            try:
-                self.client = SentenceTransformer(_LOCAL_MODEL)
-            except Exception:
-                self.client = None
+                # fallback to local if OpenAI init fails
+                self.provider = "local"
+        # Local provider path (lazy import to avoid hard dependency)
+        try:
+            from sentence_transformers import SentenceTransformer  # type: ignore
+            self.client = SentenceTransformer(_LOCAL_MODEL)
+        except Exception:
+            self.client = None
+            # If local not available and OpenAI key exists, fallback to OpenAI
+            if self.settings.openai_api_key:
+                try:
+                    self.provider = "openai"
+                    self.client = OpenAI(api_key=self.settings.openai_api_key)
+                except Exception:
+                    self.client = None
 
     def get_embedding_dimension(self) -> int:
         return _DIMENSIONS[self.provider]
@@ -68,8 +79,15 @@ class EmbeddingClient:
                     self.provider, _OPENAI_MODEL, arm, usage
                 )
                 return embedding
-            if isinstance(self.client, SentenceTransformer):
-                embedding = self.client.encode(text, convert_to_tensor=False).tolist()
+            # Local embedding if sentence_transformers is available
+            try:
+                from sentence_transformers import SentenceTransformer  # type: ignore
+                if isinstance(self.client, SentenceTransformer):
+                    embedding = self.client.encode(text, convert_to_tensor=False).tolist()
+                else:
+                    embedding = [0.0] * _DIMENSIONS.get("local", 384)
+            except Exception:
+                embedding = [0.0] * _DIMENSIONS.get("local", 384)
                 logging.info(
                     "Embedding call provider=%s model=%s arm=%s token_usage=N/A",
                     self.provider, _LOCAL_MODEL, arm

@@ -18,7 +18,9 @@
     hdrSlug: $('#hdrSlug'), hdrStatus: $('#hdrStatus'),
     figureMeta: $('#figureMeta'), sourcesMeta: $('#sourcesMeta'), embeddingsMeta: $('#embeddingsMeta'),
     ragName: $('#ragName'), ragType: $('#ragType'), ragUrl: $('#ragUrl'), addRagBtn: $('#addRagBtn'), addStatus: $('#addStatus'),
-    ctxStatus: $('#ctxStatus'), ctxBody: $('#ctxBody')
+    ctxStatus: $('#ctxStatus'), ctxBody: $('#ctxBody'),
+    ingestAllBtn: $('#ingestAllBtn'), embedAllBtnTop: $('#embedAllBtnTop'), refreshBtn: $('#refreshBtn'),
+    embedHealth: $('#embedHealth')
   };
   function slugFromPath(){
     const m = location.pathname.match(/\/admin\/figure-rag\/([^/?#]+)/);
@@ -32,6 +34,11 @@
     if (!slug){ dom.hdrStatus.textContent = 'Missing slug'; return; }
     dom.hdrSlug.textContent = slug;
     dom.hdrStatus.textContent = 'Loading…';
+    // best-effort embedding health
+    try {
+      const h = await fetchJSON('/admin/rag/embedding/health');
+      if (h && dom.embedHealth) dom.embedHealth.textContent = `Embedding: ${h.provider} • ${h.model} • ${h.dimension}D • ${h.ready? 'ready':'not-ready'}`;
+    } catch {}
     const d = await fetchJSON(`/admin/rag/figure/${encodeURIComponent(slug)}/detail`);
     // figure meta
     const f = d.figure || {};
@@ -42,17 +49,40 @@
     dom.figureMeta.innerHTML = lines.join(' · ') || '<span class="muted">No metadata</span>';
     // sources
     const s = d.sources_meta || {};
-    const links = [
-      s.wikipedia ? `<a href="${escAttr(s.wikipedia)}" target="_blank" rel="noopener">wikipedia</a>` : '',
-      s.wikidata ? `<a href="${escAttr(s.wikidata)}" target="_blank" rel="noopener">wikidata</a>` : '',
-      s.dbpedia ? `<a href="${escAttr(s.dbpedia)}" target="_blank" rel="noopener">dbpedia</a>` : ''
-    ].filter(Boolean).join(' | ');
-    dom.sourcesMeta.innerHTML = links || '<span class="muted">No known links</span>';
+    const parts = [];
+    if (s.wikipedia) parts.push(`<a href="${escAttr(s.wikipedia)}" target="_blank" rel="noopener">wikipedia</a> <button class="btn sm" data-ingest-src="wikipedia" data-url="${escAttr(s.wikipedia)}">Ingest</button>`);
+    if (s.wikidata) parts.push(`<a href="${escAttr(s.wikidata)}" target="_blank" rel="noopener">wikidata</a> <button class="btn sm" data-ingest-src="generic" data-url="${escAttr(s.wikidata)}">Ingest</button>`);
+    if (s.dbpedia) parts.push(`<a href="${escAttr(s.dbpedia)}" target="_blank" rel="noopener">dbpedia</a> <button class="btn sm" data-ingest-src="generic" data-url="${escAttr(s.dbpedia)}">Ingest</button>`);
+    dom.sourcesMeta.innerHTML = parts.join(' | ') || '<span class="muted">No known links</span>';
+    // wire ingest button(s)
+    dom.sourcesMeta.querySelectorAll('button[data-ingest-src]').forEach(btn => {
+      btn.addEventListener('click', async ()=>{
+        const slug = slugFromPath(); if (!slug) return;
+        const source = btn.getAttribute('data-ingest-src');
+        const url = btn.getAttribute('data-url') || '';
+        dom.hdrStatus.textContent = 'Ingesting…';
+        try{
+          const r = await fetchJSON(`/admin/rag/figure/${encodeURIComponent(slug)}/ingest-source`, { method:'POST', body: JSON.stringify({ source, url })});
+          dom.hdrStatus.textContent = `Created ${r.created}, skipped ${r.skipped}, embedded ${r.embedded}`;
+          await loadDetail();
+        }catch(e){ dom.hdrStatus.textContent = e.message; }
+      });
+    });
     // embeddings
     const e = d.embeddings || {};
     const ids = Array.isArray(e.ids) ? e.ids : [];
     const idsPreview = ids.slice(0, 50).map(esc).join(', ');
-    dom.embeddingsMeta.innerHTML = `<b>Vectors:</b> ${Number(e.count||ids.length)} ${e.has_more? '(showing first 1000)' : ''}<br/><span class="muted">IDs:</span> ${idsPreview || '—'}`;
+    dom.embeddingsMeta.innerHTML = `<b>Vectors:</b> ${Number(e.count||ids.length)} ${e.has_more? '(showing first 1000)' : ''} <button class="btn sm" id="embedAllBtn">Embed All</button><br/><span class="muted">IDs:</span> ${idsPreview || '—'}`;
+    // wire embed-all
+    document.querySelector('#embedAllBtn')?.addEventListener('click', async ()=>{
+      const slug = slugFromPath(); if (!slug) return;
+      dom.hdrStatus.textContent = 'Embedding all…';
+      try{
+        const r = await fetchJSON(`/admin/rag/figure/${encodeURIComponent(slug)}/embed-all`, { method:'POST' });
+        dom.hdrStatus.textContent = `Embedded ${r.embedded}`;
+        await loadDetail();
+      }catch(e){ dom.hdrStatus.textContent = e.message; }
+    });
     // contexts
     renderContexts(d.contexts||[], slug);
     dom.hdrStatus.textContent = 'Ready';
@@ -79,15 +109,20 @@
     dom.ctxBody.innerHTML = '';
     for (const c of rows){
       const url = c.source_url ? `<a href="${escAttr(c.source_url)}" target="_blank" rel="noopener">${esc(c.source_url)}</a>` : '';
-      const contentPreview = c.content ? esc(String(c.content).slice(0,160)) + (String(c.content).length>160?'…':'') : '';
+      const fullContent = c.content ? String(c.content) : '';
+      const contentPreview = fullContent ? esc(fullContent.slice(0,160)) + (fullContent.length>160?'…':'') : '';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${c.id}</td>
         <td>${esc(c.source_name || '')}</td>
         <td>${esc(c.content_type || '')}${c.is_manual? ' <span class="muted">(manual)</span>' : ''}</td>
-        <td class="summary-cell">${url}${url && contentPreview? ' · ' : ''}<span class="muted">${contentPreview}</span></td>
+        <td class="summary-cell" title="${esc(fullContent)}">${url}${url && contentPreview? ' · ' : ''}<span class="muted">${contentPreview}</span>
+          ${fullContent ? `<div><button class="btn sm" data-act="show" data-id="${c.id}">Show</button></div>
+          <div data-full="${c.id}" style="display:none; white-space:pre-wrap; margin-top:6px;">${esc(fullContent)}</div>` : ''}
+        </td>
         <td>
           <div class="row-actions">
+            <button class="btn sm" data-act="embed" data-id="${c.id}">Embed</button>
             <button class="btn sm" data-act="toggle" data-id="${c.id}" data-val="${c.is_manual?0:1}">${c.is_manual? 'Unset Manual' : 'Set Manual'}</button>
             <button class="btn sm" data-act="edit" data-id="${c.id}">Edit</button>
             <button class="btn danger sm" data-act="delete" data-id="${c.id}">Delete</button>
@@ -100,7 +135,14 @@
         const id = btn.getAttribute('data-id');
         const act = btn.getAttribute('data-act');
         try{
-          if (act==='toggle'){
+          if (act === 'show'){
+            const el = document.querySelector(`div[data-full="${id}"]`);
+            if (el) el.style.display = (el.style.display === 'none' ? 'block' : 'none');
+            return;
+          }
+          if (act==='embed'){
+            await fetchJSON(`/admin/rag/contexts/${id}/embed`, { method:'POST' });
+          } else if (act==='toggle'){
             const val = Number(btn.getAttribute('data-val'))||0;
             await fetchJSON(`/admin/rag/contexts/${id}`, { method:'PATCH', body: JSON.stringify({ is_manual: val }) });
           } else if (act==='delete'){
@@ -139,6 +181,25 @@
   }
 
   // events
+  dom.refreshBtn?.addEventListener('click', ()=>{ loadDetail().catch(e=> dom.hdrStatus.textContent = e.message); });
+  dom.embedAllBtnTop?.addEventListener('click', async ()=>{
+    const slug = slugFromPath(); if (!slug) return;
+    dom.hdrStatus.textContent = 'Embedding all…';
+    try{
+      const r = await fetchJSON(`/admin/rag/figure/${encodeURIComponent(slug)}/embed-all`, { method:'POST' });
+      dom.hdrStatus.textContent = `Embedded ${r.embedded}`;
+      await loadDetail();
+    }catch(e){ dom.hdrStatus.textContent = e.message; }
+  });
+  dom.ingestAllBtn?.addEventListener('click', async ()=>{
+    const slug = slugFromPath(); if (!slug) return;
+    dom.hdrStatus.textContent = 'Ingesting all sources…';
+    try{
+      const r = await fetchJSON(`/admin/rag/figure/${encodeURIComponent(slug)}/ingest-all`, { method:'POST' });
+      dom.hdrStatus.textContent = `Created ${r.total_created}, skipped ${r.total_skipped}, embedded ${r.total_embedded}`;
+      await loadDetail();
+    }catch(e){ dom.hdrStatus.textContent = e.message; }
+  });
   dom.addRagBtn?.addEventListener('click', ()=>{
     const slug = slugFromPath(); if (!slug) return alert('Missing slug');
     addManual(slug).catch(e=>alert(e.message));

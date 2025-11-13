@@ -601,23 +601,30 @@
   }
 
   // --------------- Tabs & events ---------------
+  function showTab(tab) {
+    dom.tabs.forEach((t) => t.classList.remove("active"));
+    const target = Array.from(dom.tabs).find(t => t.getAttribute("data-tab") === tab);
+    if (target) target.classList.add("active");
+    dom.panelUsers.style.display = tab === "users" ? "block" : "none";
+    dom.panelFigures.style.display = tab === "figures" ? "block" : "none";
+    dom.panelRag.style.display = tab === "rag" ? "block" : "none";
+    dom.panelLlm.style.display = tab === "llm" ? "block" : "none";
+    if (tab === "users") loadUsers().catch(()=>{});
+    if (tab === "figures") loadFigures().catch(()=>{});
+    if (tab === "rag") loadRagSummary().catch(()=>{});
+    if (tab === "llm") { loadLLMProfiles().catch(()=>{}); loadLLMHealth().catch(()=>{}); }
+  }
+
   dom.tabs.forEach((el) => {
     el.addEventListener("click", () => {
       if (el.classList.contains("disabled")) {
         interactiveLoginAndStepUp().then((ok) => { if (ok) el.click(); });
         return;
       }
-      dom.tabs.forEach((t) => t.classList.remove("active"));
-      el.classList.add("active");
       const tab = el.getAttribute("data-tab");
-      dom.panelUsers.style.display = tab === "users" ? "block" : "none";
-      dom.panelFigures.style.display = tab === "figures" ? "block" : "none";
-      dom.panelRag.style.display = tab === "rag" ? "block" : "none";
-      dom.panelLlm.style.display = tab === "llm" ? "block" : "none";
-      if (tab === "users") loadUsers().catch(()=>{});
-      if (tab === "figures") loadFigures().catch(()=>{});
-      if (tab === "rag") loadRagSummary().catch(()=>{});
-      if (tab === "llm") { loadLLMProfiles().catch(()=>{}); loadLLMHealth().catch(()=>{}); }
+      showTab(tab);
+      // reflect in URL hash for deep-link/back-navigation
+      try { history.replaceState(null, "", `#${tab}`); } catch {}
     });
   });
 
@@ -763,6 +770,12 @@
     } else {
       // If the page has a login form, wait for user click; else prompt immediately.
       if (!dom.loginBtn) interactiveLoginAndStepUp().catch(()=>{});
+    }
+
+    // Select tab from URL hash if present (#users|#figures|#rag|#llm)
+    const hash = (location.hash || "").replace(/^#/, "");
+    if (hash && ["users","figures","rag","llm"].includes(hash)) {
+      showTab(hash);
     }
   })();
 

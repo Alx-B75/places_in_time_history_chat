@@ -10,11 +10,14 @@ Notes
 
 from __future__ import annotations
 
-from typing import Generator, List, Optional
+from typing import Generator, List, Optional, Tuple, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+import re
+import html as html_mod
+import requests
 
 from app import models
 from app.figures_database import FigureSessionLocal
@@ -307,6 +310,159 @@ def rag_figure_detail(
     )
 
 
+# ---------- Embedding helpers and endpoints ----------
+
+def _chunk_text(text: str, max_len: int = 1600, overlap: int = 200) -> List[str]:
+    text = text.strip()
+    if not text:
+        return []
+    parts: List[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        j = min(n, i + max_len)
+        parts.append(text[i:j])
+        if j >= n:
+            break
+        i = max(0, j - overlap)
+    return parts
+
+
+def _html_to_text(html: str) -> str:
+    # Very light HTML to text conversion; avoids extra deps
+    html = re.sub(r"<script[\s\S]*?</script>", " ", html, flags=re.IGNORECASE)
+    html = re.sub(r"<style[\s\S]*?</style>", " ", html, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = html_mod.unescape(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+class EmbedResult(BaseModel):
+    embedded: int
+    detail: Optional[str] = None
+
+
+@router.post("/contexts/{ctx_id}/embed", response_model=EmbedResult)
+def embed_context(
+    ctx_id: int,
+    _: models.User = Depends(admin_required),
+    db_fig: Session = Depends(get_figure_db),
+):
+    ctx = db_fig.query(models.FigureContext).filter(models.FigureContext.id == ctx_id).first()
+    if not ctx:
+        raise HTTPException(status_code=404, detail="Context not found")
+    if not ctx.content:
+        raise HTTPException(status_code=400, detail="Context has no content to embed")
+    from app.vector.chroma_client import get_figure_context_collection
+    from app.vector.embedding_provider import get_embedding
+    coll = get_figure_context_collection()
+    vec_id = f"{ctx.figure_slug}-{ctx.id}"
+    try:
+        # delete previous if exists; ignore errors
+        try:
+            coll.delete(ids=[vec_id])
+        except Exception:
+            pass
+        emb = get_embedding(ctx.content)
+        meta = {
+            "figure_slug": ctx.figure_slug,
+            "source_name": getattr(ctx, "source_name", None),
+            "source_url": getattr(ctx, "source_url", None),
+            "content_type": getattr(ctx, "content_type", None),
+            "is_manual": bool(getattr(ctx, "is_manual", 0)),
+        }
+        coll.add(documents=[ctx.content], embeddings=[emb], metadatas=[meta], ids=[vec_id])
+        return EmbedResult(embedded=1)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Embed failed: {exc}")
+
+
+@router.post("/figure/{figure_slug}/embed-all", response_model=EmbedResult)
+def embed_all_for_figure(
+    figure_slug: str,
+    _: models.User = Depends(admin_required),
+    db_fig: Session = Depends(get_figure_db),
+):
+    rows = (
+        db_fig.query(models.FigureContext)
+        .filter(models.FigureContext.figure_slug == figure_slug)
+        .all()
+    )
+    from app.vector.chroma_client import get_figure_context_collection
+    from app.vector.embedding_provider import get_embedding
+    coll = get_figure_context_collection()
+    embedded = 0
+    for ctx in rows:
+        if not ctx.content:
+            continue
+        vec_id = f"{ctx.figure_slug}-{ctx.id}"
+        try:
+            try:
+                coll.delete(ids=[vec_id])
+            except Exception:
+                pass
+            emb = get_embedding(ctx.content)
+            meta = {
+                "figure_slug": ctx.figure_slug,
+                "source_name": getattr(ctx, "source_name", None),
+                "source_url": getattr(ctx, "source_url", None),
+                "content_type": getattr(ctx, "content_type", None),
+                "is_manual": bool(getattr(ctx, "is_manual", 0)),
+            }
+            coll.add(documents=[ctx.content], embeddings=[emb], metadatas=[meta], ids=[vec_id])
+            embedded += 1
+        except Exception:
+            # continue with best-effort embedding
+            continue
+    return EmbedResult(embedded=embedded)
+
+
+class IngestSourceRequest(BaseModel):
+    source: str = Field(..., description="wikipedia | generic")
+    url: Optional[str] = None
+    max_chunks: Optional[int] = Field(default=20, ge=1, le=200)
+
+
+class IngestSourceResponse(BaseModel):
+    created: int
+    skipped: int
+    embedded: int
+
+
+@router.post("/figure/{figure_slug}/ingest-source", response_model=IngestSourceResponse)
+def ingest_source_for_figure(
+    figure_slug: str,
+    payload: IngestSourceRequest,
+    _: models.User = Depends(admin_required),
+    db_fig: Session = Depends(get_figure_db),
+):
+    fig = (
+        db_fig.query(models.HistoricalFigure)
+        .filter(models.HistoricalFigure.slug == figure_slug)
+        .first()
+    )
+    if not fig:
+        raise HTTPException(status_code=404, detail="Figure not found")
+
+    source = (payload.source or "").lower().strip()
+    url = (payload.url or "").strip()
+    # Resolve URL from stored links if not provided
+    if source == "wikipedia" and not url:
+        try:
+            import json
+            wiki_links = json.loads(fig.wiki_links) if getattr(fig, "wiki_links", None) else {}
+            url = (wiki_links or {}).get("wikipedia") or ""
+        except Exception:
+            url = ""
+    if not url:
+        raise HTTPException(status_code=400, detail="No URL available to ingest")
+
+    created, skipped, embedded = _ingest_single_url(db_fig, figure_slug, source, url, payload.max_chunks)
+    return IngestSourceResponse(created=created, skipped=skipped, embedded=embedded)
+
+
+# Clean manual source creation endpoint
 @router.post("/sources", response_model=ContextRead, status_code=status.HTTP_201_CREATED)
 def create_manual_source(
     payload: ContextCreate,
@@ -316,8 +472,11 @@ def create_manual_source(
     """
     Create a manual FigureContext entry for a given figure.
     """
-    # Ensure figure exists
-    fig = db_fig.query(models.HistoricalFigure).filter(models.HistoricalFigure.slug == payload.figure_slug).first()
+    fig = (
+        db_fig.query(models.HistoricalFigure)
+        .filter(models.HistoricalFigure.slug == payload.figure_slug)
+        .first()
+    )
     if not fig:
         raise HTTPException(status_code=404, detail="Figure not found")
 
@@ -333,3 +492,138 @@ def create_manual_source(
     db_fig.commit()
     db_fig.refresh(ctx)
     return ctx  # type: ignore[return-value]
+
+
+# Shared helper for ingestion of a single URL with chunking, dedupe, and embedding
+def _ingest_single_url(db_fig: Session, figure_slug: str, source: str, url: str, max_chunks: Optional[int]) -> Tuple[int, int, int]:
+    headers = {
+        "User-Agent": "PlacesInTimeBot/1.0 (+https://example.com/admin; contact: admin@example.com)",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    try:
+        resp = requests.get(url, timeout=20, headers=headers)
+        resp.raise_for_status()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Fetch failed: {exc}")
+
+    text = _html_to_text(resp.text)
+    if not text:
+        raise HTTPException(status_code=400, detail="No text extracted from source")
+
+    chunks = _chunk_text(text)
+    if max_chunks:
+        chunks = chunks[: max_chunks]
+
+    existing = (
+        db_fig.query(models.FigureContext)
+        .filter(models.FigureContext.figure_slug == figure_slug)
+        .filter(models.FigureContext.source_url == url)
+        .all()
+    )
+    existing_texts = set((r.content or "").strip() for r in existing if r.content)
+
+    created = 0
+    new_rows: List[models.FigureContext] = []
+    for chunk in chunks:
+        if chunk.strip() in existing_texts:
+            continue
+        ctx = models.FigureContext(
+            figure_slug=figure_slug,
+            source_name=source,
+            source_url=url,
+            content_type="context",
+            content=chunk,
+            is_manual=0,
+        )
+        db_fig.add(ctx)
+        db_fig.flush()
+        new_rows.append(ctx)
+        existing_texts.add(chunk.strip())
+        created += 1
+    db_fig.commit()
+
+    from app.vector.chroma_client import get_figure_context_collection
+    from app.vector.embedding_provider import get_embedding
+    coll = get_figure_context_collection()
+    embedded = 0
+    for ctx in new_rows:
+        try:
+            emb = get_embedding(ctx.content or "")
+            meta = {
+                "figure_slug": ctx.figure_slug,
+                "source_name": getattr(ctx, "source_name", None),
+                "source_url": getattr(ctx, "source_url", None),
+                "content_type": getattr(ctx, "content_type", None),
+                "is_manual": bool(getattr(ctx, "is_manual", 0)),
+            }
+            vec_id = f"{ctx.figure_slug}-{ctx.id}"
+            coll.add(documents=[ctx.content or ""], embeddings=[emb], metadatas=[meta], ids=[vec_id])
+            embedded += 1
+        except Exception:
+            continue
+    skipped = len(chunks) - created
+    return created, skipped, embedded
+
+
+class IngestAllResponse(BaseModel):
+    per_source: Dict[str, IngestSourceResponse]
+    total_created: int
+    total_skipped: int
+    total_embedded: int
+
+
+@router.post("/figure/{figure_slug}/ingest-all", response_model=IngestAllResponse)
+def ingest_all_links_for_figure(
+    figure_slug: str,
+    max_chunks: int = 20,
+    _: models.User = Depends(admin_required),
+    db_fig: Session = Depends(get_figure_db),
+):
+    fig = (
+        db_fig.query(models.HistoricalFigure)
+        .filter(models.HistoricalFigure.slug == figure_slug)
+        .first()
+    )
+    if not fig:
+        raise HTTPException(status_code=404, detail="Figure not found")
+    try:
+        import json
+        wiki_links = json.loads(fig.wiki_links) if getattr(fig, "wiki_links", None) else {}
+    except Exception:
+        wiki_links = {}
+    sources_to_try = [
+        ("wikipedia", wiki_links.get("wikipedia")),
+        ("generic", wiki_links.get("wikidata")),
+        ("generic", wiki_links.get("dbpedia")),
+    ]
+    per: Dict[str, IngestSourceResponse] = {}
+    totals = {"created": 0, "skipped": 0, "embedded": 0}
+    for label, url in sources_to_try:
+        if not url:
+            continue
+        c, s, e = _ingest_single_url(db_fig, figure_slug, label, url, max_chunks)
+        per[url] = IngestSourceResponse(created=c, skipped=s, embedded=e)
+        totals["created"] += c
+        totals["skipped"] += s
+        totals["embedded"] += e
+    return IngestAllResponse(per_source=per, total_created=totals["created"], total_skipped=totals["skipped"], total_embedded=totals["embedded"])
+
+
+class EmbeddingHealth(BaseModel):
+    provider: str
+    model: str
+    dimension: int
+    ready: bool
+
+
+@router.get("/embedding/health", response_model=EmbeddingHealth)
+def embedding_health(
+    _: models.User = Depends(admin_required),
+):
+    from app.services.embedding_client import EmbeddingClient
+    client = EmbeddingClient()
+    provider = client.provider
+    model = "text-embedding-3-small" if provider == "openai" else "all-MiniLM-L6-v2"
+    dim = client.get_embedding_dimension()
+    ready = client.client is not None
+    return EmbeddingHealth(provider=provider, model=model, dimension=dim, ready=ready)

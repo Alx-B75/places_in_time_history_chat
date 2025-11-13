@@ -28,9 +28,16 @@
 <body>
   <div class="container">
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
-      <a class="btn" href="/admin/ui">← Back</a>
+      <a class="btn" href="/admin/ui#rag">← Back</a>
       <div class="title">Figure RAG Detail: <span id="hdrSlug"></span></div>
       <span class="muted" id="hdrStatus"></span>
+    </div>
+
+    <div class="section" id="actionsBar" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+      <button class="btn sm" id="ingestAllBtn">Ingest All Sources</button>
+      <button class="btn sm" id="embedAllBtnTop">Embed All Contexts</button>
+      <button class="btn sm" id="refreshBtn">Refresh</button>
+      <span class="muted" id="embedHealth"></span>
     </div>
 
     <div class="section" id="figureMetaSection">
@@ -69,7 +76,7 @@
           <col style="width:220px" />
           <col style="width:140px" />
           <col style="width:560px" />
-          <col style="width:120px" />
+          <col style="width:220px" />
         </colgroup>
         <thead>
           <tr>
