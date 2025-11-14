@@ -59,11 +59,15 @@
       <h3 style="margin:0 0 8px;">Upload Documents</h3>
       <div id="dropzone" style="border:1px dashed var(--border); padding:12px; border-radius:10px; background:#0b1220;">
         <div class="muted" style="margin-bottom:8px;">Drag and drop .txt, .md, .pdf, .html files here (max 10 files, 25MB each) or pick files:</div>
-        <input id="filePicker" type="file" multiple accept=".txt,.md,.pdf,.html,.htm" />
+        <input id="filePicker" type="file" multiple accept=".txt,.md,.pdf,.html,.htm,.docx" />
         <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
           <label><input type="checkbox" id="autoEmbed" checked /> Auto-embed after upload</label>
           <button class="btn sm" id="uploadBtn">Upload</button>
           <span class="muted" id="uploadStatus"></span>
+        </div>
+        <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+          <progress id="uploadProgress" value="0" max="100" style="width:260px; display:none;"></progress>
+          <span class="muted" id="uploadProgressText"></span>
         </div>
       </div>
     </div>

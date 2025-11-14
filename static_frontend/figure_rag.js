@@ -120,6 +120,27 @@
     if (!res.ok){ throw new Error(data?.detail || res.statusText); }
     const total = `Created ${data.total_created}, skipped ${data.total_skipped}, embedded ${data.total_embedded}`;
     dom.uploadStatus.textContent = total;
+    if (data.job_id){
+      // start polling job progress
+      const bar = dom.uploadProgress; const txt = dom.uploadProgressText;
+      if (bar) bar.style.display = 'inline-block';
+      const poll = async ()=>{
+        try{
+          const st = await fetchJSON(`/admin/rag/upload-jobs/${data.job_id}`);
+          const pct = st.total ? Math.floor(100 * (st.done||0) / st.total) : 0;
+          if (bar){ bar.max = 100; bar.value = pct; }
+          if (txt) txt.textContent = `Embedding ${st.done}/${st.total} (${pct}%)`;
+          if (String(st.status) === 'done' || (st.total && st.done >= st.total)){
+            clearInterval(timer);
+            if (bar) { bar.value = 100; setTimeout(()=>{ bar.style.display='none'; bar.value=0; }, 800); }
+            if (txt) { txt.textContent = 'Embedding complete'; setTimeout(()=>{ txt.textContent=''; }, 1200); }
+            await loadDetail();
+          }
+        }catch(e){ /* ignore transient */ }
+      };
+      const timer = setInterval(poll, 1200);
+      await poll();
+    }
     return data;
   }
 

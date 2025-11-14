@@ -20,12 +20,17 @@ import html as html_mod
 import requests
 import os
 import tempfile
+import time
+import uuid
 
 from app import models
 from app.figures_database import FigureSessionLocal
 from app.utils.security import admin_required
 
 router = APIRouter(prefix="/admin/rag", tags=["Admin RAG"])
+
+# In-memory simple job registry for background embedding
+_UPLOAD_JOBS: Dict[str, Dict] = {}
 
 
 def get_figure_db() -> Generator[Session, None, None]:
@@ -647,6 +652,7 @@ class UploadResponse(BaseModel):
     total_skipped: int
     total_embedded: int
     files: List[UploadFileResult]
+    job_id: Optional[str] = None
 
 
 def _safe_filename(name: str) -> str:
@@ -654,7 +660,22 @@ def _safe_filename(name: str) -> str:
     return base[:200]
 
 
-def _bytes_to_text_via_pdfminer(data: bytes) -> str:
+def _pdf_to_text(data: bytes) -> str:
+    """Prefer PyMuPDF for speed; fallback to pdfminer.six."""
+    # Try PyMuPDF first
+    try:
+        import fitz  # type: ignore
+        text_parts: List[str] = []
+        with fitz.open(stream=data, filetype="pdf") as doc:
+            for page in doc:
+                text_parts.append(page.get_text())
+        text = "\n".join(text_parts)
+        text = re.sub(r"\s+", " ", text or "").strip()
+        if text:
+            return text
+    except Exception:
+        pass
+    # Fallback to pdfminer.six
     try:
         from pdfminer.high_level import extract_text  # type: ignore
     except Exception:
@@ -671,6 +692,24 @@ def _bytes_to_text_via_pdfminer(data: bytes) -> str:
     return text
 
 
+def _docx_to_text(data: bytes) -> str:
+    try:
+        import docx  # type: ignore
+    except Exception:
+        raise HTTPException(status_code=500, detail="DOCX support requires python-docx. Please install it.")
+    with tempfile.NamedTemporaryFile(delete=True, suffix=".docx") as tmp:
+        tmp.write(data)
+        tmp.flush()
+        try:
+            d = docx.Document(tmp.name)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Failed to parse DOCX: {exc}")
+    texts = [p.text for p in d.paragraphs if getattr(p, 'text', '')]
+    text = "\n".join(texts)
+    text = re.sub(r"\s+", " ", text or "").strip()
+    return text
+
+
 def _ingest_uploaded_text(
     db_fig: Session,
     figure_slug: str,
@@ -681,7 +720,7 @@ def _ingest_uploaded_text(
     do_embed: bool = True,
 ) -> Tuple[int, int, int, List[int]]:
     if not text or not text.strip():
-        return (0, 0, 0)
+        return (0, 0, 0, [])
     chunks = _chunk_text(text)
     if max_chunks:
         chunks = chunks[: max_chunks]
@@ -775,6 +814,7 @@ async def upload_documents_for_figure(
     files: List[UploadFile] = File(...),
     auto_embed: bool = True,
     max_chunks: int = 50,
+    force_background: bool = False,
     background_tasks: BackgroundTasks = None,
     _: models.User = Depends(admin_required),
     db_fig: Session = Depends(get_figure_db),
@@ -796,6 +836,7 @@ async def upload_documents_for_figure(
     total_created = total_skipped = total_embedded = 0
     results: List[UploadFileResult] = []
     total_size = 0
+    job_id: Optional[str] = None
 
     for f in files:
         name = _safe_filename(f.filename or "upload.txt")
@@ -819,7 +860,9 @@ async def upload_documents_for_figure(
             if ext in (".txt", ".md"):
                 text = (data.decode("utf-8", errors="replace") or "").strip()
             elif ext in (".pdf",):
-                text = _bytes_to_text_via_pdfminer(data)
+                text = _pdf_to_text(data)
+            elif ext in (".docx",):
+                text = _docx_to_text(data)
             elif ext in (".html", ".htm"):
                 raw = (data.decode("utf-8", errors="replace") or "")
                 text = _html_to_text(raw)
@@ -841,7 +884,7 @@ async def upload_documents_for_figure(
         created = skipped = embedded = 0
         try:
             # Choose background embedding if payload is large
-            use_background = auto_embed and (size > 5 * 1024 * 1024 or total_size > 10 * 1024 * 1024)
+            use_background = auto_embed and (force_background or size > 5 * 1024 * 1024 or total_size > 10 * 1024 * 1024)
             c, s, e, ids = _ingest_uploaded_text(
                 db_fig,
                 figure_slug,
@@ -855,7 +898,31 @@ async def upload_documents_for_figure(
             if auto_embed and use_background and ids:
                 # schedule background embedding
                 if background_tasks is not None:
-                    background_tasks.add_task(_embed_context_ids, ids, db_fig)
+                    if job_id is None:
+                        job_id = uuid.uuid4().hex
+                        _UPLOAD_JOBS[job_id] = {
+                            "created_at": time.time(),
+                            "pending_ids": [],
+                            "done": 0,
+                            "total": 0,
+                            "status": "queued",
+                        }
+                    # extend job queue
+                    job = _UPLOAD_JOBS[job_id]
+                    job["pending_ids"] = job.get("pending_ids", []) + ids
+                    job["total"] = int(job.get("total", 0)) + len(ids)
+                    def _bg(ids_local: List[int], db_local: Session, job_key: str):
+                        # mark running
+                        j = _UPLOAD_JOBS.get(job_key)
+                        if j:
+                            j["status"] = "running"
+                        count = _embed_context_ids(ids_local, db_local)
+                        j = _UPLOAD_JOBS.get(job_key)
+                        if j:
+                            j["done"] = int(j.get("done", 0)) + count
+                            if j.get("done", 0) >= j.get("total", 0):
+                                j["status"] = "done"
+                    background_tasks.add_task(_bg, ids, db_fig, job_id)
                 results.append(UploadFileResult(name=name, size=size, created=created, skipped=skipped, embedded=0, detail="Embedding queued"))
                 total_created += created
                 total_skipped += skipped
@@ -869,9 +936,26 @@ async def upload_documents_for_figure(
         total_embedded += embedded
         results.append(UploadFileResult(name=name, size=size, created=created, skipped=skipped, embedded=embedded))
 
-    return UploadResponse(
+    resp = UploadResponse(
         total_created=total_created,
         total_skipped=total_skipped,
         total_embedded=total_embedded,
         files=results,
+        job_id=job_id,
     )
+    return resp
+
+
+class UploadJobStatus(BaseModel):
+    job_id: str
+    status: str
+    done: int
+    total: int
+
+
+@router.get("/upload-jobs/{job_id}", response_model=UploadJobStatus)
+def get_upload_job_status(job_id: str, _: models.User = Depends(admin_required)):
+    j = _UPLOAD_JOBS.get(job_id)
+    if not j:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return UploadJobStatus(job_id=job_id, status=str(j.get("status")), done=int(j.get("done", 0)), total=int(j.get("total", 0)))
