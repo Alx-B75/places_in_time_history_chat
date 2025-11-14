@@ -20,7 +20,8 @@
     ragName: $('#ragName'), ragType: $('#ragType'), ragUrl: $('#ragUrl'), addRagBtn: $('#addRagBtn'), addStatus: $('#addStatus'),
     ctxStatus: $('#ctxStatus'), ctxBody: $('#ctxBody'),
     ingestAllBtn: $('#ingestAllBtn'), embedAllBtnTop: $('#embedAllBtnTop'), refreshBtn: $('#refreshBtn'),
-    embedHealth: $('#embedHealth')
+    embedHealth: $('#embedHealth'),
+    filePicker: $('#filePicker'), uploadBtn: $('#uploadBtn'), uploadStatus: $('#uploadStatus'), autoEmbed: $('#autoEmbed'), dropzone: $('#dropzone')
   };
   function slugFromPath(){
     const m = location.pathname.match(/\/admin\/figure-rag\/([^/?#]+)/);
@@ -102,6 +103,24 @@
     dom.addStatus.textContent = 'Added';
     dom.ragName.value = ''; dom.ragType.value = ''; dom.ragUrl.value = '';
     await loadDetail();
+  }
+
+  async function uploadFiles(slug, files){
+    if (!files || !files.length) return;
+    const fd = new FormData();
+    Array.from(files).slice(0,10).forEach(f=> fd.append('files', f));
+    const auto = dom.autoEmbed?.checked ? 'true' : 'false';
+    fd.append('auto_embed', auto);
+    dom.uploadStatus.textContent = 'Uploading…';
+    // Auth header only; do not set Content-Type explicitly for FormData
+    const headers = authHeader();
+    delete headers['Content-Type'];
+    const res = await fetch(`/admin/rag/figure/${encodeURIComponent(slug)}/upload`, { method:'POST', headers, body: fd });
+    const data = await res.json().catch(()=>({}));
+    if (!res.ok){ throw new Error(data?.detail || res.statusText); }
+    const total = `Created ${data.total_created}, skipped ${data.total_skipped}, embedded ${data.total_embedded}`;
+    dom.uploadStatus.textContent = total;
+    return data;
   }
 
   function renderContexts(rows, slug){
@@ -204,6 +223,32 @@
     const slug = slugFromPath(); if (!slug) return alert('Missing slug');
     addManual(slug).catch(e=>alert(e.message));
   });
+
+  dom.uploadBtn?.addEventListener('click', async ()=>{
+    const slug = slugFromPath(); if (!slug) return;
+    try{
+      const files = dom.filePicker?.files || [];
+      await uploadFiles(slug, files);
+      await loadDetail();
+    }catch(e){ dom.uploadStatus.textContent = e.message; }
+  });
+
+  if (dom.dropzone){
+    const dz = dom.dropzone;
+    const onPrevent = (e)=>{ e.preventDefault(); e.stopPropagation(); };
+    ['dragenter','dragover','dragleave','drop'].forEach(ev=> dz.addEventListener(ev, onPrevent));
+    dz.addEventListener('dragover', ()=> dz.style.background = '#0c1a34');
+    dz.addEventListener('dragleave', ()=> dz.style.background = '#0b1220');
+    dz.addEventListener('drop', async (e)=>{
+      dz.style.background = '#0b1220';
+      const slug = slugFromPath(); if (!slug) return;
+      const dt = e.dataTransfer; const files = dt?.files || [];
+      try{
+        await uploadFiles(slug, files);
+        await loadDetail();
+      }catch(err){ dom.uploadStatus.textContent = err.message; }
+    });
+  }
 
   // boot
   loadDetail().catch(e=>{ dom.hdrStatus.textContent = e.message; });

@@ -12,12 +12,14 @@ from __future__ import annotations
 
 from typing import Generator, List, Optional, Tuple, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 import re
 import html as html_mod
 import requests
+import os
+import tempfile
 
 from app import models
 from app.figures_database import FigureSessionLocal
@@ -627,3 +629,249 @@ def embedding_health(
     dim = client.get_embedding_dimension()
     ready = client.client is not None
     return EmbeddingHealth(provider=provider, model=model, dimension=dim, ready=ready)
+
+
+# ---------- Upload parsers and endpoints ----------
+
+class UploadFileResult(BaseModel):
+    name: str
+    size: int
+    created: int
+    skipped: int
+    embedded: int
+    detail: Optional[str] = None
+
+
+class UploadResponse(BaseModel):
+    total_created: int
+    total_skipped: int
+    total_embedded: int
+    files: List[UploadFileResult]
+
+
+def _safe_filename(name: str) -> str:
+    base = re.sub(r"[^A-Za-z0-9._-]+", "-", name or "upload")
+    return base[:200]
+
+
+def _bytes_to_text_via_pdfminer(data: bytes) -> str:
+    try:
+        from pdfminer.high_level import extract_text  # type: ignore
+    except Exception:
+        raise HTTPException(status_code=500, detail="PDF support requires pdfminer.six. Please install it.")
+    # write to a temporary file for robust parsing
+    with tempfile.NamedTemporaryFile(delete=True, suffix=".pdf") as tmp:
+        tmp.write(data)
+        tmp.flush()
+        try:
+            text = extract_text(tmp.name) or ""
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {exc}")
+    text = re.sub(r"\s+", " ", text or "").strip()
+    return text
+
+
+def _ingest_uploaded_text(
+    db_fig: Session,
+    figure_slug: str,
+    source_name: str,
+    source_url: Optional[str],
+    text: str,
+    max_chunks: Optional[int] = None,
+    do_embed: bool = True,
+) -> Tuple[int, int, int, List[int]]:
+    if not text or not text.strip():
+        return (0, 0, 0)
+    chunks = _chunk_text(text)
+    if max_chunks:
+        chunks = chunks[: max_chunks]
+
+    # dedupe across ALL existing contexts for this figure (not just one URL)
+    existing = (
+        db_fig.query(models.FigureContext)
+        .filter(models.FigureContext.figure_slug == figure_slug)
+        .all()
+    )
+    existing_texts = set((r.content or "").strip() for r in existing if r.content)
+
+    created = 0
+    new_rows: List[models.FigureContext] = []
+    for chunk in chunks:
+        key = (chunk or "").strip()
+        if not key or key in existing_texts:
+            continue
+        ctx = models.FigureContext(
+            figure_slug=figure_slug,
+            source_name=source_name,
+            source_url=source_url,
+            content_type="context",
+            content=chunk,
+            is_manual=0,
+        )
+        db_fig.add(ctx)
+        db_fig.flush()
+        new_rows.append(ctx)
+        existing_texts.add(key)
+        created += 1
+    db_fig.commit()
+
+    embedded = 0
+    if do_embed and new_rows:
+        from app.vector.chroma_client import get_figure_context_collection
+        from app.vector.embedding_provider import get_embedding
+        coll = get_figure_context_collection()
+        for ctx in new_rows:
+            try:
+                emb = get_embedding(ctx.content or "")
+                meta = {
+                    "figure_slug": ctx.figure_slug,
+                    "source_name": getattr(ctx, "source_name", None),
+                    "source_url": getattr(ctx, "source_url", None),
+                    "content_type": getattr(ctx, "content_type", None),
+                    "is_manual": bool(getattr(ctx, "is_manual", 0)),
+                }
+                vec_id = f"{ctx.figure_slug}-{ctx.id}"
+                coll.add(documents=[ctx.content or ""], embeddings=[emb], metadatas=[meta], ids=[vec_id])
+                embedded += 1
+            except Exception:
+                continue
+    skipped = len(chunks) - created
+    return created, skipped, embedded, [r.id for r in new_rows]
+
+
+def _embed_context_ids(ctx_ids: List[int], db_fig: Session) -> int:
+    from app.vector.chroma_client import get_figure_context_collection
+    from app.vector.embedding_provider import get_embedding
+    if not ctx_ids:
+        return 0
+    rows = (
+        db_fig.query(models.FigureContext)
+        .filter(models.FigureContext.id.in_(ctx_ids))
+        .all()
+    )
+    coll = get_figure_context_collection()
+    done = 0
+    for ctx in rows:
+        try:
+            emb = get_embedding(ctx.content or "")
+            meta = {
+                "figure_slug": ctx.figure_slug,
+                "source_name": getattr(ctx, "source_name", None),
+                "source_url": getattr(ctx, "source_url", None),
+                "content_type": getattr(ctx, "content_type", None),
+                "is_manual": bool(getattr(ctx, "is_manual", 0)),
+            }
+            vec_id = f"{ctx.figure_slug}-{ctx.id}"
+            coll.add(documents=[ctx.content or ""], embeddings=[emb], metadatas=[meta], ids=[vec_id])
+            done += 1
+        except Exception:
+            continue
+    return done
+
+
+@router.post("/figure/{figure_slug}/upload", response_model=UploadResponse)
+async def upload_documents_for_figure(
+    figure_slug: str,
+    files: List[UploadFile] = File(...),
+    auto_embed: bool = True,
+    max_chunks: int = 50,
+    background_tasks: BackgroundTasks = None,
+    _: models.User = Depends(admin_required),
+    db_fig: Session = Depends(get_figure_db),
+):
+    fig = (
+        db_fig.query(models.HistoricalFigure)
+        .filter(models.HistoricalFigure.slug == figure_slug)
+        .first()
+    )
+    if not fig:
+        raise HTTPException(status_code=404, detail="Figure not found")
+
+    # limits
+    if not files or len(files) == 0:
+        raise HTTPException(status_code=400, detail="No files provided")
+    if len(files) > 10:
+        raise HTTPException(status_code=400, detail="Too many files (max 10)")
+
+    total_created = total_skipped = total_embedded = 0
+    results: List[UploadFileResult] = []
+    total_size = 0
+
+    for f in files:
+        name = _safe_filename(f.filename or "upload.txt")
+        try:
+            data = await f.read()
+        except Exception as exc:
+            results.append(UploadFileResult(name=name, size=0, created=0, skipped=0, embedded=0, detail=f"Read failed: {exc}"))
+            continue
+        size = len(data or b"")
+        total_size += size
+        if size <= 0:
+            results.append(UploadFileResult(name=name, size=0, created=0, skipped=0, embedded=0, detail="Empty file"))
+            continue
+        if size > 25 * 1024 * 1024:
+            results.append(UploadFileResult(name=name, size=size, created=0, skipped=0, embedded=0, detail="File too large (limit 25MB)"))
+            continue
+
+        ext = (os.path.splitext(name)[1] or "").lower()
+        text = ""
+        try:
+            if ext in (".txt", ".md"):
+                text = (data.decode("utf-8", errors="replace") or "").strip()
+            elif ext in (".pdf",):
+                text = _bytes_to_text_via_pdfminer(data)
+            elif ext in (".html", ".htm"):
+                raw = (data.decode("utf-8", errors="replace") or "")
+                text = _html_to_text(raw)
+            else:
+                # fallback: try utf-8 decode
+                text = (data.decode("utf-8", errors="replace") or "").strip()
+        except HTTPException as he:
+            results.append(UploadFileResult(name=name, size=size, created=0, skipped=0, embedded=0, detail=he.detail))
+            continue
+        except Exception as exc:
+            results.append(UploadFileResult(name=name, size=size, created=0, skipped=0, embedded=0, detail=f"Parse failed: {exc}"))
+            continue
+
+        if not text:
+            results.append(UploadFileResult(name=name, size=size, created=0, skipped=0, embedded=0, detail="No text extracted"))
+            continue
+
+        source_url = f"upload://{name}"
+        created = skipped = embedded = 0
+        try:
+            # Choose background embedding if payload is large
+            use_background = auto_embed and (size > 5 * 1024 * 1024 or total_size > 10 * 1024 * 1024)
+            c, s, e, ids = _ingest_uploaded_text(
+                db_fig,
+                figure_slug,
+                source_name=name,
+                source_url=source_url,
+                text=text,
+                max_chunks=max_chunks,
+                do_embed=(auto_embed and not use_background),
+            )
+            created, skipped, embedded = c, s, e
+            if auto_embed and use_background and ids:
+                # schedule background embedding
+                if background_tasks is not None:
+                    background_tasks.add_task(_embed_context_ids, ids, db_fig)
+                results.append(UploadFileResult(name=name, size=size, created=created, skipped=skipped, embedded=0, detail="Embedding queued"))
+                total_created += created
+                total_skipped += skipped
+                continue
+        except Exception as exc:
+            results.append(UploadFileResult(name=name, size=size, created=0, skipped=0, embedded=0, detail=f"Ingest failed: {exc}"))
+            continue
+
+        total_created += created
+        total_skipped += skipped
+        total_embedded += embedded
+        results.append(UploadFileResult(name=name, size=size, created=created, skipped=skipped, embedded=embedded))
+
+    return UploadResponse(
+        total_created=total_created,
+        total_skipped=total_skipped,
+        total_embedded=total_embedded,
+        files=results,
+    )

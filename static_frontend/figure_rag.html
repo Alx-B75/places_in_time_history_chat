@@ -55,6 +55,19 @@
       <div id="embeddingsMeta" class="muted">Loading…</div>
     </div>
 
+    <div class="section" id="uploadSection">
+      <h3 style="margin:0 0 8px;">Upload Documents</h3>
+      <div id="dropzone" style="border:1px dashed var(--border); padding:12px; border-radius:10px; background:#0b1220;">
+        <div class="muted" style="margin-bottom:8px;">Drag and drop .txt, .md, .pdf, .html files here (max 10 files, 25MB each) or pick files:</div>
+        <input id="filePicker" type="file" multiple accept=".txt,.md,.pdf,.html,.htm" />
+        <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+          <label><input type="checkbox" id="autoEmbed" checked /> Auto-embed after upload</label>
+          <button class="btn sm" id="uploadBtn">Upload</button>
+          <span class="muted" id="uploadStatus"></span>
+        </div>
+      </div>
+    </div>
+
     <div class="section" id="addManualSection">
       <h3 style="margin:0 0 8px;">Add Manual Context</h3>
       <input id="ragName" type="text" placeholder="Name (e.g., note)" />
@@ -92,6 +105,6 @@
     </div>
   </div>
 
-  <script src="/static/figure_rag.js?v=1"></script>
+  <script src="/static/figure_rag.js?v=2"></script>
 </body>
 </html>
