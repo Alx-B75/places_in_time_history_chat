@@ -306,6 +306,14 @@ def list_user_threads(
 
 @app.get("/", response_class=FileResponse)
 def serve_index() -> FileResponse:
+    """Serve the Register page by default at root, falling back to index.html.
+
+    This makes the initial experience account-centric in production while
+    preserving the existing static landing page as a fallback.
+    """
+    register_path = STATIC_DIR / "register.html"
+    if register_path.exists():
+        return FileResponse(register_path, media_type="text/html")
     return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
 
 
