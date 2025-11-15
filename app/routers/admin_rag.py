@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.figures_database import FigureSessionLocal
-from app.utils.security import admin_required
+from app.utils.security import get_admin_user
 
 router = APIRouter(prefix="/admin/rag", tags=["Admin RAG"])
 
@@ -67,7 +67,7 @@ class ContextCreate(BaseModel):
 @router.get("/contexts", response_model=List[ContextRead])
 def list_contexts_by_figure(
     figure_slug: str = Query(..., min_length=1, description="Slug of the figure"),
-    _: models.User = Depends(admin_required),
+    _: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ) -> List[ContextRead]:
     """
@@ -86,7 +86,7 @@ def list_contexts_by_figure(
 def update_context(
     ctx_id: int,
     patch: ContextUpdate,
-    _: models.User = Depends(admin_required),
+    _: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ) -> ContextRead:
     """
@@ -116,7 +116,7 @@ def update_context(
 @router.delete("/contexts/{ctx_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_context(
     ctx_id: int,
-    _: models.User = Depends(admin_required),
+    _: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ):
     """
@@ -148,7 +148,7 @@ class RagSummaryResponse(BaseModel):
 
 @router.get("/sources", response_model=RagSummaryResponse)
 def rag_sources_summary(
-    _: models.User = Depends(admin_required),
+    _: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ):
     """
@@ -235,7 +235,7 @@ def rag_sources_summary(
 @router.post("/sources", response_model=ContextRead, status_code=status.HTTP_201_CREATED)
 def create_manual_source(
     payload: ContextCreate,
-    _: models.User = Depends(admin_required),
+    _: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ) -> ContextRead:
     """
