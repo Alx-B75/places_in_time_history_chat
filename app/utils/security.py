@@ -31,8 +31,9 @@ _settings = get_settings()
 _ALGORITHM = "HS256"
 _ADMIN_STEPUP_TTL_MINUTES = 20
 
-_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
-_oauth2_admin_scheme = OAuth2PasswordBearer(tokenUrl="/auth/admin/stepup")
+# Disable auto_error so missing tokens don't trigger implicit WWW-Authenticate challenges
+_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+_oauth2_admin_scheme = OAuth2PasswordBearer(tokenUrl="/auth/admin/stepup", auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -73,7 +74,7 @@ def _decode_token(token: str) -> dict:
 
 
 def get_current_user(
-    token: str = Depends(_oauth2_scheme),
+    token: Optional[str] = Depends(_oauth2_scheme),
     db: Session = Depends(database.get_db_chat),
 ) -> models.User:
     """
@@ -85,6 +86,8 @@ def get_current_user(
         detail="Could not validate credentials",
     )
     try:
+        if not token:
+            raise credentials_exception
         payload = _decode_token(token)
         username = payload.get("sub")
         if not username:
