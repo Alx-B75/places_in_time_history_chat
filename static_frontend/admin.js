@@ -439,7 +439,7 @@
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${escapeHTML(f.slug)}</td>
-        <td>${escapeHTML(f.name || "")}</td>
+        <td><a href="/admin/figure-ui/${escapeAttr(f.slug || '')}">${escapeHTML(f.name || "")}</a></td>
         <td>${escapeHTML(String(f.total_contexts ?? 0))}${f.has_manual_context ? ' <span class="muted">(manual)</span>' : ''}<br/><span class="muted">${countStr}</span></td>
         <td>${links || ""}</td>
         <td>
