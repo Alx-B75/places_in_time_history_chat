@@ -41,3 +41,14 @@ Roadmap (post v0)
 - Expand moderation and RAG source transparency
 - Surface citations and source cards where available
 - Additional tests and accessibility polish
+
+Recent RAG & Operational Additions (2025-11-15)
+----------------------------------------------
+- Admin per-figure RAG detail page with context listing, ingest & embed actions.
+- Document upload endpoint (`/admin/rag/figure/{slug}/upload`) supporting TXT/MD/PDF/HTML/DOCX.
+- Automatic chunking, dedupe, and background embedding jobs with progress polling.
+- Sanitized `/health` output (no DB paths; boolean flags only).
+- Dev-only user seeding & debug routes; single static mount.
+- Per-message source citations (collapsed “View sources (n)” toggles in threads).
+
+See `docs/RAG_UPLOAD_AND_HEALTH.md` for full specification.
