@@ -346,9 +346,9 @@ def serve_threads_page(user_id: int, current_user: models.User = Depends(get_cur
 
 @app.get("/guest/{slug}", response_class=FileResponse)
 def serve_guest_page(slug: str) -> FileResponse:
-    # slug is only for client-side routing in this static page
+    """Serve SPA shell so React handles /guest/:slug routes."""
     _ = slug
-    return FileResponse(STATIC_DIR / "guest.html", media_type="text/html")
+    return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
 
 
 @app.get("/ui/figures", response_class=FileResponse)
