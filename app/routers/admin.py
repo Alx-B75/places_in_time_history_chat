@@ -348,7 +348,7 @@ def update_figure_admin(
     slug: str,
     data: schemas.HistoricalFigureUpdate,
     request: Request,
-    admin_user: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
     db_chat: Session = Depends(get_db_chat),
 ) -> schemas.HistoricalFigureDetail:
@@ -403,7 +403,7 @@ def update_figure_admin(
 def delete_figure_admin(
     slug: str,
     request: Request,
-    admin_user: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
     db_chat: Session = Depends(get_db_chat),
 ) -> Response:
