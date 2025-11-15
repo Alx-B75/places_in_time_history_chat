@@ -79,10 +79,10 @@ def get_current_user(
     """
     Return the authenticated user derived from a normal bearer token.
     """
+    # Avoid adding a WWW-Authenticate header to prevent native browser auth popups
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
     )
     try:
         payload = _decode_token(token)
