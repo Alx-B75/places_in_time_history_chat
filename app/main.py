@@ -10,6 +10,8 @@ provides a health endpoint that verifies configuration and RAG availability.
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
+import os
+import shutil
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status, Body
@@ -56,6 +58,30 @@ async def lifespan(_: FastAPI):
     """
     App lifecycle: create DBs and run idempotent figures ingest at startup.
     """
+    # Optional data seed: copy repo-local data_seed/ into /data when explicitly requested.
+    def _truthy(v: str | None) -> bool:
+        return bool(v) and str(v).strip().lower() in {"1", "true", "yes", "on"}
+    if _settings.render and _truthy(os.getenv("APPLY_DATA_SEED")):
+        try:
+            seed_src = BASE_DIR / "data_seed"
+            target = Path("/data")
+            if seed_src.exists() and target.exists() and os.access(target, os.W_OK):
+                # Overwrite a limited set of known artifacts (DBs, chroma directories, csv/hash files)
+                for item in seed_src.iterdir():
+                    dest = target / item.name
+                    if dest.exists():
+                        if dest.is_dir():
+                            shutil.rmtree(dest, ignore_errors=True)
+                        else:
+                            try: dest.unlink()
+                            except Exception: pass
+                    if item.is_dir():
+                        shutil.copytree(item, dest)
+                    else:
+                        shutil.copy2(item, dest)
+        except Exception:
+            # Silent failure; seeding is best-effort and should not block startup.
+            pass
     # models import ensures table registration
     ChatBase.metadata.create_all(bind=chat_engine)
     FigureBase.metadata.create_all(bind=figures_engine)
