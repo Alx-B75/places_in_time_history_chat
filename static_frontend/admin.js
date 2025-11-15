@@ -101,6 +101,9 @@
     }
     const ready = !!state.adminToken;
     dom.tabs.forEach((t) => t.classList.toggle("disabled", !ready));
+    // Toggle inline login panel visibility
+    const loginPanel = document.getElementById("login-panel");
+    if (loginPanel) loginPanel.style.display = ready ? "none" : "block";
   }
 
   function parseJwt(token) {
