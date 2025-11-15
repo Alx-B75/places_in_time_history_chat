@@ -230,9 +230,10 @@ def compat_login(payload: dict = Body(...), db: Session = Depends(get_db_chat)):
 # Optional convenience routes to serve static login/register pages on GET
 @app.get("/login")
 def serve_login_page() -> Response:
-    # In dev, steer to the Vite SPA login to avoid confusion with static page
+    # In dev (explicit ENVIRONMENT=dev), steer to local Vite SPA; otherwise serve static login.
     import os
-    if os.getenv("ENVIRONMENT", "dev").lower() == "dev":
+    env = os.getenv("ENVIRONMENT", "prod").lower()
+    if env == "dev":
         return RedirectResponse(url="http://127.0.0.1:5173/login", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
     path = STATIC_DIR / "login.html"
     if not path.exists():
