@@ -119,10 +119,16 @@
   }
 
   function saveTokens() {
-    if (state.userToken) sessionStorage.setItem("user_token", state.userToken);
-    else sessionStorage.removeItem("user_token");
-    if (state.adminToken) sessionStorage.setItem("admin_token", state.adminToken);
-    else sessionStorage.removeItem("admin_token");
+    // Session storage (current tab)
+    if (state.userToken) sessionStorage.setItem("user_token", state.userToken); else sessionStorage.removeItem("user_token");
+    if (state.adminToken) sessionStorage.setItem("admin_token", state.adminToken); else sessionStorage.removeItem("admin_token");
+    // Local storage (share across tabs)
+    if (state.userToken) localStorage.setItem("access_token", state.userToken); else localStorage.removeItem("access_token");
+    // Cookies (fallback for other static pages to bootstrap auth)
+    const secure = location.protocol === 'https:' ? '; Secure' : '';
+    const base = '; Path=/; SameSite=Lax' + secure;
+    if (state.userToken) document.cookie = `pit_access_token=${encodeURIComponent(state.userToken)}${base}`; else document.cookie = `pit_access_token=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; SameSite=Lax${secure}`;
+    if (state.adminToken) document.cookie = `pit_admin_token=${encodeURIComponent(state.adminToken)}${base}`; else document.cookie = `pit_admin_token=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; SameSite=Lax${secure}`;
   }
   function loadTokens() {
     const ut = sessionStorage.getItem("user_token");

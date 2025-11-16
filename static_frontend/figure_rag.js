@@ -6,8 +6,15 @@ async function slugFromPath() {
   return parts[parts.length-1] || parts[parts.length-2];
 }
 
+function readCookie(name){
+  try{
+    const m = document.cookie.split('; ').find(row => row.startsWith(name + '='));
+    return m ? decodeURIComponent(m.split('=')[1]) : null;
+  }catch(_){ return null }
+}
+
 function authFetch(url, opts={}) {
-  const tok = sessionStorage.getItem('admin_token');
+  const tok = sessionStorage.getItem('admin_token') || readCookie('pit_admin_token');
   const headers = { ...(opts.headers||{}) };
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
   return fetch(url, { ...opts, headers });

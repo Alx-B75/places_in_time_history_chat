@@ -360,6 +360,7 @@ def chat_complete(
     if thread.figure_slug:
         figure = crud.get_figure_by_slug(db_fig, thread.figure_slug)
 
+    import json as _json
     messages, _sources = build_prompt(
         figure=figure,
         user_message=message,
@@ -380,7 +381,20 @@ def chat_complete(
     )
     answer = response["choices"][0]["message"]["content"].strip() if response.get("choices") else ""
 
-    assistant_msg = schemas.ChatMessageCreate(user_id=user_id, role="assistant", message=answer, thread_id=thread_id)
+    # Persist sources used to generate this answer for client-side display
+    sources_json = None
+    try:
+        if _sources:
+            sources_json = _json.dumps(_sources, ensure_ascii=False)
+    except Exception:
+        sources_json = None
+    assistant_msg = schemas.ChatMessageCreate(
+        user_id=user_id,
+        role="assistant",
+        message=answer,
+        thread_id=thread_id,
+        source_page=sources_json,
+    )
     crud.create_chat_message(db, assistant_msg)
 
     return RedirectResponse(url=f"/user/{user_id}/threads", status_code=status.HTTP_303_SEE_OTHER)

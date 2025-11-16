@@ -64,6 +64,14 @@
 
         <div id="messages" class="messages" aria-live="polite" aria-atomic="false"></div>
 
+        <div id="sources-toggle" class="panel" style="border-top:1px solid var(--border);display:none;padding:8px 16px;">
+          <button id="toggle-sources-btn" class="btn sm">Show Sources</button>
+          <span id="sources-count" class="muted" style="margin-left:8px"></span>
+        </div>
+        <div id="sources-panel" class="panel" style="display:none;padding:8px 16px;">
+          <div id="sources-list" class="muted"></div>
+        </div>
+
         <form id="message-form" class="compose">
           <textarea id="message-input" rows="3" placeholder="Type a message… (Enter to send, Shift+Enter for a new line)"></textarea>
           <button id="send-btn" type="submit" class="btn">Send</button>
@@ -125,6 +133,11 @@
     const figureHeroImg = document.getElementById('figure-hero-img');
     const figureDesc = document.getElementById('figure-desc');
     const statusEl = document.getElementById('status');
+    const sourcesToggle = document.getElementById('sources-toggle');
+    const sourcesBtn = document.getElementById('toggle-sources-btn');
+    const sourcesPanel = document.getElementById('sources-panel');
+    const sourcesList = document.getElementById('sources-list');
+    const sourcesCount = document.getElementById('sources-count');
 
     userLabel.textContent = `— signed in as ${username || 'user ' + userId}`;
 
@@ -232,11 +245,36 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    function renderSourcesFromLastAssistant(msgs){
+      // Find last assistant message with sources
+      let last = null;
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        if (m.role === 'assistant' && m.source_page) { last = m; break; }
+      }
+      if (!last) { sourcesToggle.style.display='none'; sourcesPanel.style.display='none'; return; }
+      try{
+        const arr = typeof last.source_page === 'string' ? JSON.parse(last.source_page) : (last.source_page || []);
+        if (!Array.isArray(arr) || arr.length === 0) { sourcesToggle.style.display='none'; sourcesPanel.style.display='none'; return; }
+        sourcesList.innerHTML = arr.map((s,idx)=>{
+          const name = (s.source_name || `Source ${idx+1}`).toString();
+          const url = s.source_url || '';
+          if (url) return `<div>• <a href="${url}" target="_blank" rel="noopener noreferrer">${escapeHTML(name)}</a></div>`;
+          return `<div>• ${escapeHTML(name)}</div>`;
+        }).join('');
+        sourcesCount.textContent = `(${arr.length})`;
+        sourcesToggle.style.display='block';
+      } catch(_) {
+        sourcesToggle.style.display='none'; sourcesPanel.style.display='none';
+      }
+    }
+
     async function renderMessages(){
       if(!currentThreadId) return;
       messagesEl.innerHTML='';
       const msgs = await authGET(`/threads/${currentThreadId}/messages`);
       msgs.forEach(renderMessage);
+      renderSourcesFromLastAssistant(msgs);
     }
 
     async function selectThread(threadId){
@@ -324,6 +362,12 @@
     logoutBtn.addEventListener('click', ()=>{
       localStorage.removeItem('access_token'); localStorage.removeItem('user_id'); localStorage.removeItem('username');
       window.location.href='/';
+    });
+
+    sourcesBtn.addEventListener('click', ()=>{
+      const open = sourcesPanel.style.display === 'block';
+      sourcesPanel.style.display = open ? 'none' : 'block';
+      sourcesBtn.textContent = open ? 'Show Sources' : 'Hide Sources';
     });
 
     (async function init(){
