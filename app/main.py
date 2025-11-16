@@ -359,9 +359,7 @@ def serve_spa_thread_view(tid: str) -> FileResponse:  # tid consumed for routing
     _ = tid
     return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
 
-@app.get("/figures", response_class=FileResponse)
-def serve_spa_figures() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
+# Removed SPA shell route for /figures to allow API router /figures to respond with JSON.
 
 
 @app.get("/user/{user_id}/threads", response_class=FileResponse)
