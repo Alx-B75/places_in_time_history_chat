@@ -391,8 +391,12 @@ def serve_admin_figures_ui(_: models.User = Depends(get_admin_user_loose)) -> Fi
 
 
 @app.get("/admin/figure-ui/{slug}", response_class=FileResponse, include_in_schema=False)
-def serve_admin_figure_edit_ui(slug: str, _: models.User = Depends(get_admin_user_loose)) -> FileResponse:
-    _ = slug  # consumed for path binding; page is static
+def serve_admin_figure_edit_ui(slug: str) -> FileResponse:
+    """Serve static figure edit page without enforcing auth so initial navigation succeeds.
+
+    All mutations still require admin auth via API endpoints called from its JS.
+    """
+    _ = slug  # consumed for path binding
     return FileResponse(STATIC_DIR / "admin_figure_edit.html", media_type="text/html")
 
 

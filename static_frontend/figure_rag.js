@@ -6,8 +6,19 @@ async function slugFromPath() {
   return parts[parts.length-1] || parts[parts.length-2];
 }
 
+function authFetch(url, opts={}) {
+  const tok = sessionStorage.getItem('admin_token');
+  const headers = { ...(opts.headers||{}) };
+  if (tok) headers['Authorization'] = `Bearer ${tok}`;
+  return fetch(url, { ...opts, headers });
+}
+
 async function loadContexts(slug) {
-  const res = await fetch(`/admin/rag/contexts?figure_slug=${encodeURIComponent(slug)}`);
+  const res = await authFetch(`/admin/rag/contexts?figure_slug=${encodeURIComponent(slug)}`);
+  if (res.status === 401 || res.status === 403) {
+    showAuthWarning();
+    return [];
+  }
   if (!res.ok) return [];
   return await res.json();
 }
@@ -40,7 +51,10 @@ function renderContexts(rows) {
     btn.addEventListener('click', async () => {
       const id = btn.getAttribute('data-id');
       btn.disabled = true; btn.textContent='Embedding…';
-      try { await fetch(`/admin/rag/contexts/${id}/embed`, {method:'POST'}); } catch(e){ alert(e.message||e); }
+      try { 
+        const r = await authFetch(`/admin/rag/contexts/${id}/embed`, {method:'POST'}); 
+        if(!r.ok) throw new Error(await r.text());
+      } catch(e){ alert(e.message||e); }
       btn.textContent='Embed'; btn.disabled=false; loadAndRender();
     });
   });
@@ -92,7 +106,7 @@ document.getElementById('uploadBtn').addEventListener('click', async ()=>{
   filesToUpload.forEach(f=> fd.append('files', f));
   const auto = document.getElementById('autoEmbed').checked;
   const q = `?auto_embed=${auto?1:0}`;
-  const res = await fetch(`/admin/rag/figure/${slug}/upload${q}`, {method:'POST', body: fd});
+  const res = await authFetch(`/admin/rag/figure/${slug}/upload${q}`, {method:'POST', body: fd});
   if (!res.ok) return alert('Upload failed');
   const data = await res.json();
   if (data.job_id){
@@ -106,7 +120,11 @@ document.getElementById('uploadBtn').addEventListener('click', async ()=>{
 document.getElementById('embedAll').addEventListener('click', async ()=>{
   const slug = await slugFromPath();
   if(!confirm('Embed all contexts for this figure?')) return;
-  try{ await fetch(`/admin/rag/figure/${slug}/embed-all`, {method:'POST'}); loadAndRender(); }catch(e){ alert(e.message||e); }
+  try{ 
+    const r = await authFetch(`/admin/rag/figure/${slug}/embed-all`, {method:'POST'}); 
+    if(!r.ok) throw new Error(await r.text());
+    loadAndRender(); 
+  }catch(e){ alert(e.message||e); }
 });
 
 // Ingest All (wikipedia only for now)
@@ -114,7 +132,7 @@ document.getElementById('ingestAll').addEventListener('click', async ()=>{
   const slug = await slugFromPath();
   if(!confirm('Ingest primary source (Wikipedia) for this figure?')) return;
   try{
-    const r = await fetch(`/admin/rag/figure/${slug}/ingest-source`, {
+    const r = await authFetch(`/admin/rag/figure/${slug}/ingest-source`, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ source:'wikipedia', auto_embed:false })
     });
@@ -132,3 +150,14 @@ function escapeHTML(s){
   return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
 }
 function escapeAttr(s){ return escapeHTML(s); }
+
+function showAuthWarning(){
+  const tbody = document.querySelector('#contexts tbody');
+  if (!tbody) return;
+  if (tbody.dataset.authWarn) return;
+  tbody.dataset.authWarn = '1';
+  const tr = document.createElement('tr');
+  tr.innerHTML = '<td colspan="3" style="color:#b00;font-weight:600">Admin token missing or expired. Open /admin/ui and sign in, then reload this page.</td>';
+  tbody.innerHTML='';
+  tbody.appendChild(tr);
+}
