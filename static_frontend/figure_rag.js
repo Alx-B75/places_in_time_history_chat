@@ -15,19 +15,34 @@ async function loadContexts(slug) {
 function renderContexts(rows) {
   const tbody = document.querySelector('#contexts tbody');
   tbody.innerHTML = '';
+  if(!rows.length){
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="3" class="muted">No contexts yet.</td>';
+    tbody.appendChild(tr);
+    return;
+  }
   rows.forEach(r => {
     const tr = document.createElement('tr');
-    const tdId = document.createElement('td'); tdId.textContent = r.id;
-    const tdText = document.createElement('td'); tdText.textContent = (r.content || r.text || '').slice(0,200);
-    const tdActions = document.createElement('td');
-    const embedBtn = document.createElement('button'); embedBtn.textContent = 'Embed';
-    embedBtn.onclick = async ()=>{
-      await fetch(`/admin/rag/contexts/${r.id}/embed`, {method:'POST'});
-      loadAndRender();
-    };
-    tdActions.appendChild(embedBtn);
-    tr.appendChild(tdId); tr.appendChild(tdText); tr.appendChild(tdActions);
+    const preview = (r.content || '').replace(/\s+/g,' ').slice(0,160);
+    tr.innerHTML = `
+      <td>${r.id}</td>
+      <td>
+        <div class="ctx-preview" title="${escapeAttr(r.content||'')}">${escapeHTML(preview)}</div>
+        <div class="ctx-meta muted">${escapeHTML(r.source_name||'')} · ${escapeHTML(r.content_type||'')}</div>
+      </td>
+      <td>
+        <button class="btn sm" data-act="embed" data-id="${r.id}">Embed</button>
+      </td>
+    `;
     tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('button[data-act="embed"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      btn.disabled = true; btn.textContent='Embedding…';
+      try { await fetch(`/admin/rag/contexts/${id}/embed`, {method:'POST'}); } catch(e){ alert(e.message||e); }
+      btn.textContent='Embed'; btn.disabled=false; loadAndRender();
+    });
   });
 }
 
@@ -87,7 +102,33 @@ document.getElementById('uploadBtn').addEventListener('click', async ()=>{
   }
 });
 
+// Embed All
+document.getElementById('embedAll').addEventListener('click', async ()=>{
+  const slug = await slugFromPath();
+  if(!confirm('Embed all contexts for this figure?')) return;
+  try{ await fetch(`/admin/rag/figure/${slug}/embed-all`, {method:'POST'}); loadAndRender(); }catch(e){ alert(e.message||e); }
+});
+
+// Ingest All (wikipedia only for now)
+document.getElementById('ingestAll').addEventListener('click', async ()=>{
+  const slug = await slugFromPath();
+  if(!confirm('Ingest primary source (Wikipedia) for this figure?')) return;
+  try{
+    const r = await fetch(`/admin/rag/figure/${slug}/ingest-source`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ source:'wikipedia', auto_embed:false })
+    });
+    if(!r.ok){ throw new Error(await r.text()); }
+    await loadAndRender();
+  }catch(e){ alert(e.message||e); }
+});
+
 // Wire buttons
 document.getElementById('refresh').addEventListener('click', loadAndRender);
 
 window.addEventListener('load', loadAndRender);
+
+function escapeHTML(s){
+  return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+}
+function escapeAttr(s){ return escapeHTML(s); }

@@ -4,17 +4,31 @@
   <meta charset="utf-8">
   <title>Figure RAG - Ingest</title>
   <style>
-    #dropzone { border: 2px dashed #888; padding: 30px; text-align:center; }
+    body { font-family: system-ui, Arial, sans-serif; padding:18px; }
+    a { text-decoration:none; color:#0d4d7a; }
+    a:hover { text-decoration:underline; }
+    #dropzone { border: 2px dashed #888; padding: 30px; text-align:center; cursor:pointer; transition:background .15s; border-radius:6px; }
+    #dropzone.drag { background:#eef; }
     .hidden { display:none; }
+    .actions { display:flex; gap:8px; margin:12px 0 18px; }
+    .btn { background:#0d4d7a; color:#fff; border:1px solid #083551; padding:6px 12px; cursor:pointer; border-radius:4px; font-size:0.8rem; }
+    .btn:hover { background:#135c91; }
+    #filePicker { margin-top:8px; }
+    #progressWrap { margin:14px 0; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { border:1px solid #ccc; padding:6px 8px; font-size:0.8rem; vertical-align:top; }
+    th { background:#f5f5f5; }
+    .ctx-meta { font-size:0.65rem; color:#555; margin-top:4px; }
+    .ctx-preview { white-space:normal; line-height:1.25; }
   </style>
 </head>
 <body>
   <a href="/admin/figures.html">Back to figures</a>
   <h1 id="title">Figure</h1>
-  <div>
-    <button id="ingestAll">Ingest All</button>
-    <button id="embedAll">Embed All</button>
-    <button id="refresh">Refresh</button>
+  <div class="actions">
+    <button id="ingestAll" class="btn">Ingest Source (Wikipedia)</button>
+    <button id="embedAll" class="btn">Embed All</button>
+    <button id="refresh" class="btn">Refresh</button>
   </div>
 
   <h2>Upload Documents</h2>
@@ -33,7 +47,7 @@
 
   <h2>Contexts</h2>
   <table id="contexts">
-    <thead><tr><th>ID</th><th>Text Preview</th><th>Actions</th></tr></thead>
+    <thead><tr><th style="width:60px">ID</th><th>Content</th><th style="width:120px">Actions</th></tr></thead>
     <tbody></tbody>
   </table>
 

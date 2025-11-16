@@ -139,11 +139,14 @@ def _ingest_uploaded_text(
     db: Session,
     figure_slug: str,
     text: str,
-    author: Optional[str] = None,
     source_name: Optional[str] = None,
+    content_type: str = "document",
     auto_embed: bool = False,
 ) -> Tuple[List[int], List[UploadFileResult]]:
-    # create FigureContext rows for chunks produced from text, dedupe by exact text
+    """Chunk text and create FigureContext rows using existing model columns.
+
+    Dedupe by exact content match (figure_slug + content) to avoid duplicates.
+    """
     results: List[UploadFileResult] = []
     ctx_ids: List[int] = []
     if not text or not text.strip():
@@ -151,56 +154,38 @@ def _ingest_uploaded_text(
 
     chunks = _chunk_text(text)
     for i, c in enumerate(chunks):
-        row = models.FigureContext(
-            figure_slug=figure_slug,
-            text=c,
-            author=author or "upload",
-            source=source_name or "upload",
-            is_embedded=False,
-        )
-        # dedupe: simple existence check
         exists = (
             db.query(models.FigureContext)
             .filter(models.FigureContext.figure_slug == figure_slug)
-            .filter(models.FigureContext.text == c)
+            .filter(models.FigureContext.content == c)
             .first()
         )
         if exists:
-            results.append(
-                UploadFileResult(filename=f"chunk-{i}", type="chunk", size=len(c), ok=False)
-            )
+            results.append(UploadFileResult(filename=f"chunk-{i}", type="chunk", size=len(c), ok=False))
             continue
+        row = models.FigureContext(
+            figure_slug=figure_slug,
+            source_name=source_name or "upload",
+            source_url=None,
+            content_type=content_type,
+            content=c,
+            is_manual=0,
+        )
         db.add(row)
         db.flush()
         ctx_ids.append(row.id)
-        results.append(
-            UploadFileResult(filename=f"chunk-{i}", type="chunk", size=len(c), ok=True)
-        )
+        results.append(UploadFileResult(filename=f"chunk-{i}", type="chunk", size=len(c), ok=True))
     db.commit()
-    # Optionally embed synchronously
     if auto_embed and ctx_ids:
-        # schedule synchronous embedding in current process (simple)
         try:
-            from app.services.embedding_client import get_embedding
-            from app.vector.chroma_client import ensure_collection
-
-            emb = get_embedding
-            coll = ensure_collection(figure_slug)
-            rows = (
-                db.query(models.FigureContext).filter(models.FigureContext.id.in_(ctx_ids)).all()
-            )
-            for r in rows:
-                vec = emb(r.text)
-                coll.add_documents([r.text], metadatas=[{"id": r.id}])
-                r.is_embedded = True
-            db.commit()
+            _embed_context_ids(db, ctx_ids, figure_slug)
         except Exception:
             pass
     return ctx_ids, results
 
 
 def _embed_context_ids(db: Session, ctx_ids: List[int], figure_slug: str) -> None:
-    # embed by ids
+    """Embed contexts by id using their content field."""
     try:
         from app.services.embedding_client import get_embedding
         from app.vector.chroma_client import ensure_collection
@@ -209,9 +194,8 @@ def _embed_context_ids(db: Session, ctx_ids: List[int], figure_slug: str) -> Non
         coll = ensure_collection(figure_slug)
         rows = db.query(models.FigureContext).filter(models.FigureContext.id.in_(ctx_ids)).all()
         for r in rows:
-            vec = emb(r.text)
-            coll.add_documents([r.text], metadatas=[{"id": r.id}])
-            r.is_embedded = True
+            vec = emb(r.content or "")  # compute embedding (vec unused if coll handles raw text)
+            coll.add_documents([r.content or ""], metadatas=[{"id": r.id}])
         db.commit()
     except Exception:
         db.rollback()
@@ -229,7 +213,7 @@ class ContextRead(BaseModel):
     content_type: Optional[str] = None
     content: Optional[str] = None
     is_manual: Optional[int] = 0
-    is_embedded: Optional[bool] = False
+    # embedded status is inferred externally (vector store); omit field to match model columns
 
 
 class ContextCreate(BaseModel):
@@ -544,20 +528,20 @@ async def upload_figure_files(
         ft = (f.filename or "").lower()
         if ft.endswith(".pdf"):
             text = _pdf_to_text(content)
-            ctx_ids, results = _ingest_uploaded_text(db, figure_slug, text, source_name=f.filename, auto_embed=auto_embed)
+            ctx_ids, results = _ingest_uploaded_text(db, figure_slug, text, source_name=f.filename, content_type="document", auto_embed=auto_embed)
         elif ft.endswith(".docx"):
             text = _docx_to_text(content)
-            ctx_ids, results = _ingest_uploaded_text(db, figure_slug, text, source_name=f.filename, auto_embed=auto_embed)
+            ctx_ids, results = _ingest_uploaded_text(db, figure_slug, text, source_name=f.filename, content_type="document", auto_embed=auto_embed)
         elif ft.endswith(".html") or ft.endswith(".htm"):
             text = _html_to_text(content.decode(errors="ignore"))
-            ctx_ids, results = _ingest_uploaded_text(db, figure_slug, text, source_name=f.filename, auto_embed=auto_embed)
+            ctx_ids, results = _ingest_uploaded_text(db, figure_slug, text, source_name=f.filename, content_type="html", auto_embed=auto_embed)
         else:
             # treat as plain text
             try:
                 text = content.decode()
             except Exception:
                 text = ""
-            ctx_ids, results = _ingest_uploaded_text(db, figure_slug, text, source_name=f.filename, auto_embed=auto_embed)
+            ctx_ids, results = _ingest_uploaded_text(db, figure_slug, text, source_name=f.filename, content_type="text", auto_embed=auto_embed)
         resp.results.extend(results)
         all_new_ctx_ids.extend(ctx_ids)
 
@@ -581,3 +565,104 @@ async def upload_figure_files(
         resp.job_id = job_id
 
     return resp
+
+
+# -------- Embedding & Ingest Actions --------
+
+@router.post("/contexts/{ctx_id}/embed")
+def embed_single_context(
+    ctx_id: int,
+    _: models.User = Depends(get_admin_user),
+    db_fig: Session = Depends(get_figure_db),
+) -> ContextRead:
+    ctx = db_fig.query(models.FigureContext).filter(models.FigureContext.id == ctx_id).first()
+    if not ctx:
+        raise HTTPException(status_code=404, detail="Context not found")
+    try:
+        _embed_context_ids(db_fig, [ctx.id], ctx.figure_slug)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Embedding failed: {exc}")
+    db_fig.refresh(ctx)
+    return ctx  # type: ignore[return-value]
+
+
+@router.post("/figure/{figure_slug}/embed-all")
+def embed_all_contexts(
+    figure_slug: str,
+    _: models.User = Depends(get_admin_user),
+    db_fig: Session = Depends(get_figure_db),
+) -> dict:
+    rows = (
+        db_fig.query(models.FigureContext)
+        .filter(models.FigureContext.figure_slug == figure_slug)
+        .order_by(models.FigureContext.id.asc())
+        .all()
+    )
+    ids = [r.id for r in rows]
+    if not ids:
+        return {"embedded": 0}
+    try:
+        _embed_context_ids(db_fig, ids, figure_slug)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Embed-all failed: {exc}")
+    return {"embedded": len(ids)}
+
+
+class IngestSourcePayload(BaseModel):
+    source: str = Field(..., description="Source key e.g. 'wikipedia'")
+    url: Optional[str] = Field(None, description="Override URL if not in figure metadata")
+    auto_embed: bool = False
+
+
+@router.post("/figure/{figure_slug}/ingest-source")
+def ingest_source(
+    figure_slug: str,
+    payload: IngestSourcePayload,
+    _: models.User = Depends(get_admin_user),
+    db_fig: Session = Depends(get_figure_db),
+) -> dict:
+    fig = db_fig.query(models.HistoricalFigure).filter(models.HistoricalFigure.slug == figure_slug).first()
+    if not fig:
+        raise HTTPException(status_code=404, detail="Figure not found")
+    import json, requests
+    wiki_links = {}
+    try:
+        if getattr(fig, "wiki_links", None):
+            wiki_links = json.loads(fig.wiki_links) if isinstance(fig.wiki_links, str) else (fig.wiki_links or {})
+    except Exception:
+        wiki_links = {}
+    source = payload.source.lower().strip()
+    url = payload.url
+    if not url:
+        if source == "wikipedia":
+            url = wiki_links.get("wikipedia")
+        elif source == "wikidata":
+            url = wiki_links.get("wikidata")
+        elif source == "dbpedia":
+            url = wiki_links.get("dbpedia")
+    if not url:
+        raise HTTPException(status_code=400, detail=f"No URL available for source '{source}'")
+
+    # Fetch and extract text (basic HTML -> text). For Wikipedia prefer REST raw endpoint if possible.
+    text = ""
+    try:
+        # If Wikipedia, attempt a simplified raw content fetch via standard page url; fallback to html.
+        resp = requests.get(url, timeout=15)
+        resp.raise_for_status()
+        content_type = resp.headers.get("Content-Type", "").lower()
+        if "html" in content_type or "text" in content_type:
+            text = _html_to_text(resp.text)
+        else:
+            text = resp.text
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Fetch failed: {exc}")
+
+    new_ids, chunk_results = _ingest_uploaded_text(
+        db_fig,
+        figure_slug,
+        text,
+        source_name=source,
+        content_type="ingest",
+        auto_embed=payload.auto_embed,
+    )
+    return {"created": len(new_ids), "chunks": [r.dict() for r in chunk_results], "auto_embedded": payload.auto_embed}
