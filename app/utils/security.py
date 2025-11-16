@@ -13,11 +13,25 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status, Header, Cookie
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app import crud, models, database
 from app.settings import get_settings
+
+# Accept legacy "bcrypt" hashes, generate "bcrypt_sha256" going forward.
+try:
+    # Ensure bcrypt module exposes __about__ for compatibility with some passlib handlers
+    import bcrypt as _bcrypt_mod
+    if not hasattr(_bcrypt_mod, "__about__"):
+        # Create a minimal __about__ fallback with a __version__ attribute
+        ver = getattr(_bcrypt_mod, "__version__", None) or getattr(_bcrypt_mod, "bcrypt_version", None) or "4.0.0"
+        class _About: __version__ = ver
+        _bcrypt_mod.__about__ = _About
+except Exception:
+    # ignore if bcrypt isn't installed yet (install-time); passlib will raise later if needed
+    _bcrypt_mod = None
+
+from passlib.context import CryptContext
 
 # Accept legacy "bcrypt" hashes, generate "bcrypt_sha256" going forward.
 _pwd_context = CryptContext(
