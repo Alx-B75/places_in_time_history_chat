@@ -10,9 +10,16 @@ Notes
 
 from __future__ import annotations
 
-from typing import Generator, List, Optional
+from typing import Generator, List, Optional, Tuple, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, UploadFile, File
+import re
+import html as html_mod
+import os
+import tempfile
+import time
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel, Field, HttpUrl
 from sqlalchemy.orm import Session
 
@@ -31,7 +38,188 @@ def get_figure_db() -> Generator[Session, None, None]:
         db.close()
 
 
+# --- upload job registry -------------------------------------------------
+# lightweight in-memory job store for uploads -> background embedding job progress
+# NOTE: this is process-local. For multi-instance deployments prefer Redis/persistent store.
+_UPLOAD_JOBS: Dict[str, Dict] = {}
+
+
+class UploadFileResult(BaseModel):
+    filename: str
+    type: str
+    size: int
+    ok: bool = True
+
+
+class UploadResponse(BaseModel):
+    results: List[UploadFileResult] = Field(default_factory=list)
+    job_id: Optional[str] = None
+
+
+def _html_to_text(html: str) -> str:
+    # very small sanitizer / text extractor
+    text = re.sub(r"<script.*?>.*?</script>", "", html, flags=re.S | re.I)
+    text = re.sub(r"<style.*?>.*?</style>", "", text, flags=re.S | re.I)
+    # strip tags
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = html_mod.unescape(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _chunk_text(text: str, chunk_size: int = 750, overlap: int = 50) -> List[str]:
+    tokens = text.split()
+    out = []
+    i = 0
+    while i < len(tokens):
+        chunk = tokens[i : i + chunk_size]
+        out.append(" ".join(chunk))
+        i += chunk_size - overlap
+    return out
+
+
+# Attempt fast PDF extraction via PyMuPDF, fall back to pdfminer if not available.
+def _pdf_to_text(data: bytes) -> str:
+    try:
+        import fitz
+
+        with tempfile.NamedTemporaryFile(delete=False) as tf:
+            tf.write(data)
+            tf.flush()
+            path = tf.name
+        doc = fitz.open(path)
+        txt = []
+        for p in doc:
+            txt.append(p.get_text())
+        doc.close()
+        try:
+            os.unlink(path)
+        except Exception:
+            pass
+        return "\n".join(txt)
+    except Exception:
+        # fallback to pdfminer.six
+        try:
+            from pdfminer.high_level import extract_text
+
+            with tempfile.NamedTemporaryFile(delete=False) as tf:
+                tf.write(data)
+                tf.flush()
+                path = tf.name
+            text = extract_text(path)
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
+            return text
+        except Exception:
+            return ""
+
+
+def _docx_to_text(data: bytes) -> str:
+    try:
+        from docx import Document
+
+        with tempfile.NamedTemporaryFile(delete=False) as tf:
+            tf.write(data)
+            tf.flush()
+            path = tf.name
+        doc = Document(path)
+        paragraphs = [p.text for p in doc.paragraphs]
+        try:
+            os.unlink(path)
+        except Exception:
+            pass
+        return "\n".join(paragraphs)
+    except Exception:
+        return ""
+
+
+def _ingest_uploaded_text(
+    db: Session,
+    figure_slug: str,
+    text: str,
+    author: Optional[str] = None,
+    source_name: Optional[str] = None,
+    auto_embed: bool = False,
+) -> Tuple[List[int], List[UploadFileResult]]:
+    # create FigureContext rows for chunks produced from text, dedupe by exact text
+    results: List[UploadFileResult] = []
+    ctx_ids: List[int] = []
+    if not text or not text.strip():
+        return ctx_ids, results
+
+    chunks = _chunk_text(text)
+    for i, c in enumerate(chunks):
+        row = models.FigureContext(
+            figure_slug=figure_slug,
+            text=c,
+            author=author or "upload",
+            source=source_name or "upload",
+            is_embedded=False,
+        )
+        # dedupe: simple existence check
+        exists = (
+            db.query(models.FigureContext)
+            .filter(models.FigureContext.figure_slug == figure_slug)
+            .filter(models.FigureContext.text == c)
+            .first()
+        )
+        if exists:
+            results.append(
+                UploadFileResult(filename=f"chunk-{i}", type="chunk", size=len(c), ok=False)
+            )
+            continue
+        db.add(row)
+        db.flush()
+        ctx_ids.append(row.id)
+        results.append(
+            UploadFileResult(filename=f"chunk-{i}", type="chunk", size=len(c), ok=True)
+        )
+    db.commit()
+    # Optionally embed synchronously
+    if auto_embed and ctx_ids:
+        # schedule synchronous embedding in current process (simple)
+        try:
+            from app.services.embedding_client import get_embedding
+            from app.vector.chroma_client import ensure_collection
+
+            emb = get_embedding
+            coll = ensure_collection(figure_slug)
+            rows = (
+                db.query(models.FigureContext).filter(models.FigureContext.id.in_(ctx_ids)).all()
+            )
+            for r in rows:
+                vec = emb(r.text)
+                coll.add_documents([r.text], metadatas=[{"id": r.id}])
+                r.is_embedded = True
+            db.commit()
+        except Exception:
+            pass
+    return ctx_ids, results
+
+
+def _embed_context_ids(db: Session, ctx_ids: List[int], figure_slug: str) -> None:
+    # embed by ids
+    try:
+        from app.services.embedding_client import get_embedding
+        from app.vector.chroma_client import ensure_collection
+
+        emb = get_embedding
+        coll = ensure_collection(figure_slug)
+        rows = db.query(models.FigureContext).filter(models.FigureContext.id.in_(ctx_ids)).all()
+        for r in rows:
+            vec = emb(r.text)
+            coll.add_documents([r.text], metadatas=[{"id": r.id}])
+            r.is_embedded = True
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
+
 # ---------- Schemas ----------
+
 
 class ContextRead(BaseModel):
     id: int
@@ -40,26 +228,24 @@ class ContextRead(BaseModel):
     source_url: Optional[str] = None
     content_type: Optional[str] = None
     content: Optional[str] = None
-    is_manual: int
-
-    class Config:
-        from_attributes = True
-
-
-class ContextUpdate(BaseModel):
-    source_name: Optional[str] = Field(None, max_length=200)
-    source_url: Optional[str] = None  # keep free-form URL (some may be non-HTTP)
-    content_type: Optional[str] = Field(None, max_length=100)
-    content: Optional[str] = None
-    is_manual: Optional[int] = None
+    is_manual: Optional[int] = 0
+    is_embedded: Optional[bool] = False
 
 
 class ContextCreate(BaseModel):
-    figure_slug: str = Field(..., min_length=1)
-    source_name: str = Field(..., min_length=1, max_length=200)
-    content_type: str = Field(..., min_length=1, max_length=100)
+    figure_slug: str
+    source_name: str
     source_url: Optional[str] = None
+    content_type: str = Field(..., min_length=1, max_length=100)
     content: Optional[str] = None
+
+
+class ContextUpdate(BaseModel):
+    source_name: Optional[str] = None
+    source_url: Optional[str] = None
+    content_type: Optional[str] = None
+    content: Optional[str] = None
+    is_manual: Optional[int] = None
 
 
 # ---------- Endpoints ----------
@@ -332,3 +518,66 @@ def upload_sources(
 
     # Optionally: caller can trigger background embedding/ingest; for now return created rows
     return created  # type: ignore[return-value]
+
+
+@router.get("/upload-jobs/{job_id}")
+async def upload_job_status(job_id: str):
+    job = _UPLOAD_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="job not found")
+    return job
+
+
+@router.post("/figure/{figure_slug}/upload", response_model=UploadResponse)
+async def upload_figure_files(
+    figure_slug: str,
+    background_tasks: BackgroundTasks,
+    files: List[UploadFile] = File(...),
+    auto_embed: Optional[bool] = Query(False),
+    db: Session = Depends(get_figure_db),
+    _admin=Depends(get_admin_user),
+):
+    resp = UploadResponse()
+    all_new_ctx_ids: List[int] = []
+    for f in files:
+        content = await f.read()
+        ft = (f.filename or "").lower()
+        if ft.endswith(".pdf"):
+            text = _pdf_to_text(content)
+            ctx_ids, results = _ingest_uploaded_text(db, figure_slug, text, source_name=f.filename, auto_embed=auto_embed)
+        elif ft.endswith(".docx"):
+            text = _docx_to_text(content)
+            ctx_ids, results = _ingest_uploaded_text(db, figure_slug, text, source_name=f.filename, auto_embed=auto_embed)
+        elif ft.endswith(".html") or ft.endswith(".htm"):
+            text = _html_to_text(content.decode(errors="ignore"))
+            ctx_ids, results = _ingest_uploaded_text(db, figure_slug, text, source_name=f.filename, auto_embed=auto_embed)
+        else:
+            # treat as plain text
+            try:
+                text = content.decode()
+            except Exception:
+                text = ""
+            ctx_ids, results = _ingest_uploaded_text(db, figure_slug, text, source_name=f.filename, auto_embed=auto_embed)
+        resp.results.extend(results)
+        all_new_ctx_ids.extend(ctx_ids)
+
+    # If not auto_embed, schedule background embedding job
+    if all_new_ctx_ids and not auto_embed:
+        job_id = uuid.uuid4().hex
+        _UPLOAD_JOBS[job_id] = {"created_at": time.time(), "total": len(all_new_ctx_ids), "done": 0, "status": "queued"}
+
+        def _bg(ctx_ids: List[int], jid: str):
+            _UPLOAD_JOBS[jid]["status"] = "running"
+            # embed in batches
+            for i, cid in enumerate(ctx_ids):
+                try:
+                    _embed_context_ids(db, [cid], figure_slug)
+                    _UPLOAD_JOBS[jid]["done"] += 1
+                except Exception:
+                    pass
+            _UPLOAD_JOBS[jid]["status"] = "done"
+
+        background_tasks.add_task(_bg, all_new_ctx_ids, job_id)
+        resp.job_id = job_id
+
+    return resp

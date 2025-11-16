@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Figure RAG - Ingest</title>
+  <style>
+    #dropzone { border: 2px dashed #888; padding: 30px; text-align:center; }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+  <a href="/admin/figures.html">Back to figures</a>
+  <h1 id="title">Figure</h1>
+  <div>
+    <button id="ingestAll">Ingest All</button>
+    <button id="embedAll">Embed All</button>
+    <button id="refresh">Refresh</button>
+  </div>
+
+  <h2>Upload Documents</h2>
+  <div id="dropzone">Drop files here or click to select
+    <input id="filePicker" type="file" multiple class="hidden" />
+  </div>
+  <label><input type="checkbox" id="autoEmbed" /> Auto-embed after upload</label>
+  <div>
+    <button id="uploadBtn">Upload</button>
+  </div>
+
+  <div id="progressWrap" class="hidden">
+    <progress id="progress" value="0" max="100"></progress>
+    <div id="progressText"></div>
+  </div>
+
+  <h2>Contexts</h2>
+  <table id="contexts">
+    <thead><tr><th>ID</th><th>Text Preview</th><th>Actions</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+<script src="figure_rag.js"></script>
+</body>
+</html>
