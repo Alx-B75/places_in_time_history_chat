@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Generator, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, UploadFile, File
 from pydantic import BaseModel, Field, HttpUrl
 from sqlalchemy.orm import Session
 
@@ -258,3 +258,77 @@ def create_manual_source(
     db_fig.commit()
     db_fig.refresh(ctx)
     return ctx  # type: ignore[return-value]
+
+
+@router.post("/upload", response_model=list[ContextRead], status_code=status.HTTP_201_CREATED)
+def upload_sources(
+    figure_slug: str = Query(..., min_length=1, description="Slug of the figure to attach uploads to"),
+    files: list[UploadFile] | None = None,
+    _: models.User = Depends(get_admin_user),
+    db_fig: Session = Depends(get_figure_db),
+) -> list[ContextRead]:
+    """
+    Accept one or more uploaded files (PDFs etc), extract text (best-effort), and create FigureContext entries.
+
+    This is a simple, robust helper to restore drag-and-drop ingestion from the admin UI.
+    For PDFs we use PyPDF2 to extract text; other types fall back to raw bytes->utf-8 text.
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
+    # Ensure figure exists
+    fig = db_fig.query(models.HistoricalFigure).filter(models.HistoricalFigure.slug == figure_slug).first()
+    if not fig:
+        raise HTTPException(status_code=404, detail="Figure not found")
+
+    created: list[models.FigureContext] = []
+    for up in files:
+        filename = getattr(up, "filename", "uploaded") or "uploaded"
+        content = ""
+        try:
+            # Try PDF extraction via PyPDF2 if file looks like PDF
+            data = up.file.read()
+            up.file.seek(0)
+            if data[:4] == b"%PDF":
+                try:
+                    from PyPDF2 import PdfReader
+
+                    reader = PdfReader(up.file)
+                    pages = []
+                    for p in reader.pages:
+                        txt = p.extract_text() or ""
+                        pages.append(txt)
+                    content = "\n\n".join(pages)
+                except Exception:
+                    # Fallback to raw decode
+                    try:
+                        content = data.decode("utf-8", errors="replace")
+                    except Exception:
+                        content = ""
+            else:
+                # Non-PDF: try to decode as text
+                try:
+                    content = data.decode("utf-8", errors="replace")
+                except Exception:
+                    content = ""
+        finally:
+            try:
+                up.file.close()
+            except Exception:
+                pass
+
+        ctx = models.FigureContext(
+            figure_slug=figure_slug,
+            source_name=filename,
+            source_url=None,
+            content_type="document",
+            content=content or "",
+            is_manual=0,
+        )
+        db_fig.add(ctx)
+        db_fig.commit()
+        db_fig.refresh(ctx)
+        created.append(ctx)
+
+    # Optionally: caller can trigger background embedding/ingest; for now return created rows
+    return created  # type: ignore[return-value]
