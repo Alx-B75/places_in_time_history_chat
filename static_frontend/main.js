@@ -98,8 +98,10 @@
         // send to Vite SPA dashboard in dev
         window.location.href = `http://127.0.0.1:5173/dashboard`;
       } else {
-        // SPA route when served behind the frontend build
-        window.location.href = `/dashboard`;
+        // Take user directly to their threads console
+        const uid = data?.user_id || localStorage.getItem('user_id');
+        if (uid) window.location.href = `/user/${uid}/threads`;
+        else window.location.href = `/threads`;
       }
     } catch {
       showError("Network error during login.");
@@ -153,7 +155,9 @@
       if (dev) {
         window.location.href = `http://127.0.0.1:5173/dashboard`;
       } else {
-        window.location.href = `/dashboard`;
+        const uid = data?.user_id || localStorage.getItem('user_id');
+        if (uid) window.location.href = `/user/${uid}/threads`;
+        else window.location.href = `/threads`;
       }
     } catch {
       showError("Network error during registration.");
