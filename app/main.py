@@ -347,18 +347,17 @@ def serve_index() -> FileResponse:
 # SPA route shims: serve index.html so React Router can pick up the path.
 @app.get("/dashboard", response_class=FileResponse)
 def serve_spa_dashboard() -> FileResponse:
-    # Route dashboard to the threads UI for signed-in users
-    return FileResponse(STATIC_DIR / "threads.html", media_type="text/html")
+    # Serve SPA shell (index.html) so React/JS router can manage pages
+    return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
 
 @app.get("/threads", response_class=FileResponse)
 def serve_spa_threads() -> FileResponse:
-    return FileResponse(STATIC_DIR / "threads.html", media_type="text/html")
+    return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
 
 @app.get("/thread/{tid}", response_class=FileResponse)
 def serve_spa_thread_view(tid: str) -> FileResponse:  # tid consumed for routing
     _ = tid
-    # Show the threads UI; it will load the selected thread via API
-    return FileResponse(STATIC_DIR / "threads.html", media_type="text/html")
+    return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
 
 @app.get("/figures", response_class=FileResponse)
 def serve_spa_figures() -> FileResponse:
