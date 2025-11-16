@@ -365,7 +365,7 @@
       tr.innerHTML = `
         <td>${f.id}</td>
         <td><a href="/admin/figure-ui/${escapeAttr(f.slug || '')}">${escapeHTML(f.name || "")}</a></td>
-        <td>${escapeHTML(f.slug || "")}</td>
+        <td><a href="/admin/figure_rag.html?slug=${escapeAttr(f.slug || '')}">${escapeHTML(f.slug || "")}</a></td>
         <td>${escapeHTML(f.era || "")}</td>
         <td class="muted summary-cell" title="${escapeAttr(f.short_summary || '')}">${escapeHTML(f.short_summary || "")}</td>
         <td>
@@ -438,7 +438,7 @@
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${escapeHTML(f.slug)}</td>
+        <td><a href="/admin/figure_rag.html?slug=${escapeAttr(f.slug || '')}">${escapeHTML(f.slug)}</a></td>
         <td><a href="/admin/figure-ui/${escapeAttr(f.slug || '')}">${escapeHTML(f.name || "")}</a></td>
         <td>${escapeHTML(String(f.total_contexts ?? 0))}${f.has_manual_context ? ' <span class="muted">(manual)</span>' : ''}<br/><span class="muted">${countStr}</span></td>
         <td>${links || ""}</td>
