@@ -256,6 +256,14 @@
             || null;
         }catch(_){ /* noop */ }
         setAuthUI();
+        // If no admin token present, redirect to ops console for a single session login.
+        if(!state.adminToken){
+          // Preserve current target slug for post-login return.
+          const slug = (location.pathname.split('/').pop() || '').trim();
+          const next = encodeURIComponent(`/admin/figure-ui/${slug}`);
+          location.href = `/ops/console?next=${next}`;
+          return;
+        }
         if(state.userToken){
           try{ await loadFigure(); }catch(_){ /* handled in loadFigure */ }
         }

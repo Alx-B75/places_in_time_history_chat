@@ -28,6 +28,7 @@ llm_client = LlmClient()
 
 
 from app.config.llm_config import llm_config
+import json as _json
 
 def generate_answer(context: list[dict], prompt: str, *, model: str | None = None, temperature: float | None = None):
     """
@@ -143,13 +144,20 @@ def ask(
     model_name = payload.model_used or llm_config.model
     answer, usage = generate_answer(messages, payload.message, model=model_name, temperature=None)
 
+    # Persist actual sources used for this answer so UI can render them.
+    sources_json = None
+    try:
+        if sources:
+            sources_json = _json.dumps(sources, ensure_ascii=False)
+    except Exception:
+        sources_json = None
     assistant_msg = schemas.ChatMessageCreate(
         user_id=current_user.id,
         role="assistant",
         message=answer,
         thread_id=thread.id,
         model_used=model_name,
-        source_page=payload.source_page,
+        source_page=sources_json,
     )
     crud.create_chat_message(db, assistant_msg)
 

@@ -22,6 +22,8 @@ export default function ThreadView() {
   const [figure, setFigure] = useState(null)
   const [isFav, setIsFav] = useState(false)
   const [favBusy, setFavBusy] = useState(false)
+  const [showSources, setShowSources] = useState(false)
+  const [sources, setSources] = useState([])
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -42,6 +44,21 @@ export default function ThreadView() {
         if (!msgsRes.ok) throw new Error(await msgsRes.text())
         const msgs = await msgsRes.json()
         setMessages(msgs || [])
+        // collect sources from most recent assistant message with source_page metadata
+        try {
+          let last = null
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            const m = msgs[i]
+            if (m.role === 'assistant' && m.source_page) { last = m; break }
+          }
+          if (last) {
+            const parsed = typeof last.source_page === 'string' ? JSON.parse(last.source_page) : (last.source_page || [])
+            if (Array.isArray(parsed) && parsed.length) setSources(parsed)
+            else setSources([])
+          } else {
+            setSources([])
+          }
+        } catch { setSources([]) }
         // fetch figure details for hero display
         if (figureSlug) {
           try{
@@ -95,6 +112,18 @@ export default function ThreadView() {
       if (!msgsRes.ok) throw new Error(await msgsRes.text())
       const fresh = await msgsRes.json()
       setMessages(fresh || [])
+      // update sources from latest assistant
+      try {
+        let last = null
+        for (let i = fresh.length - 1; i >= 0; i--) {
+          const m = fresh[i]
+          if (m.role === 'assistant' && m.source_page) { last = m; break }
+        }
+        if (last) {
+          const parsed = typeof last.source_page === 'string' ? JSON.parse(last.source_page) : (last.source_page || [])
+          setSources(Array.isArray(parsed) ? parsed : [])
+        } else setSources([])
+      } catch { setSources([]) }
       setText('')
     } catch (e) { setErr(e.message || 'Ask failed') }
     finally { setSending(false) }
@@ -203,6 +232,26 @@ export default function ThreadView() {
             ))
           )}
         </div>
+        {/* Sources toggle footer */}
+        {sources.length ? (
+          <div style={{padding:'8px 12px', borderTop:'1px solid var(--border)', background:'rgba(148,163,184,.05)'}}>
+            <button
+              type="button"
+              className="btn sm"
+              onClick={()=> setShowSources(s => !s)}
+              style={{minWidth:110}}
+            >{showSources ? 'Hide Sources' : `Show Sources (${sources.length})`}</button>
+            {showSources && (
+              <div style={{marginTop:8,fontSize:13}}>
+                {sources.map((s,idx)=>(
+                  <div key={idx} style={{marginBottom:4}}>
+                    • {s.source_url ? <a href={s.source_url} target="_blank" rel="noopener noreferrer">{s.source_name || `Source ${idx+1}`}</a> : (s.source_name || `Source ${idx+1}`)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
         <form onSubmit={send} className="compose chat-input-row" style={{flexDirection:'column',alignItems:'stretch'}}>
           <textarea
             value={text}
