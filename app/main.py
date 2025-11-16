@@ -396,6 +396,15 @@ def serve_admin_figure_edit_ui(slug: str, _: models.User = Depends(get_admin_use
     return FileResponse(STATIC_DIR / "admin_figure_edit.html", media_type="text/html")
 
 
+@app.get("/admin/figure_rag.html", response_class=FileResponse)
+def serve_admin_figure_rag() -> FileResponse:
+    """Serve the per-figure RAG ingestion static page."""
+    path = STATIC_DIR / "figure_rag.html"
+    if not path.exists():
+        return Response(content="<html><body><h1>Not found</h1><p>figure_rag.html not found in static_frontend.</p></body></html>", media_type="text/html", status_code=404)
+    return FileResponse(path, media_type="text/html")
+
+
 @app.get("/main.js", response_class=FileResponse)
 def serve_main_js() -> FileResponse:
     return FileResponse(STATIC_DIR / "main.js", media_type="application/javascript")
