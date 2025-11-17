@@ -362,11 +362,12 @@ def serve_spa_thread_view(tid: str) -> FileResponse:  # tid consumed for routing
 # Removed SPA shell route for /figures to allow API router /figures to respond with JSON.
 
 
-@app.get("/user/{user_id}/threads", response_class=FileResponse)
-def serve_threads_page(user_id: int, current_user: models.User = Depends(get_current_user_loose)) -> FileResponse:
+@app.get("/user/{user_id}/threads")
+def serve_threads_page(user_id: int, current_user: models.User = Depends(get_current_user_loose)):
     if int(getattr(current_user, 'id', -1)) != int(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-    return FileResponse(STATIC_DIR / "threads.html", media_type="text/html")
+    # Redirect legacy path to SPA threads route
+    return RedirectResponse(url="/threads", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/guest/{slug}", response_class=FileResponse)

@@ -397,7 +397,8 @@ def chat_complete(
     )
     crud.create_chat_message(db, assistant_msg)
 
-    return RedirectResponse(url=f"/user/{user_id}/threads", status_code=status.HTTP_303_SEE_OTHER)
+    # Route to modern SPA threads view instead of legacy static page
+    return RedirectResponse(url="/threads", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # --- User Favorites (alternative stable path) ---
