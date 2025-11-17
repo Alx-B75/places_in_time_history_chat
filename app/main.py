@@ -3,6 +3,11 @@ from __future__ import annotations
 from typing import List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, HTMLResponse
+import os
+from pathlib import Path
 
 from app import crud, models, schemas
 from app.database import Base, engine as chat_engine, get_db_chat
@@ -41,6 +46,51 @@ app.include_router(ask_router.router)
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+# --- Static frontend (SPA + admin pages) ---
+ROOT = Path(__file__).resolve().parents[1]
+STATIC_DIR = ROOT / "static_frontend"
+
+# CORS (allow configured origins; default to same-origin)
+allowed = [s.strip() for s in (os.getenv("ALLOWED_ORIGINS", "").split(",") if os.getenv("ALLOWED_ORIGINS") else []) if s.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed or ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR), html=False), name="static")
+
+
+def _send_static(rel: str) -> HTMLResponse:
+    path = STATIC_DIR / rel
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    return HTMLResponse(path.read_text(encoding="utf-8"))
+
+
+@app.get("/", response_class=HTMLResponse)
+def spa_index():
+    return _send_static("index.html")
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def spa_dashboard():
+    return _send_static("index.html")
+
+
+@app.get("/admin/ui", response_class=HTMLResponse)
+def admin_ui():
+    return _send_static("admin.html")
+
+
+@app.get("/admin/figure_rag.html", response_class=HTMLResponse)
+def admin_figure_rag_page():
+    return _send_static("figure_rag.html")
 
 
 # Compatibility aliases for tests expecting root /register and /login
