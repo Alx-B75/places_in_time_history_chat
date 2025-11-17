@@ -274,27 +274,14 @@ def compat_login(payload: dict = Body(...), db: Session = Depends(get_db_chat)):
     token = create_access_token(data={"sub": user.username})
     return {"user_id": user.id, "username": user.username, "access_token": token, "token_type": "bearer"}
 
-# Optional convenience routes to serve static login/register pages on GET
+# Disable legacy HTML login/register pages on GET
 @app.get("/login")
-def serve_login_page() -> Response:
-    # In dev, steer to the Vite SPA login to avoid confusion with static page
-    import os
-    if os.getenv("ENVIRONMENT", "dev").lower() == "dev":
-        return RedirectResponse(url="http://127.0.0.1:5173/login", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
-    path = STATIC_DIR / "login.html"
-    if not path.exists():
-        return Response(content="<html><body><h1>Login</h1><p>Static login page not found. Use the app UI.</p></body></html>", media_type="text/html")
-    return FileResponse(path, media_type="text/html")
+def legacy_login_disabled() -> Response:
+    return Response(content="Legacy UI disabled", status_code=status.HTTP_404_NOT_FOUND, media_type="text/plain")
 
 @app.get("/register")
-def serve_register_page() -> Response:
-    import os
-    if os.getenv("ENVIRONMENT", "dev").lower() == "dev":
-        return RedirectResponse(url="http://127.0.0.1:5173/register", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
-    path = STATIC_DIR / "register.html"
-    if not path.exists():
-        return Response(content="<html><body><h1>Register</h1><p>Static register page not found. Use the app UI to register.</p></body></html>", media_type="text/html")
-    return FileResponse(path, media_type="text/html")
+def legacy_register_disabled() -> Response:
+    return Response(content="Legacy UI disabled", status_code=status.HTTP_404_NOT_FOUND, media_type="text/plain")
 
 
 @app.get(
@@ -351,28 +338,27 @@ def list_user_threads(
     return result
 
 
-@app.get("/", response_class=FileResponse)
-def serve_index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
+@app.get("/")
+def root_index() -> Response:
+    return Response(content="API OK", media_type="text/plain")
 
 
-@app.get("/user/{user_id}/threads", response_class=FileResponse)
-def serve_threads_page(user_id: int, current_user: models.User = Depends(get_current_user_loose)) -> FileResponse:
-    if int(getattr(current_user, 'id', -1)) != int(user_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-    return FileResponse(STATIC_DIR / "threads.html", media_type="text/html")
+@app.get("/user/{user_id}/threads")
+def legacy_threads_page_disabled(user_id: int, current_user: models.User = Depends(get_current_user_loose)) -> Response:
+    _ = user_id
+    _ = current_user
+    return Response(content="Legacy UI disabled", status_code=status.HTTP_404_NOT_FOUND, media_type="text/plain")
 
 
-@app.get("/guest/{slug}", response_class=FileResponse)
-def serve_guest_page(slug: str) -> FileResponse:
-    # slug is only for client-side routing in this static page
+@app.get("/guest/{slug}")
+def legacy_guest_page_disabled(slug: str) -> Response:
     _ = slug
-    return FileResponse(STATIC_DIR / "guest.html", media_type="text/html")
+    return Response(content="Legacy UI disabled", status_code=status.HTTP_404_NOT_FOUND, media_type="text/plain")
 
 
-@app.get("/ui/figures", response_class=FileResponse)
-def serve_figures_ui() -> FileResponse:
-    return FileResponse(STATIC_DIR / "figures.html", media_type="text/html")
+@app.get("/ui/figures")
+def legacy_figures_ui_disabled() -> Response:
+    return Response(content="Legacy UI disabled", status_code=status.HTTP_404_NOT_FOUND, media_type="text/plain")
 
 
 ## Removed duplicate serve_admin_ui
@@ -385,28 +371,28 @@ def serve_admin_figures_ui(_: models.User = Depends(get_admin_user_loose)) -> Fi
 
 @app.get("/admin/figure-ui/{slug}", response_class=FileResponse, include_in_schema=False)
 def serve_admin_figure_edit_ui(slug: str, _: models.User = Depends(get_admin_user_loose)) -> FileResponse:
-    _ = slug  # consumed for path binding; page is static
+    _ = slug
     return FileResponse(STATIC_DIR / "admin_figure_edit.html", media_type="text/html")
 
 
-@app.get("/main.js", response_class=FileResponse)
-def serve_main_js() -> FileResponse:
-    return FileResponse(STATIC_DIR / "main.js", media_type="application/javascript")
+@app.get("/main.js")
+def legacy_main_js_disabled() -> Response:
+    return Response(content="Legacy asset disabled", status_code=status.HTTP_404_NOT_FOUND, media_type="text/plain")
 
 
-@app.get("/style.css", response_class=FileResponse)
-def serve_style_css() -> FileResponse:
-    return FileResponse(STATIC_DIR / "style.css", media_type="text/css")
+@app.get("/style.css")
+def legacy_style_css_disabled() -> Response:
+    return Response(content="Legacy asset disabled", status_code=status.HTTP_404_NOT_FOUND, media_type="text/plain")
 
 
-@app.get("/logo.png", response_class=FileResponse)
-def serve_logo_png() -> FileResponse:
-    return FileResponse(STATIC_DIR / "logo.png", media_type="image/png")
+@app.get("/logo.png")
+def legacy_logo_png_disabled() -> Response:
+    return Response(status_code=status.HTTP_404_NOT_FOUND)
 
 
-@app.get("/threads_visual.png", response_class=FileResponse)
-def serve_threads_visual() -> FileResponse:
-    return FileResponse(STATIC_DIR / "threads_visual.png", media_type="image/png")
+@app.get("/threads_visual.png")
+def legacy_threads_visual_disabled() -> Response:
+    return Response(status_code=status.HTTP_404_NOT_FOUND)
 
 
 @app.get("/favicon.ico")
