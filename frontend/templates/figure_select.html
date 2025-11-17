@@ -4,9 +4,21 @@
     <meta charset="UTF-8"/>
     <title>Select a Historical Figure – Places in Time</title>
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <meta name="robots" content="noindex, nofollow"/>
+    <meta http-equiv="refresh" content="0; url=/dashboard"/>
     <link href="/style.css" rel="stylesheet"/>
 </head>
 <body class="login-page">
+<script>
+    // Legacy non-SPA page: redirect to SPA dashboard
+    try { window.location.replace('/dashboard'); } catch (e) { window.location.href = '/dashboard'; }
+</script>
+<noscript>
+    <div style="margin: 2rem; text-align: center;">
+        This page has moved. Redirecting to the <a href="/dashboard">Dashboard</a>.
+    </div>
+    <hr/>
+</noscript>
 <div class="centered-form">
     <img alt="Places in Time Logo" class="logo" src="/logo.png"/>
 

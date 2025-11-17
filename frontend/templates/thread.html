@@ -4,10 +4,17 @@
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>{{ thread.title or "Thread" }} – Places in Time</title>
+    <!-- Legacy non‑SPA page deactivated: redirect to SPA -->
+    <meta name="robots" content="noindex, nofollow" />
+    <meta http-equiv="refresh" content="0; url=/dashboard" />
+    <script>window.location.replace('/dashboard');</script>
     <link href="/style.css" rel="stylesheet"/>
 </head>
 <body class="threads-page">
 <div class="threads-container">
+    <p style="padding:16px;background:#fff3cd;border:1px solid #ffeeba;color:#856404;border-radius:6px;">
+        This page has moved. Redirecting to the new dashboard… If you are not redirected, <a href="/dashboard">click here</a>.
+    </p>
     <img alt="Places in Time Logo" class="logo" src="/logo.png"/>
 
     <main class="form-box">

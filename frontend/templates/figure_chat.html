@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <title>Chat with a Historical Figure</title>
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <!-- Legacy non‑SPA page deactivated: redirect to SPA dashboard -->
+    <meta name="robots" content="noindex, nofollow" />
+    <meta http-equiv="refresh" content="0; url=/dashboard" />
+    <script>window.location.replace('/dashboard');</script>
     <style>
         body { font-family: Arial, sans-serif; padding: 2rem; max-width: 700px; margin: auto; background: #f9fbff; }
         form { display: flex; flex-direction: column; gap: 1rem; }
@@ -12,6 +16,9 @@
     </style>
 </head>
 <body>
+<p style="padding:16px;background:#fff3cd;border:1px solid #ffeeba;color:#856404;border-radius:6px;">
+    This page has moved. Redirecting to the new dashboard… If you are not redirected, <a href="/dashboard">click here</a>.
+</p>
 <h1>Ask a Historical Figure</h1>
 <form action="/ask" method="post">
     <label for="user_id">User ID:</label>
