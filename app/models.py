@@ -30,6 +30,7 @@ class Chat(Base):
     source_page = Column(String, nullable=True)
     thread_id = Column(Integer, ForeignKey("threads.id"), nullable=True)
     summary_of = Column(Integer, ForeignKey("chats.id"), nullable=True)
+    sources_json = Column(Text, nullable=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="chats")
@@ -67,6 +68,7 @@ class Thread(Base):
     title = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     figure_slug = Column(String, nullable=True)
+    age_profile = Column(String, nullable=True, index=True, default="general")
 
     user = relationship("User", back_populates="threads")
     chats = relationship("Chat", back_populates="thread", cascade="all, delete-orphan")

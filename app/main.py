@@ -1,5 +1,4 @@
 from __future__ import annotations
-from fastapi.routing import APIRoute
 """
 Main FastAPI application entry point for Places in Time History Chat.
 
@@ -30,6 +29,7 @@ from app.figures_database import engine as figures_engine
 from app.routers import admin, ask, auth, chat, figures, guest, data
 from app.routers import admin_rag  # new contexts CRUD router
 from app.settings import get_settings
+import os
 from app.utils.security import (
     get_current_user,
     get_admin_user,
@@ -39,9 +39,29 @@ from app.utils.security import (
 
 
 _settings = get_settings()
+ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 STATIC_DIR = BASE_DIR / "static_frontend"
+
+# Ensure chat DB schema exists early for tests (idempotent)
+try:
+    ChatBase.metadata.create_all(bind=chat_engine)
+    # Lightweight migration: ensure threads.age_profile exists
+    from sqlalchemy import text as _sqltext
+    with chat_engine.begin() as _conn:
+        _cols = _conn.execute(_sqltext("PRAGMA table_info('threads')")).fetchall()
+        _names = {str(r[1]) for r in _cols}
+        if 'age_profile' not in _names:
+            _conn.execute(_sqltext("ALTER TABLE threads ADD COLUMN age_profile TEXT"))
+        # Ensure chats.sources_json exists for per-message citations
+        _c_cols = _conn.execute(_sqltext("PRAGMA table_info('chats')")).fetchall()
+        _c_names = {str(r[1]) for r in _c_cols}
+        if 'sources_json' not in _c_names:
+            _conn.execute(_sqltext("ALTER TABLE chats ADD COLUMN sources_json TEXT"))
+except Exception:
+    # Non-fatal during import; lifespan will attempt again
+    pass
 
 
 def _allowed_origins() -> List[str]:
@@ -58,28 +78,45 @@ async def lifespan(_: FastAPI):
     """
     # models import ensures table registration
     ChatBase.metadata.create_all(bind=chat_engine)
+    # Lightweight migration: ensure threads.age_profile exists
+    try:
+        from sqlalchemy import text as _sqltext
+        with chat_engine.begin() as conn:
+            cols = conn.execute(_sqltext("PRAGMA table_info('threads')")).fetchall()
+            names = {str(r[1]) for r in cols}
+            if 'age_profile' not in names:
+                conn.execute(_sqltext("ALTER TABLE threads ADD COLUMN age_profile TEXT"))
+            # Ensure chats.sources_json exists
+            ccols = conn.execute(_sqltext("PRAGMA table_info('chats')")).fetchall()
+            cnames = {str(r[1]) for r in ccols}
+            if 'sources_json' not in cnames:
+                conn.execute(_sqltext("ALTER TABLE chats ADD COLUMN sources_json TEXT"))
+    except Exception:
+        # Non-fatal: if migration fails, insert queries should still work on fresh DBs
+        pass
     FigureBase.metadata.create_all(bind=figures_engine)
     from app.startup_ingest import maybe_ingest_seed_csv
     maybe_ingest_seed_csv(None)
-    # Ensure at least one admin and one sample user exist for fresh rebuilds.
-    from sqlalchemy.orm import Session as _Session
-    seed_db: _Session = next(get_db_chat())
-    try:
-        # Admin user
-        if not crud.get_user_by_username(seed_db, username="admin@example.com"):
-            from app.utils.security import hash_password
-            admin_user = schemas.UserCreate(username="admin@example.com", hashed_password=hash_password("Admin!123"))
-            u = crud.create_user(seed_db, admin_user)
-            u.role = "admin"
-            seed_db.add(u)
-        # Sample user for smoke tests
-        if not crud.get_user_by_username(seed_db, username="sample@example.com"):
-            from app.utils.security import hash_password
-            sample_user = schemas.UserCreate(username="sample@example.com", hashed_password=hash_password("Sample!123"))
-            crud.create_user(seed_db, sample_user)
-        seed_db.commit()
-    finally:
-        seed_db.close()
+    # Dev-only seed of admin + sample users
+    if ENVIRONMENT.lower() == "dev":
+        from sqlalchemy.orm import Session as _Session
+        seed_db: _Session = next(get_db_chat())
+        try:
+            # Admin user
+            if not crud.get_user_by_username(seed_db, username="admin@example.com"):
+                from app.utils.security import hash_password
+                admin_user = schemas.UserCreate(username="admin@example.com", hashed_password=hash_password("Admin!123"))
+                u = crud.create_user(seed_db, admin_user)
+                u.role = "admin"
+                seed_db.add(u)
+            # Sample user for smoke tests
+            if not crud.get_user_by_username(seed_db, username="sample@example.com"):
+                from app.utils.security import hash_password
+                sample_user = schemas.UserCreate(username="sample@example.com", hashed_password=hash_password("Sample!123"))
+                crud.create_user(seed_db, sample_user)
+            seed_db.commit()
+        finally:
+            seed_db.close()
     yield
 
 
@@ -98,6 +135,18 @@ def serve_admin_ui() -> FileResponse:
     path = STATIC_DIR / "admin.html"
     if not path.exists():
         return Response(content="<html><body><h1>Admin UI</h1><p>admin.html not found in static_frontend.</p></body></html>", media_type="text/html")
+    return FileResponse(path, media_type="text/html")
+
+
+@app.get("/admin/figure-rag/{slug}", response_class=FileResponse)
+def serve_figure_rag(slug: str) -> FileResponse:
+    """Serve the per-figure RAG detail page.
+
+    Authorization enforcement is via the admin API endpoints used by this page.
+    """
+    path = STATIC_DIR / "figure_rag.html"
+    if not path.exists():
+        return Response(content="<html><body><h1>Figure RAG</h1><p>figure_rag.html not found.</p></body></html>", media_type="text/html")
     return FileResponse(path, media_type="text/html")
 
 
@@ -138,10 +187,9 @@ app.include_router(guest.router)
 app.include_router(data.router)
 app.include_router(admin_rag.router)  # per-figure RAG context CRUD
 
-# Mount SPA only if static_frontend exists
-static_dir = (Path(__file__).resolve().parent.parent / "static_frontend")
-if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
+# Single static mount (avoid duplicates)
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 
 # ... keep your router includes here (admin, ask, auth, chat, figures, guest) ...
 # app.include_router(admin.router)
@@ -149,53 +197,52 @@ if static_dir.exists():
 # etc.
 
 
-# Temporary debug route to list all registered routes
-from fastapi.routing import APIRoute
+if ENVIRONMENT.lower() == "dev":
+    # Debug route only in development
+    from fastapi.routing import APIRoute
 
-@app.get("/_debug/routes", include_in_schema=False)
-def _debug_routes():
-    out = []
-    for r in app.routes:
-        if isinstance(r, APIRoute):
-            out.append({
-                "path": r.path,
-                "methods": sorted(list(r.methods or [])),
-                "endpoint": getattr(r.endpoint, "__name__", str(r.endpoint)),
-            })
-    out.sort(key=lambda x: (x["path"], ",".join(x["methods"])))
-    return out
+    @app.get("/_debug/routes", include_in_schema=False)
+    def _debug_routes():
+        out = []
+        for r in app.routes:
+            if isinstance(r, APIRoute):
+                out.append({
+                    "path": r.path,
+                    "methods": sorted(list(r.methods or [])),
+                    "endpoint": getattr(r.endpoint, "__name__", str(r.endpoint)),
+                })
+        out.sort(key=lambda x: (x["path"], ",".join(x["methods"])))
+        return out
 
 # Removed broad SPA catch-all which could intercept API routes like /health
 
 
 @app.get("/health")
 def health() -> JSONResponse:
-    """
-    Return a configuration and dependency health report.
-    """
+    """Return sanitized configuration and dependency health report (no sensitive paths)."""
     keys_present = {
-        "OPENAI_API_KEY": bool(_settings.openai_api_key),
-        "OPENROUTER_API_KEY": bool(_settings.openrouter_api_key),
+        "openai_configured": bool(_settings.openai_api_key),
+        "openrouter_configured": bool(_settings.openrouter_api_key),
     }
     rag_status = {"enabled": _settings.rag_enabled, "ok": False, "detail": None}
     try:
         if _settings.rag_enabled:
             from app.vector.chroma_client import get_figure_context_collection
-
             collection = get_figure_context_collection()
-            _ = collection.name
+            _ = collection.name  # access to confirm client usable
             rag_status["ok"] = True
     except Exception as exc:
         rag_status["ok"] = False
         rag_status["detail"] = str(exc)
 
     payload = {
-        "ok": True,
-        "chat_db_url": CHAT_DB_URL,
-        "figures_db_url": FIGURES_DB_URL,
-        "keys_present": keys_present,
+        "status": "ok",
+        "chat_db_ok": bool(CHAT_DB_URL),
+        "figures_db_ok": bool(FIGURES_DB_URL),
+        "keys": keys_present,
         "rag": rag_status,
-        "debug": {"guest_prompt_debug": _settings.guest_prompt_debug},
+        "guest_prompt_debug": bool(_settings.guest_prompt_debug),
+        "environment": ENVIRONMENT,
     }
     return JSONResponse(payload)
 
@@ -384,12 +431,10 @@ def serve_favicon_svg() -> Response:
     return Response(status_code=status.HTTP_404_NOT_FOUND)
 
 
-@app.get("/debug/routes")
-def debug_routes():
-    return [getattr(route, 'path', None) for route in app.routes if hasattr(route, 'path')]
-
-
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+if ENVIRONMENT.lower() == "dev":
+    @app.get("/debug/routes", include_in_schema=False)
+    def debug_routes():
+        return [getattr(route, 'path', None) for route in app.routes if hasattr(route, 'path')]
 
 
 if __name__ == "__main__":

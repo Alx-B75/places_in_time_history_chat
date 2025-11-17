@@ -27,6 +27,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Notes
 - This marks the “Version 0” milestone for the end-to-end user flow: register/login, figure browse, favorite, start thread, chat, and manage threads.
 
+## [Unreleased]
+### Added
+- RAG admin per-figure detail view with context CRUD, ingest and embed endpoints.
+- Document upload (`/admin/rag/figure/{slug}/upload`) for TXT/MD/PDF/HTML/DOCX with chunking & dedupe.
+- Background embedding jobs + status polling endpoint (`/admin/rag/upload-jobs/{job_id}`).
+- Per-chat message source citations (collapsed toggle in thread views).
+### Changed
+- `/health` sanitized (no raw DB URLs; boolean flags and status only).
+- Single `/static` mount retained; duplicate removed.
+- Dev-only seeding (admin@example.com, sample@example.com) gated by `ENVIRONMENT=dev`.
+- Debug routes gated to dev only.
+### Security
+- Eliminated leakage of database file paths in health response.
+### Docs
+- Added `docs/RAG_UPLOAD_AND_HEALTH.md` describing upload workflow, background jobs, health output, environment gating.
+
 ## [0.1.0] - 2025-08-13
 ### Added
 - Initial CHANGELOG tracking.

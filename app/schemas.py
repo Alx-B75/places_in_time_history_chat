@@ -54,6 +54,7 @@ class ThreadCreate(BaseModel):
     user_id: int
     title: Optional[str] = None
     figure_slug: Optional[str] = None
+    age_profile: Optional[str] = None
 
 
 class ThreadRead(ThreadCreate):
@@ -95,6 +96,7 @@ class ChatMessageRead(ChatMessageCreate):
 
     id: int
     timestamp: datetime
+    sources_json: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -135,6 +137,7 @@ class AskRequest(BaseModel):
     model_used: Optional[str] = None
     thread_id: Optional[int] = None
     skip_llm: Optional[bool] = False
+    age_profile: Optional[str] = None
 
 
 class AskResponse(BaseModel):

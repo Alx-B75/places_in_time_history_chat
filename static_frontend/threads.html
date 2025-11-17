@@ -225,10 +225,54 @@
     }
 
     function renderMessage(m){
-      const div=document.createElement('div');
-      div.className = m.role==='user' ? 'msg-user' : 'msg-assistant';
-      div.textContent = m.message;
-      messagesEl.appendChild(div);
+      const wrapper=document.createElement('div');
+      wrapper.className = m.role==='user' ? 'msg-user' : 'msg-assistant';
+      const text = document.createElement('div');
+      text.textContent = m.message;
+      wrapper.appendChild(text);
+      // Collapsible Sources for assistant messages only
+      if (m.role === 'assistant' && m.sources_json) {
+        try {
+          const sources = JSON.parse(m.sources_json);
+          if (Array.isArray(sources) && sources.length) {
+            const details = document.createElement('details');
+            const summary = document.createElement('summary');
+            summary.textContent = `View sources (${sources.length})`;
+            summary.style.cursor = 'pointer';
+            summary.className = 'muted';
+            details.appendChild(summary);
+            const list = document.createElement('ul');
+            list.style.margin = '6px 0 0 18px';
+            list.style.padding = '0';
+            list.style.listStyle = 'disc';
+            const maxShow = Math.min(5, sources.length);
+            for (let i=0; i<maxShow; i++){
+              const s = sources[i] || {};
+              const li = document.createElement('li');
+              const name = (s.source_name || 'source').toString();
+              const url = (s.source_url || '').toString();
+              if (url) {
+                const a = document.createElement('a');
+                a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+                a.textContent = name;
+                li.appendChild(a);
+              } else {
+                li.textContent = name;
+              }
+              list.appendChild(li);
+            }
+            if (sources.length > maxShow) {
+              const more = document.createElement('div');
+              more.className = 'muted';
+              more.textContent = `+${sources.length - maxShow} more`;
+              list.appendChild(more);
+            }
+            details.appendChild(list);
+            wrapper.appendChild(details);
+          }
+        } catch(_) { /* ignore parse issues */ }
+      }
+      messagesEl.appendChild(wrapper);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 

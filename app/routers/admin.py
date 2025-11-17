@@ -348,7 +348,7 @@ def update_figure_admin(
     slug: str,
     data: schemas.HistoricalFigureUpdate,
     request: Request,
-    admin_user: models.User = Depends(admin_required),
+    admin_user: str = Depends(admin_required),
     db_fig: Session = Depends(get_figure_db),
     db_chat: Session = Depends(get_db_chat),
 ) -> schemas.HistoricalFigureDetail:
@@ -384,7 +384,7 @@ def update_figure_admin(
 
     db_chat.add(
         models.AuditLog(
-            actor_user_id=admin_user.id,
+            actor_user_id=admin_user,
             action="figure.update",
             object_type="figure",
             object_id=slug,
@@ -403,7 +403,7 @@ def update_figure_admin(
 def delete_figure_admin(
     slug: str,
     request: Request,
-    admin_user: models.User = Depends(admin_required),
+    admin_user: str = Depends(admin_required),
     db_fig: Session = Depends(get_figure_db),
     db_chat: Session = Depends(get_db_chat),
 ) -> Response:
@@ -417,7 +417,7 @@ def delete_figure_admin(
     db_fig.delete(figure)
     db_chat.add(
         models.AuditLog(
-            actor_user_id=admin_user.id,
+            actor_user_id=admin_user,
             action="figure.delete",
             object_type="figure",
             object_id=slug,

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Figure RAG Detail</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/static/pit-favicon-mark.ico" />
+  <link rel="stylesheet" href="/static/style.css?v=brand-9" />
+  <style>
+    :root { --border:#273549; --muted:#94a3b8; --text:#e5e7eb; }
+    body { color: var(--text); }
+    .container { max-width: 1100px; margin: 32px auto; padding: 0 16px; }
+    .title { font-size: 20px; font-weight: 700; }
+    .muted { color: var(--muted); }
+    .btn { border: 1px solid var(--border); color: var(--text); background: #0e1526; border-radius: 10px; padding: 8px 12px; font-weight: 600; cursor: pointer; }
+    .btn.sm { padding: 6px 10px; font-size: 12px; }
+    .btn.success { background: linear-gradient(180deg, #0b5f3e, #065f46); }
+    .btn.danger { background: linear-gradient(180deg, #7f1d1d, #991b1b); }
+    .grid { display: table; width: max-content; min-width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .grid th, .grid td { border-bottom: 1px solid var(--border); padding: 8px; font-size: 14px; white-space: nowrap; }
+    .row-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .section { padding: 12px 0; border-top: 1px dashed var(--border); margin-top: 12px; }
+    .summary-cell { max-width: 560px; overflow: hidden; text-overflow: ellipsis; }
+    .table-scroll-x { overflow-x:auto; overflow-y:hidden; }
+    .table-scroll-spacer { height:1px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+      <a class="btn" href="/admin/ui#rag">← Back</a>
+      <div class="title">Figure RAG Detail: <span id="hdrSlug"></span></div>
+      <span class="muted" id="hdrStatus"></span>
+    </div>
+
+    <div class="section" id="actionsBar" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+      <button class="btn sm" id="ingestAllBtn">Ingest All Sources</button>
+      <button class="btn sm" id="embedAllBtnTop">Embed All Contexts</button>
+      <button class="btn sm" id="refreshBtn">Refresh</button>
+      <span class="muted" id="embedHealth"></span>
+    </div>
+
+    <div class="section" id="figureMetaSection">
+      <h3 style="margin:0 0 8px;">Figure</h3>
+      <div id="figureMeta" class="muted">Loading…</div>
+    </div>
+
+    <div class="section" id="sourcesMetaSection">
+      <h3 style="margin:0 0 8px;">Sources</h3>
+      <div id="sourcesMeta" class="muted">Loading…</div>
+    </div>
+
+    <div class="section" id="embeddingsSection">
+      <h3 style="margin:0 0 8px;">Embeddings</h3>
+      <div id="embeddingsMeta" class="muted">Loading…</div>
+    </div>
+
+    <div class="section" id="uploadSection">
+      <h3 style="margin:0 0 8px;">Upload Documents</h3>
+      <div id="dropzone" style="border:1px dashed var(--border); padding:12px; border-radius:10px; background:#0b1220;">
+        <div class="muted" style="margin-bottom:8px;">Drag and drop .txt, .md, .pdf, .html files here (max 10 files, 25MB each) or pick files:</div>
+        <input id="filePicker" type="file" multiple accept=".txt,.md,.pdf,.html,.htm,.docx" />
+        <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+          <label><input type="checkbox" id="autoEmbed" checked /> Auto-embed after upload</label>
+          <button class="btn sm" id="uploadBtn">Upload</button>
+          <span class="muted" id="uploadStatus"></span>
+        </div>
+        <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+          <progress id="uploadProgress" value="0" max="100" style="width:260px; display:none;"></progress>
+          <span class="muted" id="uploadProgressText"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" id="addManualSection">
+      <h3 style="margin:0 0 8px;">Add Manual Context</h3>
+      <input id="ragName" type="text" placeholder="Name (e.g., note)" />
+      <input id="ragType" type="text" placeholder="Type (persona | note | context)" />
+      <input id="ragUrl" type="text" placeholder="URL (optional)" />
+      <button class="btn success" id="addRagBtn">Add</button>
+      <span class="muted" id="addStatus"></span>
+    </div>
+
+    <div class="section">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <h3 style="margin:0;">Contexts</h3>
+        <span class="muted" id="ctxStatus"></span>
+      </div>
+      <div class="table-scroll-x" id="ctxScrollTop"><div class="table-scroll-spacer" id="ctxScrollTopInner"></div></div>
+      <table class="grid" id="ctxTable">
+        <colgroup>
+          <col style="width:80px" />
+          <col style="width:220px" />
+          <col style="width:140px" />
+          <col style="width:560px" />
+          <col style="width:220px" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>URL / Content</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="ctxBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/static/figure_rag.js?v=2"></script>
+</body>
+</html>

@@ -30,7 +30,14 @@ def _get_client() -> chromadb.PersistentClient:
     global _client
     if _client is None:
         settings = get_settings()
-        _client = chromadb.PersistentClient(path=settings.chroma_data_path)
+        try:
+            cfg = chromadb.config.Settings(anonymized_telemetry=False)
+        except Exception:
+            cfg = None
+        if cfg is not None:
+            _client = chromadb.PersistentClient(path=settings.chroma_data_path, settings=cfg)
+        else:
+            _client = chromadb.PersistentClient(path=settings.chroma_data_path)
     return _client
 
 

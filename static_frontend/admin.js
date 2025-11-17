@@ -50,6 +50,12 @@
     ragName: $("#ragName"),
     ragType: $("#ragType"),
     ragUrl: $("#ragUrl"),
+    addRagBtn: $("#addRagBtn"),
+    ragFigureList: $("#ragFigureList"),
+    ragCtxFigure: $("#ragCtxFigure"),
+    loadRagCtx: $("#loadRagCtx"),
+    ragCtxStatus: $("#ragCtxStatus"),
+    ragCtxBody: $("#ragCtxBody"),
 
   // LLM
   llmProfileSelect: $("#llm-profile-select"),
@@ -197,6 +203,9 @@
   // rag (summary + create-manual)
   ragSummary: () => fetchJSON("/admin/rag/sources", {}, true),
   ragCreate: (payload) => fetchJSON("/admin/rag/sources", { method: "POST", body: JSON.stringify(payload) }, true),
+  ragListByFigure: (slug) => fetchJSON(`/admin/rag/contexts?figure_slug=${encodeURIComponent(slug)}`, {}, true),
+  ragUpdate: (id, patch) => fetchJSON(`/admin/rag/contexts/${id}`, { method: "PATCH", body: JSON.stringify(patch) }, true),
+  ragDelete: (id) => fetchJSON(`/admin/rag/contexts/${id}`, { method: "DELETE" }, true),
 
   // llm
   llmProfiles: () => fetchJSON("/admin/llm/profiles", {}, true),
@@ -421,6 +430,19 @@
     const figures = Array.isArray(data?.figures) ? data.figures : [];
     dom.ragStatus.textContent = `${figures.length} figures`;
 
+    // populate datalist for per-figure selector
+    if (dom.ragFigureList) {
+      dom.ragFigureList.innerHTML = "";
+      for (const f of figures) {
+        const opt = document.createElement('option');
+        opt.value = f.slug;
+        opt.label = f.name || f.slug;
+        dom.ragFigureList.appendChild(opt);
+      }
+      // default to first figure if none selected
+      if (figures[0] && dom.ragCtxFigure && !dom.ragCtxFigure.value) dom.ragCtxFigure.value = figures[0].slug;
+    }
+
     for (const f of figures) {
       const counts = f.context_counts || {};
       const countStr = Object.keys(counts).length
@@ -435,30 +457,13 @@
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${escapeHTML(f.slug)}</td>
+        <td><a href="/admin/figure-rag/${escapeAttr(f.slug)}">${escapeHTML(f.slug)}</a></td>
         <td>${escapeHTML(f.name || "")}</td>
         <td>${escapeHTML(String(f.total_contexts ?? 0))}${f.has_manual_context ? ' <span class="muted">(manual)</span>' : ''}<br/><span class="muted">${countStr}</span></td>
         <td>${links || ""}</td>
-        <td>
-          <div class="row-actions">
-            <button class="btn sm" data-act="add-manual" data-slug="${f.slug}">Add manual</button>
-          </div>
-        </td>
       `;
       dom.ragBody.appendChild(tr);
     }
-
-    dom.ragBody.querySelectorAll('button[data-act="add-manual"]').forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const figure_slug = btn.getAttribute("data-slug");
-        try {
-          await addManualSourceFlow(figure_slug);
-          await loadRagSummary();
-        } catch (e) {
-          if (e?.message) alert(e.message);
-        }
-      });
-    });
     // Sync top/bottom scrollbars
     updateRagScrollSync();
   }
@@ -507,6 +512,83 @@
     if (dom.ragUrl) dom.ragUrl.value = "";
   }
 
+  // Per-figure contexts loader and actions
+  async function loadRagContexts(slug) {
+    if (!slug) return;
+    dom.ragCtxStatus.textContent = "Loading…";
+    dom.ragCtxBody.innerHTML = "";
+    const rows = await API.ragListByFigure(slug);
+    dom.ragCtxStatus.textContent = `${rows.length} contexts`;
+    for (const c of rows) {
+      const tr = document.createElement('tr');
+      const manual = c.is_manual ? 'Yes' : 'No';
+      const url = c.source_url ? `<a href="${escapeAttr(c.source_url)}" target="_blank" rel="noopener">${escapeHTML(c.source_url)}</a>` : '';
+      tr.innerHTML = `
+        <td>${c.id}</td>
+        <td>${escapeHTML(c.source_name || '')}</td>
+        <td>${escapeHTML(c.content_type || '')}</td>
+        <td class="summary-cell" title="${escapeAttr(c.source_url || '')}">${url}</td>
+        <td>${manual}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn sm" data-act="toggle-manual" data-id="${c.id}" data-val="${c.is_manual ? 0 : 1}">${c.is_manual ? 'Unset Manual' : 'Set Manual'}</button>
+            <button class="btn sm" data-act="edit" data-id="${c.id}">Edit</button>
+            <button class="btn danger sm" data-act="delete" data-id="${c.id}">Delete</button>
+          </div>
+        </td>
+      `;
+      dom.ragCtxBody.appendChild(tr);
+    }
+
+    dom.ragCtxBody.querySelectorAll('button').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        const act = btn.getAttribute('data-act');
+        try {
+          if (act === 'toggle-manual') {
+            const val = Number(btn.getAttribute('data-val')) || 0;
+            await API.ragUpdate(id, { is_manual: val });
+          } else if (act === 'delete') {
+            if (!confirm(`Delete context ${id}?`)) return;
+            await API.ragDelete(id);
+          } else if (act === 'edit') {
+            // Simple prompt-based edits (name/type/url/content)
+            const name = prompt('Source name (blank to skip):', '') || '';
+            const type = prompt('Content type (blank to skip):', '') || '';
+            const url = prompt('Source URL (blank to skip):', '') || '';
+            const content = prompt('Content (blank to skip):', '') || '';
+            const patch = {};
+            if (name) patch.source_name = name;
+            if (type) patch.content_type = type;
+            if (url) patch.source_url = url;
+            if (content) patch.content = content;
+            if (Object.keys(patch).length) await API.ragUpdate(id, patch);
+          }
+          await loadRagContexts(slug);
+        } catch (e) { alert(e.message); }
+      });
+    });
+
+    // Sync top/bottom scrollbars for contexts table
+    updateRagCtxScrollSync();
+  }
+
+  function updateRagCtxScrollSync() {
+    const table = document.getElementById('ragCtxTable');
+    const top = document.getElementById('ragCtxScrollTop');
+    const topInner = document.getElementById('ragCtxScrollTopInner');
+    if (!table || !top || !topInner) return;
+    topInner.style.width = `${table.scrollWidth}px`;
+    let syncing = false;
+    const bottomContainer = table.parentElement;
+    const onTopScroll = () => { if (syncing) return; syncing = true; bottomContainer.scrollLeft = top.scrollLeft; syncing = false; };
+    const onBottomScroll = () => { if (syncing) return; syncing = true; top.scrollLeft = bottomContainer.scrollLeft; syncing = false; };
+    top.removeEventListener('scroll', onTopScroll);
+    bottomContainer.removeEventListener('scroll', onBottomScroll);
+    top.addEventListener('scroll', onTopScroll);
+    bottomContainer.addEventListener('scroll', onBottomScroll);
+  }
+
   // --------------- Utils ---------------
   function escapeHTML(s) {
     return (s || "")
@@ -519,23 +601,30 @@
   }
 
   // --------------- Tabs & events ---------------
+  function showTab(tab) {
+    dom.tabs.forEach((t) => t.classList.remove("active"));
+    const target = Array.from(dom.tabs).find(t => t.getAttribute("data-tab") === tab);
+    if (target) target.classList.add("active");
+    dom.panelUsers.style.display = tab === "users" ? "block" : "none";
+    dom.panelFigures.style.display = tab === "figures" ? "block" : "none";
+    dom.panelRag.style.display = tab === "rag" ? "block" : "none";
+    dom.panelLlm.style.display = tab === "llm" ? "block" : "none";
+    if (tab === "users") loadUsers().catch(()=>{});
+    if (tab === "figures") loadFigures().catch(()=>{});
+    if (tab === "rag") loadRagSummary().catch(()=>{});
+    if (tab === "llm") { loadLLMProfiles().catch(()=>{}); loadLLMHealth().catch(()=>{}); }
+  }
+
   dom.tabs.forEach((el) => {
     el.addEventListener("click", () => {
       if (el.classList.contains("disabled")) {
         interactiveLoginAndStepUp().then((ok) => { if (ok) el.click(); });
         return;
       }
-      dom.tabs.forEach((t) => t.classList.remove("active"));
-      el.classList.add("active");
       const tab = el.getAttribute("data-tab");
-      dom.panelUsers.style.display = tab === "users" ? "block" : "none";
-      dom.panelFigures.style.display = tab === "figures" ? "block" : "none";
-      dom.panelRag.style.display = tab === "rag" ? "block" : "none";
-      dom.panelLlm.style.display = tab === "llm" ? "block" : "none";
-      if (tab === "users") loadUsers().catch(()=>{});
-      if (tab === "figures") loadFigures().catch(()=>{});
-      if (tab === "rag") loadRagSummary().catch(()=>{});
-      if (tab === "llm") { loadLLMProfiles().catch(()=>{}); loadLLMHealth().catch(()=>{}); }
+      showTab(tab);
+      // reflect in URL hash for deep-link/back-navigation
+      try { history.replaceState(null, "", `#${tab}`); } catch {}
     });
   });
 
@@ -543,6 +632,22 @@
   dom.logoutBtn?.addEventListener("click", logout);
   dom.refreshUsers?.addEventListener("click", () => loadUsers().catch(e => alert(e.message)));
   dom.refreshFigures?.addEventListener("click", () => loadFigures().catch(e => alert(e.message)));
+  dom.refreshRag?.addEventListener("click", () => loadRagSummary().catch(e => alert(e.message)));
+  dom.loadRagCtx?.addEventListener("click", () => {
+    const slug = (dom.ragCtxFigure?.value || "").trim();
+    if (!slug) { alert("Enter a figure slug."); return; }
+    loadRagContexts(slug).catch(e => alert(e.message));
+  });
+  dom.addRagBtn?.addEventListener("click", async () => {
+    try {
+      const slug = (dom.ragCtxFigure?.value || prompt("Figure slug for this source:") || "").trim();
+      if (!slug) return alert("Figure slug is required.");
+      await addManualSourceFlow(slug);
+      await loadRagSummary();
+      if (dom.ragCtxFigure) dom.ragCtxFigure.value = slug;
+      await loadRagContexts(slug);
+    } catch (e) { alert(e.message); }
+  });
 
   // LLM events
   dom.llmProfileActivate?.addEventListener("click", async () => {
@@ -665,6 +770,12 @@
     } else {
       // If the page has a login form, wait for user click; else prompt immediately.
       if (!dom.loginBtn) interactiveLoginAndStepUp().catch(()=>{});
+    }
+
+    // Select tab from URL hash if present (#users|#figures|#rag|#llm)
+    const hash = (location.hash || "").replace(/^#/, "");
+    if (hash && ["users","figures","rag","llm"].includes(hash)) {
+      showTab(hash);
     }
   })();
 

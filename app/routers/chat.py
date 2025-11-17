@@ -34,6 +34,7 @@ class ThreadCreatePayload(BaseModel):
     user_id: int = Field(...)
     title: Optional[str] = None
     figure_slug: Optional[str] = None
+    age_profile: Optional[str] = None
 
 
 class ThreadTitleUpdate(BaseModel):
@@ -98,7 +99,7 @@ def create_thread(
     title = payload.title or "New thread"
     # Normalize slug input (optional)
     fig_slug = (payload.figure_slug or "").strip() or None
-    thread_in = schemas.ThreadCreate(user_id=payload.user_id, title=title, figure_slug=fig_slug)
+    thread_in = schemas.ThreadCreate(user_id=payload.user_id, title=title, figure_slug=fig_slug, age_profile=payload.age_profile)
     thread = crud.create_thread(db, thread_in)
     return {"thread_id": thread.id, "user_id": thread.user_id, "title": thread.title, "figure_slug": thread.figure_slug}
 
@@ -360,6 +361,9 @@ def chat_complete(
     if thread.figure_slug:
         figure = crud.get_figure_by_slug(db_fig, thread.figure_slug)
 
+    # Attempt to retrieve age_profile from thread if present; default to 'general'
+    age_profile = getattr(thread, "age_profile", None) or "general"
+
     messages, _sources = build_prompt(
         figure=figure,
         user_message=message,
@@ -367,6 +371,7 @@ def chat_complete(
         max_context_chars=4000,
         use_rag=_settings.rag_enabled,
         debug=_settings.guest_prompt_debug,
+        age_profile=age_profile,
     )
 
     user_msg = schemas.ChatMessageCreate(user_id=user_id, role="user", message=message, thread_id=thread_id)
@@ -381,7 +386,16 @@ def chat_complete(
     answer = response["choices"][0]["message"]["content"].strip() if response.get("choices") else ""
 
     assistant_msg = schemas.ChatMessageCreate(user_id=user_id, role="assistant", message=answer, thread_id=thread_id)
-    crud.create_chat_message(db, assistant_msg)
+    saved = crud.create_chat_message(db, assistant_msg)
+    # Persist sources used for this assistant response
+    try:
+        import json as _json
+        saved.sources_json = _json.dumps(_sources or [])
+        db.add(saved)
+        db.commit()
+        db.refresh(saved)
+    except Exception:
+        db.rollback()
 
     return RedirectResponse(url=f"/user/{user_id}/threads", status_code=status.HTTP_303_SEE_OTHER)
 

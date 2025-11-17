@@ -80,6 +80,7 @@ class Settings:
     chroma_data_path: str
     figures_ingest_hash_path: Optional[str]
     figures_seed_csv_path: Optional[str]
+    safety_enabled: bool
 
     def validate(self) -> None:
         """
@@ -167,6 +168,7 @@ def _load_settings() -> Settings:
         chroma_data_path=os.getenv("CHROMA_DATA_PATH", _resolve_chroma_path(render)),
         figures_ingest_hash_path=os.getenv("FIGURES_INGEST_HASH_PATH"),
         figures_seed_csv_path=os.getenv("FIGURES_SEED_CSV_PATH"),
+        safety_enabled=_to_bool(os.getenv("SAFETY_ENABLED")),
     )
     settings.validate()
     return settings

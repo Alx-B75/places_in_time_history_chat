@@ -176,6 +176,17 @@ def create_chat_message(db: Session, chat: schemas.ChatMessageCreate) -> models.
     app.models.Chat
         Newly created message.
     """
+    # Ensure schema supports chats.sources_json in case migrations haven't run yet (SQLite-safe)
+    try:
+        from sqlalchemy import text as _sqltext
+        cols = db.execute(_sqltext("PRAGMA table_info('chats')")).fetchall()
+        names = {str(r[1]) for r in cols}
+        if 'sources_json' not in names:
+            db.execute(_sqltext("ALTER TABLE chats ADD COLUMN sources_json TEXT"))
+            # Commit will occur with the insert below
+    except Exception:
+        pass
+
     db_chat = models.Chat(
         user_id=chat.user_id,
         role=chat.role,
@@ -250,10 +261,23 @@ def create_thread(db: Session, thread: schemas.ThreadCreate) -> models.Thread:
     app.models.Thread
         Newly created thread.
     """
+    # Ensure schema supports age_profile in case migrations haven't run yet (SQLite-safe)
+    try:
+        from sqlalchemy import text as _sqltext
+        cols = db.execute(_sqltext("PRAGMA table_info('threads')")).fetchall()
+        names = {str(r[1]) for r in cols}
+        if 'age_profile' not in names:
+            db.execute(_sqltext("ALTER TABLE threads ADD COLUMN age_profile TEXT"))
+            # No separate commit here; the pending INSERT will commit both operations together.
+    except Exception:
+        # Defensive: if this fails, let the INSERT surface any real errors
+        pass
+
     db_thread = models.Thread(
         user_id=thread.user_id,
         title=thread.title,
         figure_slug=thread.figure_slug,
+        age_profile=thread.age_profile or None,
     )
     db.add(db_thread)
     db.commit()
