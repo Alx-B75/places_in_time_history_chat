@@ -1,5 +1,5 @@
 export async function apiFetch(path, opts = {}) {
-  const base = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
+  const base = (import.meta?.env?.VITE_API_BASE_URL || import.meta?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
   const token = localStorage.getItem("token");
   const headers = new Headers(opts.headers || {});
   if (token) headers.set("Authorization", `Bearer ${token}`);
