@@ -170,6 +170,8 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:5174",
         "http://127.0.0.1:5174",
+        # Production SPA domain (no trailing slash)
+        "https://places-in-time-history-chat-front.onrender.com",
         *(_allowed_origins() or []),
     }),
     allow_credentials=True,
