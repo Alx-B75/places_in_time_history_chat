@@ -1,4 +1,9 @@
-const API_BASE = (import.meta?.env?.VITE_API_BASE_URL || import.meta?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
+const base = (
+  import.meta?.env?.VITE_API_BASE_URL ||
+  import.meta?.env?.VITE_API_BASE ||
+  ""
+).replace(/\/+$/, "");
+const API_BASE = base;
 
 export async function apiFetch(path, opts = {}) {
   const isAbsolute = typeof path === 'string' && /^(https?:)?\/\//i.test(path);
