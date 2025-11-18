@@ -278,12 +278,12 @@ def compat_login(payload: dict = Body(...), db: Session = Depends(get_db_chat)):
 
 # Disable legacy HTML login/register pages on GET
 @app.get("/login")
-def legacy_login_disabled() -> Response:
-    return Response(content="Legacy UI disabled", status_code=status.HTTP_404_NOT_FOUND, media_type="text/plain")
+def legacy_login_redirect() -> Response:
+    return RedirectResponse(url="https://places-in-time-history-chat-front.onrender.com/login", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 @app.get("/register")
-def legacy_register_disabled() -> Response:
-    return Response(content="Legacy UI disabled", status_code=status.HTTP_404_NOT_FOUND, media_type="text/plain")
+def legacy_register_redirect() -> Response:
+    return RedirectResponse(url="https://places-in-time-history-chat-front.onrender.com/register", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get(
@@ -353,9 +353,9 @@ def legacy_threads_page_disabled(user_id: int, current_user: models.User = Depen
 
 
 @app.get("/guest/{slug}")
-def legacy_guest_page_disabled(slug: str) -> Response:
-    _ = slug
-    return Response(content="Legacy UI disabled", status_code=status.HTTP_404_NOT_FOUND, media_type="text/plain")
+def legacy_guest_page_redirect(slug: str) -> Response:
+    target = f"https://places-in-time-history-chat-front.onrender.com/guest/{slug}"
+    return RedirectResponse(url=target, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/ui/figures")
