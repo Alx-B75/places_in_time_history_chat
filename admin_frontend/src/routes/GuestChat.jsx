@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import ReactDOM from "react-dom";
 import { asset } from "../lib/assetBase.js";
+import LogoCard from "../components/LogoCard.jsx";
 
 const MAX_QUESTIONS = 3;
 
@@ -135,26 +136,8 @@ export default function GuestChat() {
 
   return (
     <div className="wrap" style={{ maxWidth: 860 }}>
-      {/* Shared banner with logo for branding consistency */}
-      {/* Logo integrated into a framed card to match page components */}
-      <div
-        className="card panel logo-card"
-        style={{
-          margin:'16px 0',
-          display:'flex',
-          justifyContent:'center',
-          alignItems:'center',
-          padding:'18px',
-          background:'#0f172a',
-          border:'1px solid rgba(255,255,255,.06)',
-          borderRadius:14,
-          boxShadow:'0 12px 24px rgba(0,0,0,.35)'
-        }}
-      >
-        <div className="brand-mark" aria-hidden style={{width:140, height:140, borderRadius:24, overflow:'hidden'}}>
-          <img src={asset('/static/logo.png')} alt="Places in Time" style={{width:'100%', height:'100%', objectFit:'cover', borderRadius:'inherit'}} onError={(e)=>{ e.currentTarget.src = asset('/static/pit-favicon-mark.ico'); }} />
-        </div>
-      </div>
+      {/* Shared banner with consistent styling */}
+      <LogoCard size={140} style={{ margin:'16px 0' }} to={null} />
 
       {/* Centered figure hero */}
       <div className="figure-hero card" style={{marginBottom:18, display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', gap:16}}>

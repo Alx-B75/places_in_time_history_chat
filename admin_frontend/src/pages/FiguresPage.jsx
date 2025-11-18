@@ -41,7 +41,7 @@ export default function FiguresPage(){
           placeholder="Search figures by name or slug…"
           value={query}
           onChange={e=>setQuery(e.target.value)}
-          style={{flex:1, padding:'10px 12px', borderRadius:12, border:'1px solid var(--border)', background:'#0a1820', color:'var(--text)'}}
+          style={{flex:1, minWidth:0, padding:'10px 12px', borderRadius:12, border:'1px solid var(--border)', background:'#0a1820', color:'var(--text)', boxSizing:'border-box'}}
         />
       </div>
       {loading ? <div>Loading…</div> : null}
