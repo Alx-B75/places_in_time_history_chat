@@ -14,7 +14,8 @@ export default function UserLogin(){
     try{
       const res = await apiFetch('/guest/upgrade', {
         method:'POST',
-        headers:{ 'Authorization': `Bearer ${bearer}` }
+        headers:{ 'Authorization': `Bearer ${bearer}` },
+        credentials:'include'
       })
       const data = await res.json().catch(()=>null)
       return data && data.upgraded ? data : null
@@ -27,7 +28,8 @@ export default function UserLogin(){
     try{
       const res = await apiFetch('/auth/login', {
         method:'POST',
-        body: JSON.stringify({ username: email, password })
+        body: JSON.stringify({ username: email, password }),
+        credentials:'include'
       })
       const data = await res.json()
       const token = data.access_token

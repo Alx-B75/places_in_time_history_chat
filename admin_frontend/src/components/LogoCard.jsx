@@ -22,7 +22,7 @@ export default function LogoCard({ size=140, style, to='/dashboard', wide=false 
       }}
     >
       <div className="brand-mark" aria-hidden style={{width:size, height:size, borderRadius:24, overflow:'hidden'}}>
-        <img src="/static/logo.png" alt="Places in Time" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'inherit'}} />
+        <img src="/logo.svg" alt="Places in Time" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'inherit'}} />
       </div>
     </div>
   )

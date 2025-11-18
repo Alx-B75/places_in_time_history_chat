@@ -146,7 +146,7 @@ export default function FigureSelect(){
               {f.image_url ? (
                   <img className="fig-img" src={f.image_url} alt={f.name} />
                 ) : <div className="fig-img" aria-hidden style={{display:'flex',alignItems:'center',justifyContent:'center',background:'#0a1228'}}>
-                  <img src="/static/logo.png" alt="Logo" style={{width:'90%',height:'90%',objectFit:'contain',opacity:.85}} />
+                  <img src="/logo.svg" alt="Logo" style={{width:'90%',height:'90%',objectFit:'contain',opacity:.85}} />
                 </div>}
               <div className="fig-title">{f.name}</div>
             </div>

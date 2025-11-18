@@ -121,11 +121,13 @@ def _set_guest_cookie(response: Response, token: str, ttl: timedelta, secure_coo
     secure_cookie : bool
         Whether to set the cookie with the Secure flag.
     """
+    # Use SameSite=None to ensure the cookie is sent on cross-site XHR/fetch requests
+    # from the static frontend domain to the API domain.
     response.set_cookie(
         key="guest_session",
         value=token,
         httponly=True,
-        samesite="lax",
+        samesite="none",
         secure=secure_cookie,
         max_age=int(ttl.total_seconds()),
         path="/",

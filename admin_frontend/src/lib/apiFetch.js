@@ -20,7 +20,7 @@ export async function apiFetch(path, opts = {}) {
 
   if (opts.body && typeof opts.body === "string" && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
 
-  const res = await fetch(url, { ...opts, headers });
+  const res = await fetch(url, { credentials: 'include', ...opts, headers });
   if (!res.ok) {
     let msg = "";
     try { msg = await res.text(); } catch (_) {}
