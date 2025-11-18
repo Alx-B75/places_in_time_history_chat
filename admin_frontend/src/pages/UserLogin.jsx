@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import LogoCard from '../components/LogoCard.jsx'
+import { apiFetch } from '../lib/apiFetch.js'
 
 export default function UserLogin(){
   const [email, setEmail] = useState('')
@@ -11,12 +12,10 @@ export default function UserLogin(){
   const { setToken, refresh } = useAuth()
   async function attemptGuestUpgrade(bearer){
     try{
-      const res = await fetch('/guest/upgrade', {
+      const res = await apiFetch('/guest/upgrade', {
         method:'POST',
-        headers:{ 'Authorization': `Bearer ${bearer}` },
-        credentials:'include',
+        headers:{ 'Authorization': `Bearer ${bearer}` }
       })
-      if(!res.ok) return null
       const data = await res.json().catch(()=>null)
       return data && data.upgraded ? data : null
     }catch(_){ return null }
@@ -26,8 +25,10 @@ export default function UserLogin(){
     e.preventDefault()
     setErr('')
     try{
-  const res = await fetch('/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: email, password }) })
-      if(!res.ok) throw new Error(await res.text())
+      const res = await apiFetch('/auth/login', {
+        method:'POST',
+        body: JSON.stringify({ username: email, password })
+      })
       const data = await res.json()
       const token = data.access_token
       try{
