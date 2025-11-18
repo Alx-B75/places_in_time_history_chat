@@ -13,9 +13,8 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     try {
-  const base = (import.meta?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
       const body = new URLSearchParams({ username, password });
-      const res = await fetch(`${base}/auth/login`, {
+      const res = await apiFetch('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body
