@@ -1,3 +1,5 @@
+// admin_frontend/src/lib/apiFetch.js
+
 const API_BASE = "https://places-backend-o8ym.onrender.com";
 
 export async function apiFetch(path, opts = {}) {
