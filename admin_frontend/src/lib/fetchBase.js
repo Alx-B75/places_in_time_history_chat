@@ -2,7 +2,10 @@
 // Ensures calls like fetch('/auth/login') hit the backend when deployed separately
 (function(){
   if (typeof window === 'undefined' || typeof window.fetch !== 'function') return;
-  const BASE = (import.meta?.env?.VITE_API_BASE_URL || import.meta?.env?.VITE_API_BASE || '').replace(/\/+$/, '');
+  const runtime = (typeof window !== 'undefined' && (window.__API_BASE || window.API_BASE)) || '';
+  const env = (import.meta?.env?.VITE_API_BASE || import.meta?.env?.VITE_API_BASE_URL || '');
+  const fallback = 'https://places-in-time-history-chat.onrender.com';
+  const BASE = (env || runtime || fallback).replace(/\/+$/, '');
   if (!BASE) return; // nothing to do
   const origFetch = window.fetch.bind(window);
   window.fetch = (input, init) => {
