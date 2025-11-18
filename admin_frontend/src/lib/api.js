@@ -1,8 +1,8 @@
 export async function apiFetch(path, opts = {}) {
   const runtimeBase = (typeof window !== 'undefined' && (window.__API_BASE || window.API_BASE)) || "";
   const envBase = (import.meta?.env?.VITE_API_BASE || "");
-  // Final fallback: known backend host (kept minimal to unblock prod)
-  const fallbackBase = "https://places-backend-o8ym.onrender.com";
+  // Final fallback: main backend host used by this repo's service
+  const fallbackBase = "https://places-in-time-history-chat.onrender.com";
 
   const base = (envBase || runtimeBase || fallbackBase).replace(/\/+$/, "");
 
