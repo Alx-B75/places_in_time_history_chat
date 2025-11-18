@@ -4,14 +4,25 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>User Dashboard</title>
-    <link rel="icon" href="/favicon.svg" />
+    <!-- Favicon will be set at runtime to the backend-provided icon -->
   </head>
   <body>
   <div id="root"></div>
   <div id="portal-root"></div>
     <script>
-      // Runtime API base override (optional). Remove or change without rebuild.
+      // Runtime API and Asset base overrides (optional). Change without rebuild.
       window.__API_BASE = window.__API_BASE || 'https://places-in-time-history-chat.onrender.com';
+      window.__ASSET_BASE = window.__ASSET_BASE || window.__API_BASE;
+      (function(){
+        try {
+          var base = (window.__ASSET_BASE || '').replace(/\/+$/, '');
+          if (!base) return;
+          var link = document.createElement('link');
+          link.rel = 'icon';
+          link.href = base + '/static/pit-favicon-mark.ico';
+          document.head.appendChild(link);
+        } catch(_) {}
+      })();
     </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>

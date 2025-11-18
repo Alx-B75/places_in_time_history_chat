@@ -1,3 +1,4 @@
+import { asset } from '../lib/assetBase.js'
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -52,7 +53,7 @@ export default function FiguresPage(){
               <img src={f.image_url} alt={f.name} style={{width:56,height:56,borderRadius:12,objectFit:'cover',border:'1px solid rgba(255,255,255,.12)'}} />
             ) : (
               <div style={{width:56,height:56,borderRadius:12,background:'#0a1228',border:'1px solid rgba(255,255,255,.12)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                <img src="/logo.svg" alt="" style={{width:'80%',height:'80%',objectFit:'contain',opacity:.85}} />
+                <img src={asset('/static/logo.png')} alt="" style={{width:'80%',height:'80%',objectFit:'contain',opacity:.85}} onError={(e)=>{ e.currentTarget.src = asset('/static/pit-favicon-mark.ico'); }} />
               </div>
             )}
             <div style={{flex:1}}>

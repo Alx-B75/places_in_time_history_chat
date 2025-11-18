@@ -1,5 +1,6 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
+import { asset } from '../lib/assetBase.js'
 
 export default function LogoCard({ size=140, style, to='/dashboard', wide=false }){
   const card = (
@@ -22,7 +23,7 @@ export default function LogoCard({ size=140, style, to='/dashboard', wide=false 
       }}
     >
       <div className="brand-mark" aria-hidden style={{width:size, height:size, borderRadius:24, overflow:'hidden'}}>
-        <img src="/logo.svg" alt="Places in Time" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'inherit'}} />
+        <img src={asset('/static/logo.png')} alt="Places in Time" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'inherit'}} onError={(e)=>{ e.currentTarget.src = asset('/static/pit-favicon-mark.ico'); }} />
       </div>
     </div>
   )

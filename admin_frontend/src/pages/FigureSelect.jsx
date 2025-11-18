@@ -1,3 +1,4 @@
+import { asset } from '../lib/assetBase.js'
 import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
@@ -146,7 +147,7 @@ export default function FigureSelect(){
               {f.image_url ? (
                   <img className="fig-img" src={f.image_url} alt={f.name} />
                 ) : <div className="fig-img" aria-hidden style={{display:'flex',alignItems:'center',justifyContent:'center',background:'#0a1228'}}>
-                  <img src="/logo.svg" alt="Logo" style={{width:'90%',height:'90%',objectFit:'contain',opacity:.85}} />
+                  <img src={asset('/static/logo.png')} alt="Logo" style={{width:'90%',height:'90%',objectFit:'contain',opacity:.85}} onError={(e)=>{ e.currentTarget.src = asset('/static/pit-favicon-mark.ico'); }} />
                 </div>}
               <div className="fig-title">{f.name}</div>
             </div>

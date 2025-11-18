@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import ReactDOM from "react-dom";
+import { asset } from "../lib/assetBase.js";
 
 const MAX_QUESTIONS = 3;
 
@@ -151,7 +152,7 @@ export default function GuestChat() {
         }}
       >
         <div className="brand-mark" aria-hidden style={{width:140, height:140, borderRadius:24, overflow:'hidden'}}>
-          <img src="/logo.svg" alt="Places in Time" style={{width:'100%', height:'100%', objectFit:'cover', borderRadius:'inherit'}} onError={(e)=>{ e.currentTarget.src='/favicon.svg'; }} />
+          <img src={asset('/static/logo.png')} alt="Places in Time" style={{width:'100%', height:'100%', objectFit:'cover', borderRadius:'inherit'}} onError={(e)=>{ e.currentTarget.src = asset('/static/pit-favicon-mark.ico'); }} />
         </div>
       </div>
 
