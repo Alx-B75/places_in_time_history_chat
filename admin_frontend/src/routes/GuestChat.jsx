@@ -41,9 +41,11 @@ export default function GuestChat() {
   const [disabled, setDisabled] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [figure, setFigure] = useState(null);
-  const siteRoot = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
-    ? 'http://127.0.0.1:8000'
-    : 'https://www.places-in-time.com';
+  // Resolve the front-end root for auth/navigation links.
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const frontEnv = (import.meta?.env?.VITE_FRONT_ROOT || window.__FRONT_ROOT || '').trim();
+  // Prefer explicit env/override, then local dev port, then deployed SPA domain.
+  const frontRoot = frontEnv || (isLocal ? 'http://127.0.0.1:5173' : 'https://places-in-time-history-chat-front.onrender.com');
 
   useEffect(() => {
     (async () => {
@@ -149,7 +151,7 @@ export default function GuestChat() {
         }}
       >
         <div className="brand-mark" aria-hidden style={{width:140, height:140, borderRadius:24, overflow:'hidden'}}>
-          <img src="/logo.svg" alt="Places in Time" style={{width:'100%', height:'100%', objectFit:'cover', borderRadius:'inherit'}}/>
+          <img src="/logo.svg" alt="Places in Time" style={{width:'100%', height:'100%', objectFit:'cover', borderRadius:'inherit'}} onError={(e)=>{ e.currentTarget.src='/favicon.svg'; }} />
         </div>
       </div>
 
@@ -196,8 +198,8 @@ export default function GuestChat() {
       <QuotaModal
         open={showModal || window._forceGuestModal === true}
         figureName={figure?.name}
-        onRegister={() => { window.location.href = `${siteRoot}/register`; }}
-        onLater={() => { window.location.href = `${siteRoot}/`; }}
+        onRegister={() => { window.location.href = `${frontRoot}/register`; }}
+        onLater={() => { window.location.href = `${frontRoot}/`; }}
       />
     </div>
   );
