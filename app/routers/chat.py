@@ -77,6 +77,7 @@ def get_figure_db() -> Generator[Session, None, None]:
 def create_thread(
     payload: ThreadCreatePayload,
     db: Session = Depends(get_db_chat),
+    current_user: models.User = Depends(get_current_user),
 ) -> dict:
     """
     Create a new thread for the user and return its identity.
@@ -93,13 +94,14 @@ def create_thread(
     dict
         Thread identity payload.
     """
-    user = crud.get_user_by_id(db, payload.user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    # Enforce that the thread is always owned by the authenticated user.
+    # For backward compatibility, validate any provided user_id matches.
+    if payload.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to create thread for another user")
     title = payload.title or "New thread"
     # Normalize slug input (optional)
     fig_slug = (payload.figure_slug or "").strip() or None
-    thread_in = schemas.ThreadCreate(user_id=payload.user_id, title=title, figure_slug=fig_slug, age_profile=payload.age_profile)
+    thread_in = schemas.ThreadCreate(user_id=current_user.id, title=title, figure_slug=fig_slug, age_profile=payload.age_profile)
     thread = crud.create_thread(db, thread_in)
     return {"thread_id": thread.id, "user_id": thread.user_id, "title": thread.title, "figure_slug": thread.figure_slug}
 
@@ -295,6 +297,7 @@ def chat_complete(
     message: str = Form(...),
     thread_id: Optional[int] = Form(None),
     figure_slug: Optional[str] = Form(None),
+    current_user: models.User = Depends(get_current_user),
 ) -> RedirectResponse:
     """
     Persist a user message, generate an assistant reply, and redirect to the threads page.
@@ -321,9 +324,10 @@ def chat_complete(
     fastapi.responses.RedirectResponse
         Redirect to the threads page for the user.
     """
-    user = crud.get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    # Enforce that the operation is performed as the authenticated user.
+    if user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to act as another user")
+    user = current_user
 
     if thread_id is None:
         initial_slug = (figure_slug or "").strip() or None
@@ -332,14 +336,14 @@ def chat_complete(
             if not figure_obj:
                 raise HTTPException(status_code=404, detail="Figure not found")
             initial_slug = figure_obj.slug
-        thread_in = schemas.ThreadCreate(user_id=user_id, title="New thread", figure_slug=initial_slug)
+        thread_in = schemas.ThreadCreate(user_id=current_user.id, title="New thread", figure_slug=initial_slug)
         thread = crud.create_thread(db, thread_in)
         thread_id = thread.id
     else:
         thread = crud.get_thread_by_id(db, thread_id)
         if not thread:
             raise HTTPException(status_code=404, detail="Thread not found")
-        if thread.user_id != user.id:
+        if thread.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized to access this thread")
         update_slug = (figure_slug or "").strip()
         if update_slug or figure_slug == "":
@@ -374,7 +378,7 @@ def chat_complete(
         age_profile=age_profile,
     )
 
-    user_msg = schemas.ChatMessageCreate(user_id=user_id, role="user", message=message, thread_id=thread_id)
+    user_msg = schemas.ChatMessageCreate(user_id=current_user.id, role="user", message=message, thread_id=thread_id)
     crud.create_chat_message(db, user_msg)
 
     from app.config.llm_config import llm_config
@@ -385,7 +389,7 @@ def chat_complete(
     )
     answer = response["choices"][0]["message"]["content"].strip() if response.get("choices") else ""
 
-    assistant_msg = schemas.ChatMessageCreate(user_id=user_id, role="assistant", message=answer, thread_id=thread_id)
+    assistant_msg = schemas.ChatMessageCreate(user_id=current_user.id, role="assistant", message=answer, thread_id=thread_id)
     saved = crud.create_chat_message(db, assistant_msg)
     # Persist sources used for this assistant response
     try:
@@ -397,7 +401,7 @@ def chat_complete(
     except Exception:
         db.rollback()
 
-    return RedirectResponse(url=f"/user/{user_id}/threads", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url=f"/user/{current_user.id}/threads", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # --- User Favorites (alternative stable path) ---

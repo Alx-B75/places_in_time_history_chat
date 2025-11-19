@@ -17,14 +17,39 @@ def test_create_thread_returns_identity() -> None:
     username = f"threads_user_{uuid4().hex[:8]}"
     reg = client.post("/register", json={"username": username, "password": "pw"})
     assert reg.status_code == 200, reg.text
+    token = reg.json()["access_token"]
     user_id = reg.json()["user_id"]
 
-    r = client.post("/threads", json={"user_id": user_id, "title": "T1"})
+    r = client.post(
+        "/threads",
+        json={"user_id": user_id, "title": "T1"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert r.status_code == 201, r.text
     data = r.json()
     assert {"thread_id", "user_id", "title"} <= set(data.keys())
     assert data["user_id"] == user_id
     assert data["title"] == "T1"
+
+
+def test_create_thread_cannot_spoof_other_user() -> None:
+    """Authenticated user cannot create a thread for a different user_id."""
+    # Register two users
+    reg_a = client.post("/register", json={"username": f"user_a", "password": "pw"})
+    assert reg_a.status_code == 200, reg_a.text
+    token_a = reg_a.json()["access_token"]
+
+    reg_b = client.post("/register", json={"username": f"user_b", "password": "pw"})
+    assert reg_b.status_code == 200, reg_b.text
+    user_b_id = reg_b.json()["user_id"]
+
+    # User A tries to create a thread for user B
+    r = client.post(
+        "/threads",
+        json={"user_id": user_b_id, "title": "Spoofed"},
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert r.status_code == 403
 
 
 def test_delete_thread_requires_owner_and_succeeds() -> None:
@@ -35,7 +60,11 @@ def test_delete_thread_requires_owner_and_succeeds() -> None:
     token = reg.json()["access_token"]
     user_id = reg.json()["user_id"]
 
-    r = client.post("/threads", json={"user_id": user_id, "title": "ToDelete"})
+    r = client.post(
+        "/threads",
+        json={"user_id": user_id, "title": "ToDelete"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert r.status_code == 201, r.text
     thread_id = r.json()["thread_id"]
 
@@ -53,9 +82,14 @@ def test_delete_thread_forbidden_for_other_user() -> None:
     # Owner
     owner = client.post("/register", json={"username": f"owner_{uuid4().hex[:8]}", "password": "pw"})
     assert owner.status_code == 200
+    owner_token = owner.json()["access_token"]
     owner_id = owner.json()["user_id"]
     # Create thread for owner
-    r = client.post("/threads", json={"user_id": owner_id, "title": "OwnerThread"})
+    r = client.post(
+        "/threads",
+        json={"user_id": owner_id, "title": "OwnerThread"},
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
     assert r.status_code == 201
     thread_id = r.json()["thread_id"]
 
@@ -78,7 +112,11 @@ def test_threads_list_includes_first_user_message_preview() -> None:
     user_id = reg.json()["user_id"]
 
     # Create a thread via API
-    r = client.post("/threads", json={"user_id": user_id, "title": "HasPreview"})
+    r = client.post(
+        "/threads",
+        json={"user_id": user_id, "title": "HasPreview"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert r.status_code == 201
     thread_id = r.json()["thread_id"]
 

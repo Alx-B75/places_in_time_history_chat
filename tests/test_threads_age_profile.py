@@ -13,7 +13,11 @@ def test_thread_creation_accepts_age_profile():
     token = reg.json()["access_token"]
     user_id = reg.json()["user_id"]
 
-    r = client.post("/threads", json={"user_id": user_id, "title": "AP", "age_profile": "kids"})
+    r = client.post(
+        "/threads",
+        json={"user_id": user_id, "title": "AP", "age_profile": "kids"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert r.status_code == 201, r.text
     thread_id = r.json()["thread_id"]
 
