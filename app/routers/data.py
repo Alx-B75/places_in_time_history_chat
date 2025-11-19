@@ -1,12 +1,12 @@
-"""
-Data download routes for exporting application artifacts.
-"""
+"""Data download routes for exporting application artifacts."""
 
 import os
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
+
+from app import models
+from app.utils.security import get_admin_user
 
 router = APIRouter(tags=["Data"])
 
@@ -21,10 +21,8 @@ def _resolve_data_dir() -> str:
 
 
 @router.get("/download_db")
-def download_figures_db() -> FileResponse:
-    """
-    Streams the figures database file as an attachment.
-    """
+def download_figures_db(_: models.User = Depends(get_admin_user)) -> FileResponse:
+    """Stream the figures database file as an attachment for admins only."""
     data_dir = _resolve_data_dir()
     db_path = os.path.join(data_dir, "figures.db")
     if not os.path.isfile(db_path):

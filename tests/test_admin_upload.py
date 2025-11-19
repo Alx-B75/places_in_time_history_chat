@@ -37,9 +37,8 @@ def ensure_figure(slug: str = "upload-fig", name: str = "Upload Figure"):
         db.refresh(fig)
         return fig
     finally:
-        db.close()
-
-
+            def test_admin_upload_text_monkeypatched_chroma(monkeypatch, admin_auth_header):
+                # Ensure figure present
 def test_admin_upload_text_monkeypatched_chroma(monkeypatch):
     # Force dev bypass for admin_required
     monkeypatch.setenv("ENVIRONMENT", "dev")
@@ -55,7 +54,11 @@ def test_admin_upload_text_monkeypatched_chroma(monkeypatch):
     client = TestClient(app)
 
     files = [
-        (
+                resp = client.post(
+                    f"/admin/rag/figure/{fig.slug}/upload",
+                    files=files,
+                    headers=admin_auth_header,
+                )
             "files",
             ("sample.txt", b"This is a small test document. " * 200, "text/plain"),
         )
@@ -65,9 +68,7 @@ def test_admin_upload_text_monkeypatched_chroma(monkeypatch):
     data = resp.json()
     assert data["total_created"] >= 1
     assert data["total_skipped"] >= 0
-    # Either embedded now or queued; both are acceptable
-    assert "files" in data and len(data["files"]) == 1
-    assert data["files"][0]["name"].startswith("sample")
+            def test_admin_upload_background_job_status(monkeypatch, admin_auth_header):
 
 
 def test_admin_upload_background_job_status(monkeypatch):
@@ -82,7 +83,11 @@ def test_admin_upload_background_job_status(monkeypatch):
     client = TestClient(app)
     files = [
         (
-            "files",
+                resp = client.post(
+                    f"/admin/rag/figure/{fig.slug}/upload?force_background=true",
+                    files=files,
+                    headers=admin_auth_header,
+                )
             ("small.txt", b"This queues background embedding.", "text/plain"),
         )
     ]

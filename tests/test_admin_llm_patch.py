@@ -2,10 +2,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.config.llm_config import llm_config
 
-def test_patch_admin_llm_updates_model(monkeypatch):
-    # Force dev bypass
-    monkeypatch.setenv("ENVIRONMENT", "dev")
 
+def test_patch_admin_llm_updates_model(monkeypatch, admin_auth_header):
     llm_config.api_key = "dummy"
     client = TestClient(app)
 
@@ -22,12 +20,14 @@ def test_patch_admin_llm_updates_model(monkeypatch):
     resp = client.patch(
         "/admin/llm",
         json=patch_payload,
+        headers=admin_auth_header,
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["active"]["model"] == "patched-model"
 
     health_resp = client.get(
         "/admin/llm/health",
+        headers=admin_auth_header,
     )
     assert health_resp.status_code == 200, health_resp.text
     assert health_resp.json()["model"] == "patched-model"

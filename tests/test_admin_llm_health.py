@@ -1,16 +1,9 @@
-import os
 from fastapi.testclient import TestClient
 from app.main import app
-
-# Ensure dev environment bypass is active for admin_required
-import os
-os.environ.setdefault("ENVIRONMENT", "dev")
 from app.config.llm_config import llm_config
 
-def test_admin_llm_health(monkeypatch):
-    # Force dev environment bypass for admin_required
-    monkeypatch.setenv("ENVIRONMENT", "dev")
 
+def test_admin_llm_health(monkeypatch, admin_auth_header):
     class DummyLLMClient:
         def generate(self, messages, temperature=0.0, max_tokens=5, **kwargs):
             return {"model": "gpt-4", "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
@@ -21,7 +14,7 @@ def test_admin_llm_health(monkeypatch):
     # Set a dummy API key to avoid runtime errors inside LlmClient
     llm_config.api_key = "dummy"
     client = TestClient(app)
-    resp = client.get("/admin/health/llm")
+    resp = client.get("/admin/health/llm", headers=admin_auth_header)
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert "provider" in data
