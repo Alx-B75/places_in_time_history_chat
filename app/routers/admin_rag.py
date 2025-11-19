@@ -25,7 +25,7 @@ import uuid
 
 from app import models
 from app.figures_database import FigureSessionLocal
-from app.utils.security import admin_required
+from app.utils.security import get_admin_user
 
 router = APIRouter(prefix="/admin/rag", tags=["Admin RAG"])
 
@@ -77,7 +77,7 @@ class ContextCreate(BaseModel):
 @router.get("/contexts", response_model=List[ContextRead])
 def list_contexts_by_figure(
     figure_slug: str = Query(..., min_length=1, description="Slug of the figure"),
-    _: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ) -> List[ContextRead]:
     """
@@ -96,7 +96,7 @@ def list_contexts_by_figure(
 def update_context(
     ctx_id: int,
     patch: ContextUpdate,
-    _: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ) -> ContextRead:
     """
@@ -126,7 +126,7 @@ def update_context(
 @router.delete("/contexts/{ctx_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_context(
     ctx_id: int,
-    _: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ):
     """
@@ -158,7 +158,7 @@ class RagSummaryResponse(BaseModel):
 
 @router.get("/sources", response_model=RagSummaryResponse)
 def rag_sources_summary(
-    _: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ):
     """
@@ -252,7 +252,7 @@ class FigureRagDetail(BaseModel):
 @router.get("/figure/{figure_slug}/detail", response_model=FigureRagDetail)
 def rag_figure_detail(
     figure_slug: str,
-    _: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ):
     """
@@ -353,7 +353,7 @@ class EmbedResult(BaseModel):
 @router.post("/contexts/{ctx_id}/embed", response_model=EmbedResult)
 def embed_context(
     ctx_id: int,
-    _: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ):
     ctx = db_fig.query(models.FigureContext).filter(models.FigureContext.id == ctx_id).first()
@@ -388,7 +388,7 @@ def embed_context(
 @router.post("/figure/{figure_slug}/embed-all", response_model=EmbedResult)
 def embed_all_for_figure(
     figure_slug: str,
-    _: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ):
     rows = (
@@ -441,7 +441,7 @@ class IngestSourceResponse(BaseModel):
 def ingest_source_for_figure(
     figure_slug: str,
     payload: IngestSourceRequest,
-    _: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ):
     fig = (
@@ -473,7 +473,7 @@ def ingest_source_for_figure(
 @router.post("/sources", response_model=ContextRead, status_code=status.HTTP_201_CREATED)
 def create_manual_source(
     payload: ContextCreate,
-    _: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ) -> ContextRead:
     """
@@ -583,7 +583,7 @@ class IngestAllResponse(BaseModel):
 def ingest_all_links_for_figure(
     figure_slug: str,
     max_chunks: int = 20,
-    _: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ):
     fig = (
@@ -625,7 +625,7 @@ class EmbeddingHealth(BaseModel):
 
 @router.get("/embedding/health", response_model=EmbeddingHealth)
 def embedding_health(
-    _: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
 ):
     from app.services.embedding_client import EmbeddingClient
     client = EmbeddingClient()
@@ -816,7 +816,7 @@ async def upload_documents_for_figure(
     max_chunks: int = 50,
     force_background: bool = False,
     background_tasks: BackgroundTasks = None,
-    _: models.User = Depends(admin_required),
+    admin_user: models.User = Depends(get_admin_user),
     db_fig: Session = Depends(get_figure_db),
 ):
     fig = (
@@ -954,7 +954,7 @@ class UploadJobStatus(BaseModel):
 
 
 @router.get("/upload-jobs/{job_id}", response_model=UploadJobStatus)
-def get_upload_job_status(job_id: str, _: models.User = Depends(admin_required)):
+def get_upload_job_status(job_id: str, admin_user: models.User = Depends(get_admin_user)):
     j = _UPLOAD_JOBS.get(job_id)
     if not j:
         raise HTTPException(status_code=404, detail="Job not found")

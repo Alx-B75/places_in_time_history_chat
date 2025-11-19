@@ -14,7 +14,7 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 # Define router at the top so all endpoints use the same instance
 from app.config.llm_config import llm_config, LLMRuntimeConfig
 from app.services.llm_client import llm_client
-from app.utils.security import admin_required, get_admin_user
+from app.utils.security import get_admin_user
 from sqlalchemy.orm import Session
 from app.database import get_db_chat
 from app import models, schemas  # <-- ensure models is imported before use in dependency annotations
@@ -90,7 +90,7 @@ def admin_activate_llm_profile(
 
 # PATCH /admin/llm for runtime LLM config
 @router.patch("/llm")
-def admin_update_llm(cfg: LLMRuntimeConfig, _: str = Depends(admin_required)):
+def admin_update_llm(cfg: LLMRuntimeConfig, admin_user: models.User = Depends(get_admin_user)):
     llm_config.provider = cfg.provider or llm_config.provider
     llm_config.model = cfg.model or llm_config.model
     llm_config.api_key = cfg.api_key or llm_config.api_key
@@ -102,7 +102,7 @@ def admin_update_llm(cfg: LLMRuntimeConfig, _: str = Depends(admin_required)):
 
 # --- LLM Health Endpoint ---
 @router.get("/llm/health")
-def llm_health(_: str = Depends(admin_required)):
+def llm_health(admin_user: models.User = Depends(get_admin_user)):
     """
     Check active LLM provider connectivity and return status.
     """
@@ -136,8 +136,8 @@ def llm_health(_: str = Depends(admin_required)):
 
 # Back-compat alias for tests expecting /admin/health/llm
 @router.get("/health/llm")
-def llm_health_alias(_: str = Depends(admin_required)):
-    return llm_health(_)  # delegate to the same implementation
+def llm_health_alias(admin_user: models.User = Depends(get_admin_user)):
+    return llm_health(admin_user)  # delegate to the same implementation
 __all__ = ["router"]
 
 from app.figures_database import FigureSessionLocal
