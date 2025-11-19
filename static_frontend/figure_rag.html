@@ -7,29 +7,34 @@
   <link rel="icon" href="/static/pit-favicon-mark.ico" />
   <link rel="stylesheet" href="/static/style.css?v=brand-9" />
   <style>
-    :root { --border:#273549; --muted:#94a3b8; --text:#e5e7eb; }
-    body { color: var(--text); }
-    .container { max-width: 1100px; margin: 32px auto; padding: 0 16px; }
-    .title { font-size: 20px; font-weight: 700; }
+    :root { --border:#273549; --muted:#94a3b8; --text:#e5e7eb; --panel:#0b1220; --panel2:#0f172a; --tag:#1f6f78; }
+    body { color: var(--text); background: linear-gradient(180deg, var(--panel), var(--panel2)); }
+    .container { max-width: 1100px; margin: 20px auto; padding: 0 14px; }
+    .toolbar { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background: rgba(255,255,255,0.02); backdrop-filter: blur(4px); }
+    .title { font-size: 18px; font-weight: 700; }
     .muted { color: var(--muted); }
-    .btn { border: 1px solid var(--border); color: var(--text); background: #0e1526; border-radius: 10px; padding: 8px 12px; font-weight: 600; cursor: pointer; }
-    .btn.sm { padding: 6px 10px; font-size: 12px; }
+    .btn { border: 1px solid var(--border); color: var(--text); background: #0e1526; border-radius: 10px; padding: 6px 10px; font-weight: 600; cursor: pointer; line-height: 1; }
+    .btn.sm { padding: 5px 8px; font-size: 12px; border-radius: 8px; }
+    .btn.xs { padding: 4px 6px; font-size: 11px; border-radius: 8px; }
     .btn.success { background: linear-gradient(180deg, #0b5f3e, #065f46); }
     .btn.danger { background: linear-gradient(180deg, #7f1d1d, #991b1b); }
     .grid { display: table; width: max-content; min-width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .grid th, .grid td { border-bottom: 1px solid var(--border); padding: 8px; font-size: 14px; white-space: nowrap; }
-    .row-actions { display:flex; gap:8px; flex-wrap:wrap; }
-    .section { padding: 12px 0; border-top: 1px dashed var(--border); margin-top: 12px; }
-    .summary-cell { max-width: 560px; overflow: hidden; text-overflow: ellipsis; }
+    .grid th, .grid td { border-bottom: 1px solid var(--border); padding: 6px; font-size: 13px; white-space: nowrap; }
+    .row-actions { display:flex; gap:6px; flex-wrap:wrap; }
+    .section { padding: 10px 0; border-top: 1px dashed var(--border); margin-top: 10px; }
+    .summary-cell { max-width: 520px; overflow: hidden; text-overflow: ellipsis; }
     .table-scroll-x { overflow-x:auto; overflow-y:hidden; }
     .table-scroll-spacer { height:1px; }
+    .pill { padding:4px 8px; border:1px solid var(--border); border-radius:999px; font-size:11px; color:#a7f3d0; background: rgba(34,211,238,.08); }
+    .tag { display:inline-block; padding:2px 6px; border-radius:999px; font-size:11px; color:#cffafe; background: rgba(34,211,238,.12); border:1px solid rgba(34,211,238,.18); }
+    .dropzone { border:1px dashed var(--border); padding:10px; border-radius:10px; background:#0b1220; }
   </style>
 </head>
 <body>
   <div class="container">
-    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
-      <a class="btn" href="/admin/ui#rag">← Back</a>
-      <div class="title">Figure RAG Detail: <span id="hdrSlug"></span></div>
+    <div class="toolbar" style="margin-bottom:10px;">
+      <a class="btn sm" href="/admin/ui#rag">← Back</a>
+      <div class="title">Figure RAG: <span id="hdrSlug"></span></div>
       <span class="muted" id="hdrStatus"></span>
     </div>
 
@@ -57,10 +62,10 @@
 
     <div class="section" id="uploadSection">
       <h3 style="margin:0 0 8px;">Upload Documents</h3>
-      <div id="dropzone" style="border:1px dashed var(--border); padding:12px; border-radius:10px; background:#0b1220;">
+      <div id="dropzone" class="dropzone">
         <div class="muted" style="margin-bottom:8px;">Drag and drop .txt, .md, .pdf, .html files here (max 10 files, 25MB each) or pick files:</div>
         <input id="filePicker" type="file" multiple accept=".txt,.md,.pdf,.html,.htm,.docx" />
-        <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+        <div style="margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
           <label><input type="checkbox" id="autoEmbed" checked /> Auto-embed after upload</label>
           <button class="btn sm" id="uploadBtn">Upload</button>
           <span class="muted" id="uploadStatus"></span>
@@ -89,11 +94,11 @@
       <div class="table-scroll-x" id="ctxScrollTop"><div class="table-scroll-spacer" id="ctxScrollTopInner"></div></div>
       <table class="grid" id="ctxTable">
         <colgroup>
-          <col style="width:80px" />
-          <col style="width:220px" />
-          <col style="width:140px" />
-          <col style="width:560px" />
-          <col style="width:220px" />
+          <col style="width:64px" />
+          <col style="width:200px" />
+          <col style="width:120px" />
+          <col style="width:520px" />
+          <col style="width:200px" />
         </colgroup>
         <thead>
           <tr>

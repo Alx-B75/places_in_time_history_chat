@@ -155,17 +155,17 @@
       tr.innerHTML = `
         <td>${c.id}</td>
         <td>${esc(c.source_name || '')}</td>
-        <td>${esc(c.content_type || '')}${c.is_manual? ' <span class="muted">(manual)</span>' : ''}</td>
+        <td>${esc(c.content_type || '')}${c.is_manual? ' <span class="tag">manual</span>' : ''}</td>
         <td class="summary-cell" title="${esc(fullContent)}">${url}${url && contentPreview? ' · ' : ''}<span class="muted">${contentPreview}</span>
-          ${fullContent ? `<div><button class="btn sm" data-act="show" data-id="${c.id}">Show</button></div>
+          ${fullContent ? `<div style=\"margin-top:4px;\"><button class=\"btn xs\" data-act=\"show\" data-id=\"${c.id}\">Show</button></div>
           <div data-full="${c.id}" style="display:none; white-space:pre-wrap; margin-top:6px;">${esc(fullContent)}</div>` : ''}
         </td>
         <td>
           <div class="row-actions">
-            <button class="btn sm" data-act="embed" data-id="${c.id}">Embed</button>
-            <button class="btn sm" data-act="toggle" data-id="${c.id}" data-val="${c.is_manual?0:1}">${c.is_manual? 'Unset Manual' : 'Set Manual'}</button>
-            <button class="btn sm" data-act="edit" data-id="${c.id}">Edit</button>
-            <button class="btn danger sm" data-act="delete" data-id="${c.id}">Delete</button>
+            <button class="btn xs" data-act="embed" data-id="${c.id}">Embed</button>
+            <button class="btn xs" data-act="toggle" data-id="${c.id}" data-val="${c.is_manual?0:1}">${c.is_manual? 'Unset' : 'Set'}</button>
+            <button class="btn xs" data-act="edit" data-id="${c.id}">Edit</button>
+            <button class="btn danger xs" data-act="delete" data-id="${c.id}">Delete</button>
           </div>
         </td>`;
       dom.ctxBody.appendChild(tr);
