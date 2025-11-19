@@ -137,7 +137,7 @@ export default function GuestChat() {
   return (
     <div className="wrap" style={{ maxWidth: 860 }}>
       {/* Shared banner with consistent styling */}
-      <LogoCard size={140} style={{ margin:'16px 0' }} to={null} />
+      <LogoCard wide size={140} style={{ margin:'16px 0' }} to={null} />
 
       {/* Centered figure hero */}
       <div className="figure-hero card" style={{marginBottom:18, display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', gap:16}}>
