@@ -19,7 +19,11 @@ def test_ask_returns_answer_and_persists() -> None:
     access_token = reg.json()["access_token"]
     headers = {"Authorization": f"Bearer {access_token}"}
 
-    t = client.post("/threads", json={"user_id": user_id, "title": "Ask Thread"})
+    t = client.post(
+        "/threads",
+        json={"user_id": user_id, "title": "Ask Thread"},
+        headers=headers,
+    )
     assert t.status_code == 201, t.text
     thread_id = t.json()["thread_id"]
 
