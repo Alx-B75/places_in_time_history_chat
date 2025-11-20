@@ -16,14 +16,8 @@ def test_admin_ui_allows_admin(admin_auth_header):
     assert r.status_code == 200
     assert "text/html" in r.headers.get("content-type", "")
 
-
-def test_ops_console_requires_auth():
+def test_ops_console_is_public():
     r = client.get("/ops/console")
-    assert r.status_code in (401, 403)
-
-
-def test_ops_console_allows_admin(admin_auth_header):
-    r = client.get("/ops/console", headers=admin_auth_header)
     assert r.status_code == 200
     assert "text/html" in r.headers.get("content-type", "")
 

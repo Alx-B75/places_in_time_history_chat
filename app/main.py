@@ -151,8 +151,8 @@ def serve_figure_rag(slug: str) -> FileResponse:
 
 
 @app.get("/ops/console", response_class=FileResponse)
-def serve_ops_console(_: models.User = Depends(get_admin_user)) -> FileResponse:
-    """Serve an innocuous admin sign-in page (blank console).
+def serve_ops_console() -> FileResponse:
+    """Serve a public admin sign-in shell.
 
     This page performs an admin-only login via /auth/admin/login and, on success,
     stores tokens in sessionStorage before redirecting to /admin/ui.
