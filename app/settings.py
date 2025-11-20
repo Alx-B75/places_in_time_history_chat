@@ -81,6 +81,7 @@ class Settings:
     figures_ingest_hash_path: Optional[str]
     figures_seed_csv_path: Optional[str]
     safety_enabled: bool
+    enable_figure_ingest: bool
 
     def validate(self) -> None:
         """
@@ -165,10 +166,11 @@ def _load_settings() -> Settings:
         rag_enabled=_to_bool(os.getenv("RAG_ENABLED", "true")),
         use_openai_embedding=_to_bool(os.getenv("USE_OPENAI_EMBEDDING")),
         allowed_origins=allowed,
-        chroma_data_path=os.getenv("CHROMA_DATA_PATH", _resolve_chroma_path(render)),
+        chroma_data_path=os.getenv("CHROMA_DATA_PATH", "/data/chroma" if render else _resolve_chroma_path(render)),
         figures_ingest_hash_path=os.getenv("FIGURES_INGEST_HASH_PATH"),
         figures_seed_csv_path=os.getenv("FIGURES_SEED_CSV_PATH"),
         safety_enabled=_to_bool(os.getenv("SAFETY_ENABLED")),
+        enable_figure_ingest=_to_bool(os.getenv("ENABLE_FIGURE_INGEST", "true")),
     )
     settings.validate()
     return settings

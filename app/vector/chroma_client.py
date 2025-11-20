@@ -8,6 +8,7 @@ obtain the collection used for figure context documents.
 from __future__ import annotations
 
 from typing import Any
+import os
 
 import chromadb
 
@@ -34,6 +35,8 @@ def _get_client() -> chromadb.PersistentClient:
             cfg = chromadb.config.Settings(anonymized_telemetry=False)
         except Exception:
             cfg = None
+        # Ensure the target directory exists for persistent storage.
+        os.makedirs(settings.chroma_data_path, exist_ok=True)
         if cfg is not None:
             _client = chromadb.PersistentClient(path=settings.chroma_data_path, settings=cfg)
         else:

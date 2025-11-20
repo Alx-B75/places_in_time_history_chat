@@ -292,6 +292,11 @@ def _upsert_figure(db: Session, data: Dict[str, Any]) -> Tuple[bool, bool]:
         ]
         for key in fields:
             new_val = data.get(key)
+            # For selected fields, only populate if the existing value is empty.
+            if key in {"image_url", "persona_prompt", "short_summary"}:
+                current_val = getattr(existing, key)
+                if current_val not in (None, ""):
+                    continue
             if getattr(existing, key) != new_val:
                 setattr(existing, key, new_val)
                 changed = True

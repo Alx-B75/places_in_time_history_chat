@@ -96,7 +96,9 @@ async def lifespan(_: FastAPI):
         pass
     FigureBase.metadata.create_all(bind=figures_engine)
     from app.startup_ingest import maybe_ingest_seed_csv
-    maybe_ingest_seed_csv(None)
+    # Run idempotent figures ingest only when enabled via settings.
+    if _settings.enable_figure_ingest:
+        maybe_ingest_seed_csv(None)
     # Dev-only seed of admin + sample users
     if ENVIRONMENT.lower() == "dev":
         from sqlalchemy.orm import Session as _Session
