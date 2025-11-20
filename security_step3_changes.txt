@@ -1,0 +1,194 @@
+Step 3 security hardening: tighten admin auth and remove legacy bypass paths
+
+Goals
+-----
+- All admin APIs and admin HTML routes require a real admin JWT (role-based via get_admin_user).
+- No dev-only or static-token shortcuts remain in production code.
+- Tests reflect the strict admin model.
+
+Key helper changes (app/utils/security.py)
+-----------------------------------------
+
+1) Removed static-token based admin_required
+
+- Old behaviour (now removed):
+
+    def admin_required(authorization: Optional[str] = Header(None)) -> str:
+        """Validate admin access. Allows a local-dev bypass when ENVIRONMENT=dev.
+        In production, requires a static bearer token matching ADMIN_TOKEN.
+        """
+        env = os.getenv("ENVIRONMENT", "dev").lower()
+        if env == "dev":
+            return "dev-admin"
+        expected = os.getenv("ADMIN_TOKEN", "").strip()
+        if expected and authorization == f"Bearer {expected}":
+            return "admin"
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+- New behaviour:
+  - The helper is removed entirely.
+  - Admin access is enforced exclusively via JWT + role-based get_admin_user.
+
+2) get_admin_user (unchanged, now the single source of truth)
+
+    def get_admin_user(current_user: models.User = Depends(get_current_user)) -> models.User:
+        """Require that the authenticated user has role=admin.
+
+        This enforces role-based access using normal user tokens.
+        """
+        if getattr(current_user, "role", None) != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
+        return current_user
+
+- All admin APIs and admin HTML routes now use get_admin_user as their guard.
+
+
+Admin HTML routes (app/main.py)
+-------------------------------
+
+1) /admin/ui (serve_admin_ui)
+
+- Old (no auth guard):
+
+    @app.get("/admin/ui", response_class=FileResponse)
+    def serve_admin_ui() -> FileResponse:
+        ...
+
+- New (requires real admin JWT via get_admin_user):
+
+    @app.get("/admin/ui", response_class=FileResponse)
+    def serve_admin_ui(_: models.User = Depends(get_admin_user)) -> FileResponse:
+        ...
+
+- Effect:
+  - In production, the Admin Dashboard shell is only served to authenticated admin users.
+
+2) /ops/console (serve_ops_console)
+
+- Old (no auth guard):
+
+    @app.get("/ops/console", response_class=FileResponse)
+    def serve_ops_console() -> FileResponse:
+        ...
+
+- New (requires real admin JWT):
+
+    @app.get("/ops/console", response_class=FileResponse)
+    def serve_ops_console(_: models.User = Depends(get_admin_user)) -> FileResponse:
+        ...
+
+- Effect:
+  - The admin sign-in / console page itself is now protected; only admin users with a valid JWT can load it.
+
+3) /admin/figures-ui (serve_admin_figures_ui)
+
+- Old (used loose cookie-or-header auth):
+
+    @app.get("/admin/figures-ui", response_class=FileResponse, include_in_schema=False)
+    def serve_admin_figures_ui(_: models.User = Depends(get_admin_user_loose)) -> FileResponse:
+        return FileResponse(STATIC_DIR / "admin_figures.html", media_type="text/html")
+
+- New (strict admin JWT only):
+
+    @app.get("/admin/figures-ui", response_class=FileResponse, include_in_schema=False)
+    def serve_admin_figures_ui(_: models.User = Depends(get_admin_user)) -> FileResponse:
+        return FileResponse(STATIC_DIR / "admin_figures.html", media_type="text/html")
+
+- Effect:
+  - The figures admin UI shell now requires a proper admin JWT; cookie-only or static-token access is not accepted in production.
+
+4) /admin/figure-ui/{slug} (serve_admin_figure_edit_ui)
+
+- Old (used loose auth):
+
+    @app.get("/admin/figure-ui/{slug}", response_class=FileResponse, include_in_schema=False)
+    def serve_admin_figure_edit_ui(slug: str, _: models.User = Depends(get_admin_user_loose)) -> FileResponse:
+        _ = slug
+        return FileResponse(STATIC_DIR / "admin_figure_edit.html", media_type="text/html")
+
+- New (strict admin JWT only):
+
+    @app.get("/admin/figure-ui/{slug}", response_class=FileResponse, include_in_schema=False)
+    def serve_admin_figure_edit_ui(slug: str, _: models.User = Depends(get_admin_user)) -> FileResponse:
+        _ = slug
+        return FileResponse(STATIC_DIR / "admin_figure_edit.html", media_type="text/html")
+
+- Effect:
+  - Per-figure edit UI is only available to authenticated admin users with a valid JWT.
+
+
+Admin API routers
+-----------------
+
+- app/routers/admin.py and app/routers/admin_rag.py already used get_admin_user for all endpoints.
+- No changes were required there for Step 3.
+- Combined with the helper changes above, this means all admin APIs are consistently guarded by JWT + role-based admin checks.
+
+
+Test updates
+-----------
+
+New tests/test_admin_ui.py
+
+- Added coverage to ensure admin HTML routes now enforce the strict admin model.
+
+1) /admin/ui
+
+    def test_admin_ui_requires_auth():
+        r = client.get("/admin/ui")
+        assert r.status_code in (401, 403)
+
+    def test_admin_ui_allows_admin(admin_auth_header):
+        r = client.get("/admin/ui", headers=admin_auth_header)
+        assert r.status_code == 200
+        assert "text/html" in r.headers.get("content-type", "")
+
+2) /ops/console
+
+    def test_ops_console_requires_auth():
+        r = client.get("/ops/console")
+        assert r.status_code in (401, 403)
+
+    def test_ops_console_allows_admin(admin_auth_header):
+        r = client.get("/ops/console", headers=admin_auth_header)
+        assert r.status_code == 200
+        assert "text/html" in r.headers.get("content-type", "")
+
+3) /admin/figures-ui
+
+    def test_admin_figures_ui_requires_auth():
+        r = client.get("/admin/figures-ui")
+        assert r.status_code in (401, 403)
+
+    def test_admin_figures_ui_allows_admin(admin_auth_header):
+        r = client.get("/admin/figures-ui", headers=admin_auth_header)
+        assert r.status_code == 200
+        assert "text/html" in r.headers.get("content-type", "")
+
+4) /admin/figure-ui/{slug}
+
+    def test_admin_figure_edit_ui_requires_auth():
+        r = client.get("/admin/figure-ui/test-slug")
+        assert r.status_code in (401, 403)
+
+    def test_admin_figure_edit_ui_allows_admin(admin_auth_header):
+        r = client.get("/admin/figure-ui/test-slug", headers=admin_auth_header)
+        assert r.status_code == 200
+        assert "text/html" in r.headers.get("content-type", "")
+
+
+Suggested test commands and expected outcome
+-------------------------------------------
+
+Run focused admin tests:
+
+    pytest tests/test_admin_llm_health.py tests/test_admin_llm_patch.py tests/test_admin_upload.py
+    pytest tests/test_admin_ui.py
+
+Then run full suite:
+
+    pytest
+
+Expected:
+- All admin API and HTML route tests pass.
+- No remaining dependencies on admin_required or ENVIRONMENT-based admin bypasses.

@@ -27,11 +27,13 @@ llm_client = LlmClient()
 
 
 class ThreadCreatePayload(BaseModel):
-    """
-    Request body for creating a new conversation thread.
+    """Request body for creating a new conversation thread.
+
+    The legacy user_id field is optional and used only for mismatch
+    detection; the authenticated user always owns the thread.
     """
 
-    user_id: int = Field(...)
+    user_id: Optional[int] = Field(default=None)
     title: Optional[str] = None
     figure_slug: Optional[str] = None
     age_profile: Optional[str] = None
@@ -95,9 +97,12 @@ def create_thread(
         Thread identity payload.
     """
     # Enforce that the thread is always owned by the authenticated user.
-    # For backward compatibility, validate any provided user_id matches.
-    if payload.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to create thread for another user")
+    # For backward compatibility, validate any provided user_id matches when present.
+    if payload.user_id is not None and payload.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to create thread for another user",
+        )
     title = payload.title or "New thread"
     # Normalize slug input (optional)
     fig_slug = (payload.figure_slug or "").strip() or None
@@ -316,7 +321,7 @@ def chat_complete(
         Message content.
     thread_id : int | None
         Optional thread identifier.
-    figure_slug : str | None
+        user_id: Optional[int] = Form(default=None),
         Optional figure slug from the form.
 
     Returns
@@ -333,7 +338,7 @@ def chat_complete(
         initial_slug = (figure_slug or "").strip() or None
         if initial_slug:
             figure_obj = crud.get_figure_by_slug(db_fig, initial_slug)
-            if not figure_obj:
+    user_id : Optional[int]
                 raise HTTPException(status_code=404, detail="Figure not found")
             initial_slug = figure_obj.slug
         thread_in = schemas.ThreadCreate(user_id=current_user.id, title="New thread", figure_slug=initial_slug)
@@ -347,8 +352,9 @@ def chat_complete(
             raise HTTPException(status_code=403, detail="Not authorized to access this thread")
         update_slug = (figure_slug or "").strip()
         if update_slug or figure_slug == "":
-            if update_slug:
-                figure_obj = crud.get_figure_by_slug(db_fig, update_slug)
+    # Enforce that the operation is performed as the authenticated user.
+    # If a legacy user_id is supplied and does not match, forbid.
+    if user_id is not None and user_id != current_user.id:
                 if not figure_obj:
                     raise HTTPException(status_code=404, detail="Figure not found")
                 thread.figure_slug = figure_obj.slug

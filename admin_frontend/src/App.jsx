@@ -24,7 +24,7 @@ function NotFound() {
 export default function App() {
   return (
     <Routes>
-      {/* Neutral default: simple home/placeholder */}
+      {/* Default entry: auth gateway (Home handles redirect vs register view) */}
       <Route path="/" element={<Home />} />
       <Route path="/guest/:slug" element={<GuestChat />} />
   <Route path="/login" element={<UserLogin />} />

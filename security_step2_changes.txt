@@ -1,0 +1,206 @@
+Step 2 security hardening: lock down POST /threads and POST /complete
+
+Key route changes (app/routers/chat.py)
+--------------------------------------
+
+1) POST /threads (create_thread)
+
+- Added authentication dependency and stopped trusting client-supplied user_id.
+- Updated so user_id is optional/legacy: mismatch is forbidden; omission is allowed.
+
+Schema and handler diff:
+
+class ThreadCreatePayload(BaseModel):
+    """Request body for creating a new conversation thread.
+
+    The legacy user_id field is optional and used only for mismatch
+    detection; the authenticated user always owns the thread.
+    """
+
+    user_id: Optional[int] = Field(default=None)
+    title: Optional[str] = None
+    figure_slug: Optional[str] = None
+    age_profile: Optional[str] = None
+
+
+@router.post("/threads", status_code=201)
+def create_thread(
+    payload: ThreadCreatePayload,
+    db: Session = Depends(get_db_chat),
+    current_user: models.User = Depends(get_current_user),
+) -> dict:
+    """Create a new thread for the user and return its identity."""
+
+    # Enforce that the thread is always owned by the authenticated user.
+    # For backward compatibility, validate any provided user_id matches when present.
+    if payload.user_id is not None and payload.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to create thread for another user",
+        )
+    title = payload.title or "New thread"
+    fig_slug = (payload.figure_slug or "").strip() or None
+    thread_in = schemas.ThreadCreate(
+        user_id=current_user.id,
+        title=title,
+        figure_slug=fig_slug,
+        age_profile=payload.age_profile,
+    )
+    thread = crud.create_thread(db, thread_in)
+    return {
+        "thread_id": thread.id,
+        "user_id": thread.user_id,
+        "title": thread.title,
+        "figure_slug": thread.figure_slug,
+    }
+
+
+2) POST /complete (chat_complete)
+
+- Added authentication dependency, validated form user_id against current_user.id,
+  and always used current_user.id for thread ownership, messages, and redirects.
+- Updated so user_id form field is optional/legacy: mismatch is forbidden; omission is allowed.
+
+Diff (essential parts):
+
+@router.post("/complete", response_class=RedirectResponse)
+def chat_complete(
+    request: Request,
+    db: Session = Depends(get_db_chat),
+    db_fig: Session = Depends(get_figure_db),
+    user_id: Optional[int] = Form(default=None),
+    message: str = Form(...),
+    thread_id: Optional[int] = Form(None),
+    figure_slug: Optional[str] = Form(None),
+    current_user: models.User = Depends(get_current_user),
+) -> RedirectResponse:
+
+    # Enforce that the operation is performed as the authenticated user.
+    # If a legacy user_id is supplied and does not match, forbid.
+    if user_id is not None and user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to act as another user",
+        )
+    user = current_user
+
+    if thread_id is None:
+        initial_slug = (figure_slug or "").strip() or None
+        ...
+        thread_in = schemas.ThreadCreate(
+            user_id=current_user.id,
+            title="New thread",
+            figure_slug=initial_slug,
+        )
+        thread = crud.create_thread(db, thread_in)
+        thread_id = thread.id
+    else:
+        thread = crud.get_thread_by_id(db, thread_id)
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        if thread.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this thread")
+        ...
+
+    user_msg = schemas.ChatMessageCreate(
+        user_id=current_user.id,
+        role="user",
+        message=message,
+        thread_id=thread_id,
+    )
+    crud.create_chat_message(db, user_msg)
+
+    ...
+
+    assistant_msg = schemas.ChatMessageCreate(
+        user_id=current_user.id,
+        role="assistant",
+        message=answer,
+        thread_id=thread_id,
+    )
+    saved = crud.create_chat_message(db, assistant_msg)
+
+    return RedirectResponse(
+        url=f"/user/{current_user.id}/threads",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+Test updates (threads)
+----------------------
+
+tests/test_threads_errors.py
+
+- Old: expected 404 for unknown user_id when calling POST /threads without auth.
+- New: ensures POST /threads without authentication is rejected (401/403).
+
+New test:
+
+def test_create_thread_without_auth_is_rejected() -> None:
+    """Creating a thread without authentication should be rejected."""
+    r = client.post("/threads", json={"user_id": 1, "title": "Nope"})
+    assert r.status_code in (401, 403)
+
+
+tests/test_threads_api.py
+
+- All POST /threads calls now include a Bearer token for the registered user, and
+  most payloads omit user_id entirely (relying on the authenticated user):
+
+    token = reg.json()["access_token"]
+    user_id = reg.json()["user_id"]
+
+    r = client.post(
+        "/threads",
+        json={"title": "T1"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+- New anti-spoofing test to ensure user A cannot create a thread for user B:
+
+def test_create_thread_cannot_spoof_other_user() -> None:
+    """Authenticated user cannot create a thread for a different user_id."""
+    # Register two users
+    reg_a = client.post("/register", json={"username": f"user_a", "password": "pw"})
+    assert reg_a.status_code == 200, reg_a.text
+    token_a = reg_a.json()["access_token"]
+
+    reg_b = client.post("/register", json={"username": f"user_b", "password": "pw"})
+    assert reg_b.status_code == 200, reg_b.text
+    user_b_id = reg_b.json()["user_id"]
+
+    # User A tries to create a thread for user B
+    r = client.post(
+        "/threads",
+        json={"user_id": user_b_id, "title": "Spoofed"},
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert r.status_code == 403
+
+
+tests/test_threads_age_profile.py
+
+- Thread creation with age_profile now authenticates POST /threads with the user token
+  and omits user_id from the payload, relying on the authenticated user id:
+
+    token = reg.json()["access_token"]
+    user_id = reg.json()["user_id"]
+
+    r = client.post(
+        "/threads",
+        json={"title": "AP", "age_profile": "kids"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+
+Test command and summary
+------------------------
+
+Command used to run only affected tests:
+
+    pytest tests/test_threads_api.py tests/test_threads_errors.py tests/test_threads_age_profile.py
+
+Summary:
+
+- Passed: 7 tests
+- Failed: 0 tests

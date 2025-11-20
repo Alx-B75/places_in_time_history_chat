@@ -125,7 +125,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(redirect_slashes=True, lifespan=lifespan)
 
 @app.get("/admin/ui", response_class=FileResponse)
-def serve_admin_ui() -> FileResponse:
+def serve_admin_ui(_: models.User = Depends(get_admin_user)) -> FileResponse:
     """Serve the Admin Dashboard UI shell.
 
     Authorization is enforced by the admin API endpoints this UI calls. Serving
@@ -151,7 +151,7 @@ def serve_figure_rag(slug: str) -> FileResponse:
 
 
 @app.get("/ops/console", response_class=FileResponse)
-def serve_ops_console() -> FileResponse:
+def serve_ops_console(_: models.User = Depends(get_admin_user)) -> FileResponse:
     """Serve an innocuous admin sign-in page (blank console).
 
     This page performs an admin-only login via /auth/admin/login and, on success,
@@ -367,12 +367,12 @@ def legacy_figures_ui_disabled() -> Response:
 
 
 @app.get("/admin/figures-ui", response_class=FileResponse, include_in_schema=False)
-def serve_admin_figures_ui(_: models.User = Depends(get_admin_user_loose)) -> FileResponse:
+def serve_admin_figures_ui(_: models.User = Depends(get_admin_user)) -> FileResponse:
     return FileResponse(STATIC_DIR / "admin_figures.html", media_type="text/html")
 
 
 @app.get("/admin/figure-ui/{slug}", response_class=FileResponse, include_in_schema=False)
-def serve_admin_figure_edit_ui(slug: str, _: models.User = Depends(get_admin_user_loose)) -> FileResponse:
+def serve_admin_figure_edit_ui(slug: str, _: models.User = Depends(get_admin_user)) -> FileResponse:
     _ = slug
     return FileResponse(STATIC_DIR / "admin_figure_edit.html", media_type="text/html")
 

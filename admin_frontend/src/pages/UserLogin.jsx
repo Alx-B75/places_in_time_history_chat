@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import LogoCard from '../components/LogoCard.jsx'
 import { apiFetch } from '../lib/apiFetch.js'
@@ -69,6 +69,7 @@ export default function UserLogin(){
           <button className="btn btn-primary" type="submit">Sign in</button>
           {err ? <div className="muted" style={{color:'#fca5a5'}}>{err}</div> : null}
         </form>
+        <div style={{marginTop:12}}>Need an account? <Link to="/register">Register</Link></div>
       </div>
     </div>
   )

@@ -97,24 +97,6 @@ def get_current_user(
     return user
 
 
-from typing import Optional
-import os
-from fastapi import Header, HTTPException, status
-
-def admin_required(authorization: Optional[str] = Header(None)) -> str:
-    """
-    Validate admin access. Allows a local-dev bypass when ENVIRONMENT=dev.
-    In production, requires a static bearer token matching ADMIN_TOKEN.
-    """
-    env = os.getenv("ENVIRONMENT", "dev").lower()
-    if env == "dev":
-        return "dev-admin"
-    expected = os.getenv("ADMIN_TOKEN", "").strip()
-    if expected and authorization == f"Bearer {expected}":
-        return "admin"
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
-
-
 def get_admin_user(current_user: models.User = Depends(get_current_user)) -> models.User:
     """Require that the authenticated user has role=admin.
 

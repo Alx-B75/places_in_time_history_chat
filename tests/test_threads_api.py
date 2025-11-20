@@ -20,9 +20,11 @@ def test_create_thread_returns_identity() -> None:
     token = reg.json()["access_token"]
     user_id = reg.json()["user_id"]
 
+    # user_id field is optional; if omitted, backend should still
+    # associate the thread with the authenticated user.
     r = client.post(
         "/threads",
-        json={"user_id": user_id, "title": "T1"},
+        json={"title": "T1"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 201, r.text
@@ -62,7 +64,7 @@ def test_delete_thread_requires_owner_and_succeeds() -> None:
 
     r = client.post(
         "/threads",
-        json={"user_id": user_id, "title": "ToDelete"},
+        json={"title": "ToDelete"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 201, r.text
@@ -87,7 +89,7 @@ def test_delete_thread_forbidden_for_other_user() -> None:
     # Create thread for owner
     r = client.post(
         "/threads",
-        json={"user_id": owner_id, "title": "OwnerThread"},
+        json={"title": "OwnerThread"},
         headers={"Authorization": f"Bearer {owner_token}"},
     )
     assert r.status_code == 201
@@ -114,7 +116,7 @@ def test_threads_list_includes_first_user_message_preview() -> None:
     # Create a thread via API
     r = client.post(
         "/threads",
-        json={"user_id": user_id, "title": "HasPreview"},
+        json={"title": "HasPreview"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 201
