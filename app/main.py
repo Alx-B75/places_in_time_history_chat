@@ -369,14 +369,20 @@ def legacy_figures_ui_disabled() -> Response:
 
 
 @app.get("/admin/figures-ui", response_class=FileResponse, include_in_schema=False)
-def serve_admin_figures_ui(_: models.User = Depends(get_admin_user)) -> FileResponse:
-    return FileResponse(STATIC_DIR / "admin_figures.html", media_type="text/html")
+def serve_admin_figures_ui() -> Response:
+    path = STATIC_DIR / "admin_figures.html"
+    if not path.exists():
+        return Response(content="<html><body></body></html>", media_type="text/html")
+    return FileResponse(path, media_type="text/html")
 
 
 @app.get("/admin/figure-ui/{slug}", response_class=FileResponse, include_in_schema=False)
-def serve_admin_figure_edit_ui(slug: str, _: models.User = Depends(get_admin_user)) -> FileResponse:
+def serve_admin_figure_edit_ui(slug: str) -> Response:
     _ = slug
-    return FileResponse(STATIC_DIR / "admin_figure_edit.html", media_type="text/html")
+    path = STATIC_DIR / "admin_figure_edit.html"
+    if not path.exists():
+        return Response(content="<html><body></body></html>", media_type="text/html")
+    return FileResponse(path, media_type="text/html")
 
 
 @app.get("/main.js")
