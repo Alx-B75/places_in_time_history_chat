@@ -125,16 +125,18 @@ async def lifespan(_: FastAPI):
 app = FastAPI(redirect_slashes=True, lifespan=lifespan)
 
 @app.get("/admin/ui", response_class=FileResponse)
-def serve_admin_ui(_: models.User = Depends(get_admin_user)) -> FileResponse:
-    """Serve the Admin Dashboard UI shell.
+def serve_admin_ui() -> FileResponse:
+    """Serve the Admin Dashboard UI shell (public shell).
 
-    Authorization is enforced by the admin API endpoints this UI calls. Serving
-    the HTML itself without auth avoids 401s on initial navigation while still
-    keeping admin operations protected.
+    Actual admin operations are still enforced by admin-only API endpoints
+    and stricter HTML routes like /admin/figures-ui.
     """
     path = STATIC_DIR / "admin.html"
     if not path.exists():
-        return Response(content="<html><body><h1>Admin UI</h1><p>admin.html not found in static_frontend.</p></body></html>", media_type="text/html")
+        return Response(
+            content="<html><body><h1>Admin UI</h1><p>admin.html not found in static_frontend.</p></body></html>",
+            media_type="text/html",
+        )
     return FileResponse(path, media_type="text/html")
 
 
