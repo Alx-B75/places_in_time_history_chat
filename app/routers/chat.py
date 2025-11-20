@@ -298,7 +298,7 @@ def chat_complete(
     request: Request,
     db: Session = Depends(get_db_chat),
     db_fig: Session = Depends(get_figure_db),
-    user_id: int = Form(...),
+    user_id: Optional[int] = Form(default=None),
     message: str = Form(...),
     thread_id: Optional[int] = Form(None),
     figure_slug: Optional[str] = Form(None),
@@ -315,13 +315,13 @@ def chat_complete(
         Chat database session.
     db_fig : sqlalchemy.orm.Session
         Figures database session.
-    user_id : int
-        Identifier of the user sending the message.
+    user_id : int | None
+        Optional legacy user identifier from the form.
     message : str
         Message content.
     thread_id : int | None
         Optional thread identifier.
-        user_id: Optional[int] = Form(default=None),
+    figure_slug : str | None
         Optional figure slug from the form.
 
     Returns
@@ -330,18 +330,26 @@ def chat_complete(
         Redirect to the threads page for the user.
     """
     # Enforce that the operation is performed as the authenticated user.
-    if user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to act as another user")
+    # If a legacy user_id is supplied and does not match, forbid.
+    if user_id is not None and user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to act as another user",
+        )
     user = current_user
 
     if thread_id is None:
         initial_slug = (figure_slug or "").strip() or None
         if initial_slug:
             figure_obj = crud.get_figure_by_slug(db_fig, initial_slug)
-    user_id : Optional[int]
+            if not figure_obj:
                 raise HTTPException(status_code=404, detail="Figure not found")
             initial_slug = figure_obj.slug
-        thread_in = schemas.ThreadCreate(user_id=current_user.id, title="New thread", figure_slug=initial_slug)
+        thread_in = schemas.ThreadCreate(
+            user_id=current_user.id,
+            title="New thread",
+            figure_slug=initial_slug,
+        )
         thread = crud.create_thread(db, thread_in)
         thread_id = thread.id
     else:
@@ -352,9 +360,8 @@ def chat_complete(
             raise HTTPException(status_code=403, detail="Not authorized to access this thread")
         update_slug = (figure_slug or "").strip()
         if update_slug or figure_slug == "":
-    # Enforce that the operation is performed as the authenticated user.
-    # If a legacy user_id is supplied and does not match, forbid.
-    if user_id is not None and user_id != current_user.id:
+            if update_slug:
+                figure_obj = crud.get_figure_by_slug(db_fig, update_slug)
                 if not figure_obj:
                     raise HTTPException(status_code=404, detail="Figure not found")
                 thread.figure_slug = figure_obj.slug
