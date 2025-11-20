@@ -455,11 +455,14 @@
         src.dbpedia ? `<a href="${escapeAttr(src.dbpedia)}" target="_blank" rel="noopener">dbpedia</a>` : "",
       ].filter(Boolean).join(" | ");
 
+      const embedCount = Number(f.embedding_count ?? 0);
+
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td><a href="/admin/figure-rag/${escapeAttr(f.slug)}">${escapeHTML(f.slug)}</a></td>
         <td>${escapeHTML(f.name || "")}</td>
         <td>${escapeHTML(String(f.total_contexts ?? 0))}${f.has_manual_context ? ' <span class="muted">(manual)</span>' : ''}<br/><span class="muted">${countStr}</span></td>
+        <td>${embedCount}</td>
         <td>${links || ""}</td>
       `;
       dom.ragBody.appendChild(tr);

@@ -149,6 +149,7 @@ class RagFigureSummary(BaseModel):
     has_manual_context: bool
     context_counts: dict
     sources_meta: dict = Field(default_factory=dict)
+    embedding_count: int = 0
 
 
 class RagSummaryResponse(BaseModel):
@@ -169,6 +170,7 @@ def rag_sources_summary(
     """
     # Collection info (best-effort)
     collection_info = {"ok": False, "detail": None, "name": None, "doc_count": None}
+    coll = None
     try:
         from app.vector.chroma_client import get_figure_context_collection
         coll = get_figure_context_collection()
@@ -204,6 +206,24 @@ def rag_sources_summary(
             continue
         grouped.setdefault(r.figure_slug, []).append(r)
 
+    # Precompute per-figure embedding counts if we have a collection
+    embedding_counts: dict[str, int] = {}
+    if coll is not None:
+        try:
+            # We assume Chroma metadata includes figure_slug for each document.
+            for slug in by_slug.keys():
+                try:
+                    if hasattr(coll, "count"):
+                        embedding_counts[slug] = int(coll.count(where={"figure_slug": slug}))
+                    else:
+                        docs = coll.get(where={"figure_slug": slug})
+                        ids = docs.get("ids") or []
+                        embedding_counts[slug] = len(ids)
+                except Exception:
+                    embedding_counts[slug] = 0
+        except Exception:
+            embedding_counts = {}
+
     for slug, figure in by_slug.items():
         rows = grouped.get(slug, [])
         counts: dict[str, int] = {}
@@ -236,6 +256,7 @@ def rag_sources_summary(
                 has_manual_context=manual,
                 context_counts=counts,
                 sources_meta=sources_meta,
+                embedding_count=embedding_counts.get(slug, 0),
             )
         )
 
