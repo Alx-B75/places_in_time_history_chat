@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta
+import time
 from typing import Any, Dict, Generator, List, Optional
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from app.services.llm_client import LlmClient
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, selectinload
@@ -28,6 +29,30 @@ router = APIRouter(prefix="/guest", tags=["Guest"])
 
 _settings = get_settings()
 llm_client = LlmClient()
+
+
+_GUEST_RATE: Dict[str, List[float]] = {}
+_GUEST_START_LIMIT = 10
+_GUEST_WINDOW_SECONDS = 3600
+_GUEST_ASK_LIMIT = 60
+_GUEST_ASK_WINDOW_SECONDS = 3600
+
+
+def _check_guest_rate_limit(key: str, limit: int, window_seconds: int) -> None:
+    """Simple in-memory rate limit for guest endpoints.
+
+    Raises HTTPException(429) if the number of requests from ``key``
+    within the last ``window_seconds`` exceeds ``limit``.
+    """
+
+    now = time.time()
+    window_start = now - window_seconds
+    bucket = _GUEST_RATE.setdefault(key, [])
+    # prune old timestamps
+    bucket[:] = [ts for ts in bucket if ts >= window_start]
+    if len(bucket) >= limit:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests")
+    bucket.append(now)
 
 
 def get_figure_db() -> Generator[Session, None, None]:
@@ -138,6 +163,7 @@ def _set_guest_cookie(response: Response, token: str, ttl: timedelta, secure_coo
 def start_guest_session(
     figure_slug: str,
     response: Response,
+    request: Request,
     db: Session = Depends(get_db_chat),
     figure_db: Session = Depends(get_figure_db),
 ) -> GuestStartResponse:
@@ -161,6 +187,9 @@ def start_guest_session(
         Details of the created session, including expiration.
     """
     limits = _get_limits()
+    client_ip = request.client.host if request.client else "unknown"
+    key = f"start:{client_ip}"
+    _check_guest_rate_limit(key, _GUEST_START_LIMIT, _GUEST_WINDOW_SECONDS)
     figure = crud.get_figure_by_slug(figure_db, slug=figure_slug)
     if not figure:
         raise HTTPException(status_code=404, detail="Figure not found")
@@ -187,6 +216,7 @@ def start_guest_session(
 def guest_ask(
     payload: GuestAskRequest,
     response: Response,
+    request: Request,
     db: Session = Depends(get_db_chat),
     figure_db: Session = Depends(get_figure_db),
     guest_token: Optional[str] = Cookie(default=None, alias="guest_session"),
@@ -214,6 +244,9 @@ def guest_ask(
     """
     if not guest_token:
         raise HTTPException(status_code=400, detail="Guest session not found")
+    client_ip = request.client.host if request.client else "unknown"
+    key = f"ask:{client_ip}"
+    _check_guest_rate_limit(key, _GUEST_ASK_LIMIT, _GUEST_ASK_WINDOW_SECONDS)
     limits = _get_limits()
     session = (
         db.query(models.GuestSession)

@@ -221,9 +221,8 @@ if ENVIRONMENT.lower() == "dev":
 # Removed broad SPA catch-all which could intercept API routes like /health
 
 
-@app.get("/health")
-def health() -> JSONResponse:
-    """Return sanitized configuration and dependency health report (no sensitive paths)."""
+def _compute_health_detail() -> dict:
+    """Internal helper to compute detailed health diagnostics."""
     keys_present = {
         "openai_configured": bool(_settings.openai_api_key),
         "openrouter_configured": bool(_settings.openrouter_api_key),
@@ -239,7 +238,7 @@ def health() -> JSONResponse:
         rag_status["ok"] = False
         rag_status["detail"] = str(exc)
 
-    payload = {
+    return {
         "status": "ok",
         "chat_db_ok": bool(CHAT_DB_URL),
         "figures_db_ok": bool(FIGURES_DB_URL),
@@ -248,7 +247,27 @@ def health() -> JSONResponse:
         "guest_prompt_debug": bool(_settings.guest_prompt_debug),
         "environment": ENVIRONMENT,
     }
+
+
+@app.get("/health")
+def health() -> JSONResponse:
+    """Public minimal health endpoint without detailed diagnostics."""
+    detail = _compute_health_detail()
+    payload = {
+        "status": detail["status"],
+        "environment": detail["environment"],
+        "rag_enabled": bool(detail.get("rag", {}).get("enabled")),
+        "chat_db_ok": bool(detail.get("chat_db_ok")),
+        "figures_db_ok": bool(detail.get("figures_db_ok")),
+    }
     return JSONResponse(payload)
+
+
+@app.get("/health/admin")
+def health_admin(current_admin: models.User = Depends(get_admin_user)) -> JSONResponse:
+    """Admin-only health with full diagnostics."""
+    _ = current_admin
+    return JSONResponse(_compute_health_detail())
 
 # Compatibility endpoints for tests expecting /register and /login at root
 @app.post("/register")
