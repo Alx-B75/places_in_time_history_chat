@@ -206,19 +206,18 @@ def rag_sources_summary(
             continue
         grouped.setdefault(r.figure_slug, []).append(r)
 
-    # Precompute per-figure embedding counts if we have a collection
+    # Precompute per-figure embedding counts if we have a collection.
+    # We rely on coll.get(where={"figure_slug": slug}) because some
+    # Chroma backends don't implement count(where=...) and will always
+    # return 0 for filtered counts.
     embedding_counts: dict[str, int] = {}
     if coll is not None:
         try:
-            # We assume Chroma metadata includes figure_slug for each document.
             for slug in by_slug.keys():
                 try:
-                    if hasattr(coll, "count"):
-                        embedding_counts[slug] = int(coll.count(where={"figure_slug": slug}))
-                    else:
-                        docs = coll.get(where={"figure_slug": slug})
-                        ids = docs.get("ids") or []
-                        embedding_counts[slug] = len(ids)
+                    docs = coll.get(where={"figure_slug": slug})
+                    ids = docs.get("ids") or []
+                    embedding_counts[slug] = len(ids)
                 except Exception:
                     embedding_counts[slug] = 0
         except Exception:
