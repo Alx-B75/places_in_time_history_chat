@@ -91,6 +91,8 @@ class Settings:
     SMTP_USERNAME: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     SMTP_USE_TLS: bool = True
+    EMAIL_ENABLED: bool = False
+    FRONTEND_BASE_URL: Optional[str] = None
 
     def validate(self) -> None:
         """
@@ -188,6 +190,8 @@ def _load_settings() -> Settings:
         SMTP_USERNAME=os.getenv("SMTP_USERNAME"),
         SMTP_PASSWORD=os.getenv("SMTP_PASSWORD"),
         SMTP_USE_TLS=_to_bool(os.getenv("SMTP_USE_TLS", "true")),
+        EMAIL_ENABLED=_to_bool(os.getenv("EMAIL_ENABLED")),
+        FRONTEND_BASE_URL=os.getenv("FRONTEND_BASE_URL") or os.getenv("PUBLIC_BASE_URL"),
     )
     settings.validate()
     return settings
