@@ -162,16 +162,32 @@ def admin_health(_: models.User = Depends(get_admin_user)) -> dict:
     return {"ok": True, "scope": "admin"}
 
 
-@router.get("/users", response_model=List[schemas.UserRead])
+@router.get("/users", response_model=List[schemas.UserAdminRead])
 def list_users(
     _: models.User = Depends(get_admin_user),
     db_chat: Session = Depends(get_db_chat),
-) -> List[schemas.UserRead]:
+) -> List[schemas.UserAdminRead]:
     """
-    List all users for administration.
+    List all users with email and verification status (admin only).
     """
     users = db_chat.query(models.User).order_by(models.User.id.asc()).all()
-    return [schemas.UserRead.from_orm(u) for u in users]
+    results: list[schemas.UserAdminRead] = []
+    for u in users:
+        email = None
+        email_verified = False
+        if getattr(u, "profile", None):
+            email = u.profile.email
+            email_verified = bool(getattr(u.profile, "email_verified", 0))
+        results.append(
+            schemas.UserAdminRead(
+                id=u.id,
+                username=u.username,
+                role=u.role,
+                email=email,
+                email_verified=email_verified,
+            )
+        )
+    return results
 
 
 @router.patch("/users/{user_id}/role", response_model=schemas.UserRead)
@@ -246,6 +262,32 @@ def delete_user(
     )
     db_chat.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+from app.utils.email_utils import send_email
+from app.settings import get_settings
+
+
+@router.post("/users/{user_id}/email")
+def admin_email_user(
+    user_id: int,
+    payload: schemas.AdminEmailRequest,
+    db: Session = Depends(get_db_chat),
+    current_admin: models.User = Depends(get_admin_user),
+    settings = Depends(get_settings),
+) -> dict:
+    """
+    Send a plain text email to a specific user (admin only).
+    """
+    _ = current_admin
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    profile = getattr(user, "profile", None)
+    if not profile or not getattr(profile, "email", None):
+        raise HTTPException(status_code=400, detail="User has no email address")
+    send_email(profile.email, payload.subject, payload.body, settings=settings)
+    return {"status": "sent"}
 
 
 @router.get("/figures", response_model=List[schemas.HistoricalFigureRead])

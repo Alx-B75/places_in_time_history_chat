@@ -54,6 +54,8 @@ class User(Base):
     threads = relationship("Thread", back_populates="user", cascade="all, delete")
     audit_logs = relationship("AuditLog", back_populates="actor", cascade="all, delete")
     favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
+    # One-to-one profile containing email + verification status (separate table)
+    profile = relationship("UserProfile", back_populates="user", uselist=False)
 
 
 class Thread(Base):
@@ -72,6 +74,8 @@ class Thread(Base):
 
     user = relationship("User", back_populates="threads")
     chats = relationship("Chat", back_populates="thread", cascade="all, delete-orphan")
+    # One-to-one metadata row (origin + allowances) without changing the base threads schema
+    meta = relationship("ThreadMeta", back_populates="thread", uselist=False)
 
 
 class Favorite(Base):
@@ -226,6 +230,41 @@ class GuestMessage(Base):
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
     session = relationship("GuestSession", back_populates="messages")
+
+
+class UserProfile(Base):
+    """
+    Per-user profile holding email and verification status.
+
+    NOTE: This creates a new table and does not modify the existing users table.
+    """
+
+    __tablename__ = "user_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    email = Column(String, nullable=False, unique=True, index=True)
+    email_verified = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="profile")
+
+
+class ThreadMeta(Base):
+    """
+    Per-thread metadata without altering the base threads table.
+    Tracks the origin of the thread and an allowance counter for unverified users
+    upgrading from guest sessions.
+    """
+
+    __tablename__ = "thread_meta"
+
+    id = Column(Integer, primary_key=True, index=True)
+    thread_id = Column(Integer, ForeignKey("threads.id"), unique=True, nullable=False)
+    origin = Column(String, nullable=False, default="user")  # values: user, guest_upgrade
+    unverified_allowance_remaining = Column(Integer, nullable=False, default=0)
+
+    thread = relationship("Thread", back_populates="meta")
 
 
 class AuditLog(Base):

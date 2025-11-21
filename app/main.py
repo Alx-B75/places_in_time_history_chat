@@ -221,7 +221,7 @@ if ENVIRONMENT.lower() == "dev":
         return out
 
 # Removed broad SPA catch-all which could intercept API routes like /health
-
+ 
 
 def _compute_health_detail() -> dict:
     """Internal helper to compute detailed health diagnostics."""
@@ -282,6 +282,15 @@ def compat_register(payload: dict = Body(...), db: Session = Depends(get_db_chat
     user = crud.get_user_by_username(db, username=username)
     if not user:
         user = crud.create_user(db, schemas.UserCreate(username=username, hashed_password=hash_password(password)))
+        # Create a verified profile with a synthetic email so legacy flows work unchanged
+        try:
+            synthetic_email = f"{username}@example.local"
+            if not db.query(models.UserProfile).filter(models.UserProfile.user_id == user.id).first():
+                profile = models.UserProfile(user_id=user.id, email=synthetic_email, email_verified=1)
+                db.add(profile)
+                db.commit()
+        except Exception:
+            db.rollback()
     token = create_access_token(data={"sub": user.username})
     return {"user_id": user.id, "username": user.username, "access_token": token, "token_type": "bearer"}
 

@@ -13,7 +13,9 @@ def test_ask_returns_answer_and_persists() -> None:
     Registers a user, creates a thread, posts a question to /ask, and
     asserts the response contract is satisfied.
     """
-    reg = client.post("/register", json={"username": "ask_user_ok", "password": "pw"})
+    from uuid import uuid4
+    unique_user = f"ask_{uuid4().hex[:8]}"
+    reg = client.post("/register", json={"username": unique_user, "password": "pw"})
     assert reg.status_code == 200, reg.text
     user_id = reg.json()["user_id"]
     access_token = reg.json()["access_token"]

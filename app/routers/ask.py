@@ -115,6 +115,24 @@ def ask(
     elif payload.figure_slug:
         resolved_slug = payload.figure_slug
 
+    # Enforce unverified allowance on guest-upgraded threads
+    email_verification_required = False
+    prof = db.query(models.UserProfile).filter(models.UserProfile.user_id == current_user.id).first()
+    if prof is None or not int(getattr(prof, "email_verified", 0)):
+        meta = db.query(models.ThreadMeta).filter(models.ThreadMeta.thread_id == thread.id).first()
+        if meta and (meta.origin or "user") == "guest_upgrade" and int(getattr(meta, "unverified_allowance_remaining", 0)) > 0:
+            meta.unverified_allowance_remaining = int(getattr(meta, "unverified_allowance_remaining", 0)) - 1
+            if meta.unverified_allowance_remaining < 0:
+                meta.unverified_allowance_remaining = 0
+            db.add(meta)
+            db.commit()
+            email_verification_required = True
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Email address not verified; please verify via the link we sent before continuing this conversation.",
+            )
+
     user_msg = schemas.ChatMessageCreate(
         user_id=current_user.id,
         role="user",
@@ -127,7 +145,7 @@ def ask(
 
     # Optionally skip LLM generation (useful for tests)
     if payload.skip_llm:
-        return {"answer": "", "sources": [], "thread_id": thread.id, "usage": {"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}
+        return {"answer": "", "sources": [], "thread_id": thread.id, "usage": {"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}, "email_verification_required": email_verification_required}
 
     figure = crud.get_figure_by_slug(db_fig, resolved_slug) if resolved_slug else None
     history = crud.get_messages_by_thread(db, thread.id, limit=1000)
@@ -160,7 +178,7 @@ def ask(
                 source_page=payload.source_page,
             )
             crud.create_chat_message(db, assistant_msg)
-            return {"answer": safe_msg, "sources": [], "thread_id": thread.id, "usage": {"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}
+            return {"answer": safe_msg, "sources": [], "thread_id": thread.id, "usage": {"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}, "email_verification_required": email_verification_required}
 
     answer, usage = generate_answer(messages, payload.message, model=model_name, temperature=None)
 
@@ -187,4 +205,4 @@ def ask(
     except Exception:
         db.rollback()
 
-    return {"answer": answer, "sources": sources, "thread_id": thread.id, "usage": usage}
+    return {"answer": answer, "sources": sources, "thread_id": thread.id, "usage": usage, "email_verification_required": email_verification_required}

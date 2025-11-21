@@ -103,6 +103,14 @@ def create_thread(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to create thread for another user",
         )
+    # Block new thread creation for unverified users
+    profile = db.query(models.UserProfile).filter(models.UserProfile.user_id == current_user.id).first()
+    if profile is None or not int(getattr(profile, "email_verified", 0)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email address not verified; cannot create new threads",
+        )
+
     title = payload.title or "New thread"
     # Normalize slug input (optional)
     fig_slug = (payload.figure_slug or "").strip() or None

@@ -17,6 +17,16 @@ class Credentials(BaseModel):
     password: str
 
 
+class UserRegisterRequest(BaseModel):
+    """
+    Registration payload for the JSON /auth/register route.
+    """
+
+    username: str
+    password: str
+    email: str
+
+
 class UserCreate(BaseModel):
     """
     Input schema for registering a new user.
@@ -153,6 +163,8 @@ class AskResponse(BaseModel):
     source_page: Optional[str] = None
     thread_id: Optional[int] = None
     timestamp: datetime
+    # Optional signal to clients that user must verify email
+    email_verification_required: bool | None = False
 
     model_config = {"from_attributes": True}
 
@@ -284,3 +296,16 @@ class FavoriteRead(BaseModel):
     figure_slug: str
 
     model_config = {"from_attributes": True}
+
+
+class UserAdminRead(BaseModel):
+    id: int
+    username: str
+    role: str
+    email: str | None = None
+    email_verified: bool = False
+
+
+class AdminEmailRequest(BaseModel):
+    subject: str
+    body: str

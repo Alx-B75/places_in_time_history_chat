@@ -82,6 +82,15 @@ class Settings:
     figures_seed_csv_path: Optional[str]
     safety_enabled: bool
     enable_figure_ingest: bool
+    # Email + verification settings
+    REQUIRE_VERIFIED_EMAIL_FOR_LOGIN: bool = False
+    EMAIL_FROM: Optional[str] = None
+    EMAIL_VERIFICATION_SECRET: str = "changeme-email-secret"
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_USE_TLS: bool = True
 
     def validate(self) -> None:
         """
@@ -171,6 +180,14 @@ def _load_settings() -> Settings:
         figures_seed_csv_path=os.getenv("FIGURES_SEED_CSV_PATH"),
         safety_enabled=_to_bool(os.getenv("SAFETY_ENABLED")),
         enable_figure_ingest=_to_bool(os.getenv("ENABLE_FIGURE_INGEST", "true")),
+        REQUIRE_VERIFIED_EMAIL_FOR_LOGIN=_to_bool(os.getenv("REQUIRE_VERIFIED_EMAIL_FOR_LOGIN")),
+        EMAIL_FROM=os.getenv("EMAIL_FROM"),
+        EMAIL_VERIFICATION_SECRET=os.getenv("EMAIL_VERIFICATION_SECRET", "changeme-email-secret"),
+        SMTP_HOST=os.getenv("SMTP_HOST"),
+        SMTP_PORT=int(os.getenv("SMTP_PORT", "587") or "587"),
+        SMTP_USERNAME=os.getenv("SMTP_USERNAME"),
+        SMTP_PASSWORD=os.getenv("SMTP_PASSWORD"),
+        SMTP_USE_TLS=_to_bool(os.getenv("SMTP_USE_TLS", "true")),
     )
     settings.validate()
     return settings

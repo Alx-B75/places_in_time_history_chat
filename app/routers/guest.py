@@ -375,6 +375,15 @@ def upgrade_guest_session(
 
     db.query(models.GuestMessage).filter(models.GuestMessage.session_id == session.id).delete()
     db.delete(session)
+    # Create or update ThreadMeta to grant allowance for unverified users
+    meta = db.query(models.ThreadMeta).filter(models.ThreadMeta.thread_id == thread.id).first()
+    if meta is None:
+        meta = models.ThreadMeta(thread_id=thread.id, origin="guest_upgrade", unverified_allowance_remaining=5)
+        db.add(meta)
+    else:
+        meta.origin = "guest_upgrade"
+        meta.unverified_allowance_remaining = 5
+        db.add(meta)
     db.commit()
 
     response.delete_cookie("guest_session", path="/")

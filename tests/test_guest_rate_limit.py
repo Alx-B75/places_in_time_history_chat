@@ -35,6 +35,18 @@ def test_guest_ask_rate_limit(monkeypatch):
 
     from app.routers import guest as guest_router
 
+    # Stub the router-level LLM client to avoid real OpenAI calls.
+    class DummyLLM:
+        def generate(self, messages, model, temperature=0.3, top_p=1.0, max_tokens=None):  # signature compatible
+            return {
+                "choices": [
+                    {"message": {"content": "stubbed"}}
+                ],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            }
+
+    monkeypatch.setattr(guest_router, "llm_client", DummyLLM(), raising=False)
+
     if hasattr(guest_router, "_GUEST_ASK_LIMIT"):
         monkeypatch.setattr(guest_router, "_GUEST_ASK_LIMIT", 3, raising=False)
     if hasattr(guest_router, "_GUEST_ASK_WINDOW_SECONDS"):

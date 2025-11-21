@@ -1,0 +1,43 @@
+Failing Tests Summary (Initial Scan)
+Date: 2025-11-21
+
+Total tests run: 35
+Passed: 31
+Failed: 4
+
+1. tests/test_admin_users_contact.py::test_admin_email_user_sends_email
+   Failure Type: RuntimeError raised in app.utils.email_utils.send_email
+   Traceback Root: app\utils\email_utils.py:26
+   Cause: Test assigns email_utils.send_email = fake_send, but admin router imported send_email directly (app.routers.admin.send_email). Patch did not replace route-level reference, leading to RuntimeError due to missing SMTP config.
+
+2. tests/test_ask_api.py::test_ask_returns_answer_and_persists
+   Assertion: Expected thread creation 201 Created, got 403 Forbidden
+   Detail: {"detail":"Email address not verified; cannot create new threads"}
+   Cause: /threads endpoint enforces verified email (app.routers.chat.create_thread). User registered via legacy /register may have missing or unverified profile (synthetic profile creation failed or existing user had unverified profile). Need fixture ensuring profile creation for legacy registration.
+
+3. tests/test_auth_email_verification.py::test_register_with_email_creates_profile_and_sends_email
+   Failure Type: AttributeError 'str' object has no attribute '__wrapped__'
+   Location: tests\test_auth_email_verification.py:24
+   Cause: Incorrect monkeypatch attempts on function attributes '__wrapped__' and '__call__'. send_email in auth router imported as a direct symbol; test should monkeypatch 'app.routers.auth.send_email' directly.
+
+4. tests/test_unverified_allowance.py::test_unverified_allowance_on_upgraded_thread
+   Assertion: Expected 200 OK from /auth/register, received 400 Bad Request
+   Detail: {"detail":"An account already exists with this email address."}
+   Cause: Persistent test database (sqlite file test_chat.db) retains prior user with email 'allowance@example.com'. No cleanup between tests. Requires uniqueness strategy (autouse cleanup fixture or dynamic unique emails).
+
+Planned Minimal Fix Strategy:
+ - Add autouse fixture in tests/conftest.py to stub email sending for auth/admin routers and to delete known test emails before each test (ensures uniqueness and prevents SMTP RuntimeError).
+ - Add autouse fixture to ensure a UserProfile exists (verified) for users created via legacy /register while leaving explicitly unverified profiles untouched.
+ - Adjust tests/test_auth_email_verification.py to remove invalid monkeypatch calls and correctly patch auth router send_email.
+ - Adjust tests/test_guest_rate_limit.py to stub llm_client.generate so guest ask rate limit test never calls external LLM API.
+
+Files Proposed for Editing (no production logic changes):
+ - tests/conftest.py (add autouse fixtures for email stubbing and cleanup/profile assurance)
+ - tests/test_auth_email_verification.py (simplify monkeypatch usage)
+ - tests/test_guest_rate_limit.py (add llm_client stub)
+
+No other files will be modified. Production code untouched.
+
+Next Steps:
+ - Await approval to apply patches.
+ - Re-run pytest to confirm all tests pass.

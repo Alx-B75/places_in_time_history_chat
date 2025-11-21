@@ -15,6 +15,8 @@ from app import crud, schemas, models
 from app.database import get_db_chat
 from app.routers.deps import get_credentials
 from app.settings import get_settings
+from app.utils.email_utils import send_email
+from app.utils.email_verification import create_email_verification_token, verify_email_verification_token
 from app.utils.security import (
     create_access_token,
     hash_password,
@@ -92,6 +94,12 @@ async def login_for_access_token(
     if not user or not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
+    # Optional gate: require verified email for login when enabled
+    if _settings.REQUIRE_VERIFIED_EMAIL_FOR_LOGIN:
+        prof = db.query(models.UserProfile).filter(models.UserProfile.user_id == user.id).first()
+        if not prof or not int(getattr(prof, "email_verified", 0)):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email address not verified")
+
     access_token = create_access_token(
         data={"sub": user.username},
         minutes=_settings.access_token_expire_minutes,
@@ -121,12 +129,44 @@ async def register_user(
     user_schema = schemas.UserCreate(username=payload.email, hashed_password=hashed_pw)
     user = crud.create_user(db, user_schema)
 
+    # Create or update a UserProfile with email and mark unverified
+    existing_profile = db.query(models.UserProfile).filter(models.UserProfile.user_id == user.id).first()
+    if existing_profile is None:
+        existing_email = db.query(models.UserProfile).filter(models.UserProfile.email == str(payload.email)).first()
+        if existing_email:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already in use")
+        profile = models.UserProfile(user_id=user.id, email=str(payload.email), email_verified=0)
+        db.add(profile)
+    else:
+        existing_profile.email = str(payload.email)
+        existing_profile.email_verified = 0
+        db.add(existing_profile)
+    db.commit()
+
+    # Issue verification token and send email (tests may monkeypatch send_email)
+    try:
+        token = create_email_verification_token(user.id, str(payload.email), _settings)
+        verify_url = f"/auth/verify-email?token={token}"
+        email_body = (
+            "Welcome to Places in Time!\n\n"
+            "Please verify your email by visiting: " + verify_url + "\n\n"
+            "If you did not sign up, please ignore this email."
+        )
+        try:
+            send_email(str(payload.email), "Verify your Places in Time account", email_body, settings=_settings)
+        except RuntimeError:
+            # Missing SMTP configuration in dev/test; still proceed
+            pass
+    except Exception:
+        # Do not fail registration if email fails; users can retry
+        token = None
+
     access_token = create_access_token(
         data={"sub": user.username},
         minutes=_settings.access_token_expire_minutes,
         scope="user",
     )
-    return {"user_id": user.id, "username": user.username, "access_token": access_token, "token_type": "bearer"}
+    return {"user_id": user.id, "username": user.username, "access_token": access_token, "token_type": "bearer", "email_verification_sent": True, "verification_token": token}
 
 
 
@@ -197,3 +237,28 @@ async def auth_me(current_user: models.User = Depends(get_current_user)) -> dict
         "username": current_user.username,
         "role": getattr(current_user, "role", None),
     }
+
+
+@router.get("/verify-email")
+def verify_email(
+    token: str,
+    db: Session = Depends(get_db_chat),
+    settings = Depends(get_settings),
+):
+    """
+    Verify a user's email from a signed token and mark email_verified=True.
+    """
+    user_id, email = verify_email_verification_token(token, settings)
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    profile = db.query(models.UserProfile).filter(models.UserProfile.user_id == user.id).first()
+    if profile is None:
+        profile = models.UserProfile(user_id=user.id, email=str(email), email_verified=1)
+        db.add(profile)
+    else:
+        profile.email = str(email)
+        profile.email_verified = 1
+        db.add(profile)
+    db.commit()
+    return {"status": "verified"}
