@@ -58,10 +58,10 @@
   <div id="limit-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="limit-title">
     <div class="modal">
       <h3 id="limit-title">Create a free account</h3>
-      <p>You’ve reached the guest limit. Register to continue this conversation and save your threads.</p>
+      <p>You’ve reached the guest limit. Create a free account with your email to continue and we’ll send a verification link.</p>
       <div class="actions">
         <button id="later-btn" class="btn">Maybe later</button>
-        <button id="go-login-btn" class="btn btn-primary">Register / Log in</button>
+        <button id="go-login-btn" class="btn btn-primary">Register / Verify Email</button>
       </div>
     </div>
   </div>
@@ -224,7 +224,7 @@
     sendBtn.addEventListener('click', ask);
     inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); } });
     laterBtn.addEventListener('click', () => { closeModal(); });
-    goLoginBtn.addEventListener('click', () => { window.location.href = '/'; });
+    goLoginBtn.addEventListener('click', () => { window.location.href = '/register.html'; });
 
     startGuest();
   </script>

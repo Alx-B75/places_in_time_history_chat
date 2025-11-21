@@ -7,9 +7,71 @@
     <link rel="icon" href="/static/pit-favicon-mark.ico" />
     <script type="module" crossorigin src="/assets/index-BAEjupy_.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-C3kCsgad.css">
+      <!-- Frontend enhancement: graceful /ask 403 handling & verification banner -->
+      <script>
+        (function(){
+          const originalFetch = window.fetch;
+          function ensureBannerRoot(){
+            let root = document.getElementById('ui-banners');
+            if(!root){
+              root = document.createElement('div');
+              root.id = 'ui-banners';
+              root.style.maxWidth = '920px';
+              root.style.margin = '12px auto 0 auto';
+              root.style.padding = '0 12px';
+              document.body.prepend(root);
+            }
+            return root;
+          }
+          function showBlockingBanner(msg){
+            const root = ensureBannerRoot();
+            let b = document.getElementById('ask-block-banner');
+            if(!b){
+              b = document.createElement('div');
+              b.id = 'ask-block-banner';
+              b.className = 'ask-error-banner';
+              root.appendChild(b);
+            }
+            b.textContent = msg || 'Email verification required to continue this conversation.';
+            disableAskInputs();
+          }
+          function showAllowanceNotice(){
+            if(document.getElementById('allowance-notice')) return;
+            const root = ensureBannerRoot();
+            const n = document.createElement('div');
+            n.id = 'allowance-notice';
+            n.className = 'ask-warning-banner';
+            n.textContent = 'Temporary access: verify your email soon to avoid interruptions.';
+            root.appendChild(n);
+          }
+          function disableAskInputs(){
+            const inputs = document.querySelectorAll('textarea, input[type="text"], input[data-role="ask-input"]');
+            inputs.forEach(i=>{ i.disabled = true; i.classList.add('disabled'); });
+            const buttons = document.querySelectorAll('button[type="submit"], button[data-role="ask-send"], button.send, #send');
+            buttons.forEach(b=>{ b.disabled = true; b.classList.add('disabled'); });
+          }
+          window.fetch = async function(input, init){
+            const res = await originalFetch(input, init);
+            try {
+              const url = typeof input === 'string' ? input : (input && input.url) || '';
+              if(url.includes('/ask')){
+                if(res.status === 403){
+                  let detail = 'Email verification required to continue this conversation.';
+                  try { const cloned = res.clone(); const txt = await cloned.text(); detail = (JSON.parse(txt).detail)|| detail; } catch(_){ }
+                  showBlockingBanner(detail);
+                } else if(res.ok) {
+                  try { const cloned = res.clone(); const data = await cloned.json(); if(data && data.email_verification_required) showAllowanceNotice(); } catch(_){ }
+                }
+              }
+            } catch(e){ }
+            return res;
+          };
+        })();
+      </script>
   </head>
   <body>
   <div id="root"></div>
-  <div id="portal-root"></div>
+  <div id="portal-root"></div>
+
   </body>
 </html>
