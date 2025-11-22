@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Verification Error – Places in Time</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    body { background:#0f172a; color:#e2e8f0; font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif; }
+    .center-box { max-width:520px; margin:7vh auto; background:#1e293b; padding:2.2rem 2rem 2.4rem; border-radius:16px; box-shadow:0 8px 28px -6px rgba(0,0,0,0.45); border:1px solid #334155; text-align:center; }
+    h1 { margin:0 0 0.75rem; font-size:1.55rem; font-weight:600; color:#f1f5f9; }
+    p { margin:0.45rem 0 1.2rem; line-height:1.4; }
+    .btn-secondary { background:#2563eb; color:#fff; border:none; padding:0.75rem 1.25rem; font-size:1rem; border-radius:0.55rem; cursor:pointer; font-weight:600; }
+    .btn-secondary:hover { background:#1d4ed8; }
+    .logo { width:72px; height:auto; margin-bottom:1.1rem; filter:drop-shadow(0 2px 6px rgba(0,0,0,.35)); }
+  </style>
+</head>
+<body>
+  <main class="center-box" role="alert">
+    <img src="/static/logo.png" alt="Places in Time" class="logo" />
+    <h1>Verification link invalid or expired.</h1>
+    <p>Please request a new verification email. Links expire for your security.</p>
+    <div style="display:flex;flex-direction:column;gap:0.75rem;align-items:center;">
+      <a href="/resend-verification.html"><button class="btn-secondary" type="button" id="resendBtn">Resend verification email</button></a>
+      <a href="/dashboard" style="text-decoration:none;"><button class="btn-secondary" type="button" style="background:#0d9488;">Go to Dashboard</button></a>
+    </div>
+    <p style="font-size:0.75rem;color:#64748b;margin-top:1rem;">If you recently verified, you can head back to your dashboard instead.</p>
+  </main>
+</body>
+</html>

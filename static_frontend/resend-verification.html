@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Resend Verification – Places in Time</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    body { background:#0f172a; color:#e2e8f0; font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif; }
+    .center-box { max-width:520px; margin:7vh auto; background:#1e293b; padding:2.1rem 2rem 2.3rem; border-radius:16px; box-shadow:0 8px 28px -6px rgba(0,0,0,0.45); border:1px solid #334155; text-align:center; }
+    h1 { margin:0 0 0.75rem; font-size:1.5rem; font-weight:600; }
+    p { margin:0.5rem 0 1.1rem; line-height:1.4; }
+    .btn-main { background:#0d9488; color:#fff; border:none; padding:0.7rem 1.15rem; font-size:1rem; border-radius:0.55rem; cursor:pointer; font-weight:600; }
+    .btn-main:hover { background:#0f766e; }
+    .logo { width:72px; height:auto; margin-bottom:1.1rem; filter:drop-shadow(0 2px 6px rgba(0,0,0,.35)); }
+  </style>
+</head>
+<body>
+  <main class="center-box">
+    <img src="/static/logo.png" alt="Places in Time" class="logo" />
+    <h1>Resend Verification</h1>
+    <p id="intro" style="line-height:1.4;">Click the button below to resend your verification email.</p>
+    <div id="status" style="margin:0.6rem 0 1rem;font-size:0.9rem;color:#94a3b8;"></div>
+    <button id="resendBtn" class="btn-main" type="button">Resend verification email</button>
+    <div style="margin-top:1.4rem;font-size:0.75rem;color:#64748b">If you do not have a session, please <a href="/login" style="color:#0ea5e9">login</a> first.</div>
+    <div style="margin-top:1.2rem;"><a href="/dashboard"><button class="btn-main" type="button" style="background:#2563eb;">Go to Dashboard</button></a></div>
+  </main>
+  <script>
+  (function(){
+    const statusEl = document.getElementById('status');
+    const btn = document.getElementById('resendBtn');
+    function show(msg, cls){
+      statusEl.textContent = msg || '';
+      statusEl.style.color = cls === 'error' ? '#fca5a5' : (cls === 'success' ? '#bef264' : '#94a3b8');
+    }
+    function getToken(){
+      try { return sessionStorage.getItem('userToken') || localStorage.getItem('access_token'); }catch(e){ return null; }
+    }
+    btn.addEventListener('click', async () => {
+      const token = getToken();
+      if(!token){ show('No active session found. Please login first.', 'error'); return; }
+      show('Sending…','');
+      try {
+        const resp = await fetch('/auth/resend-verification', {
+          method:'POST',
+          headers:{ 'Authorization':'Bearer '+token, 'Content-Type':'application/json' },
+          credentials:'include'
+        });
+        const data = await resp.json().catch(()=>({}));
+        if(resp.ok){
+          // Backend returns {detail:"Verification email sent"}
+          show(data.detail || data.status || 'Verification email sent.', 'success');
+          return;
+        }
+        if(data.detail === 'Email already verified' || data.status === 'already_verified'){
+          show('Email already verified. You can proceed to the dashboard.', 'success');
+          return;
+        }
+        show(data.detail || data.error || 'Failed to resend verification email.', 'error');
+      } catch(err){
+        show('Network error while resending.', 'error');
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

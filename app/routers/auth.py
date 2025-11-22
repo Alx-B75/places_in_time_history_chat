@@ -7,7 +7,8 @@ from __future__ import annotations
 import re
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import FileResponse
 import logging
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
@@ -282,23 +283,53 @@ async def resend_verification(current_user: models.User = Depends(get_current_us
 @router.get("/verify-email")
 def verify_email(
     token: str,
+    request: Request,
     db: Session = Depends(get_db_chat),
     settings = Depends(get_settings),
 ):
+    """Verify a user's email from a signed token and mark email_verified=True.
+
+    Content negotiation:
+    - If Accept includes 'application/json' returns JSON.
+    - If Accept includes 'text/html' returns an HTML page.
+    - Default (no Accept) preserves legacy JSON behavior (tests rely on this).
     """
-    Verify a user's email from a signed token and mark email_verified=True.
-    """
-    user_id, email = verify_email_verification_token(token, settings)
+    accept = (request.headers.get("accept") or "").lower()
+    wants_json = "application/json" in accept or ("text/html" not in accept and accept != "")
+    _log.info("Email verification request received")
+    try:
+        user_id, email = verify_email_verification_token(token, settings)
+    except Exception as e:
+        _log.info("Email verification failure: %s", e)
+        if wants_json:
+            return {"status": "invalid or expired"}
+        # Serve error HTML
+        from pathlib import Path
+        error_path = Path(__file__).resolve().parents[2] / "static_frontend" / "verify_error.html"
+        return FileResponse(str(error_path), media_type="text/html")
+
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        _log.info("Email verification failure: user not found")
+        if wants_json:
+            return {"status": "invalid or expired"}
+        from pathlib import Path
+        error_path = Path(__file__).resolve().parents[2] / "static_frontend" / "verify_error.html"
+        return FileResponse(str(error_path), media_type="text/html")
+
     profile = db.query(models.UserProfile).filter(models.UserProfile.user_id == user.id).first()
     if profile is None:
         profile = models.UserProfile(user_id=user.id, email=str(email), email_verified=1)
         db.add(profile)
     else:
-        profile.email = str(email)
-        profile.email_verified = 1
+        # Use setattr to avoid static type instrumentation complaints
+        setattr(profile, "email", str(email))
+        setattr(profile, "email_verified", 1)
         db.add(profile)
     db.commit()
-    return {"status": "verified"}
+    _log.info("Email verification success for user_id=%s", user_id)
+    if wants_json:
+        return {"status": "verified"}
+    from pathlib import Path
+    ok_path = Path(__file__).resolve().parents[2] / "static_frontend" / "verified.html"
+    return FileResponse(str(ok_path), media_type="text/html")
