@@ -38,18 +38,15 @@ def send_email(to: str, subject: str, body: str, settings: Optional[Settings] = 
     cfg = settings or get_settings()
 
     if not getattr(cfg, "EMAIL_ENABLED", False):
-        _log.debug("Email disabled (EMAIL_ENABLED not truthy); skipping send to %s", to)
+        _log.info("Email disabled (EMAIL_ENABLED not truthy); skipping send to %s", to)
         return
 
-    # Support alternative variable names (EMAIL_SMTP_HOST, EMAIL_FROM_ADDRESS) if present in the environment.
-    # This allows deploy environments to use either legacy or new names without code changes.
-    smtp_host = os.getenv("EMAIL_SMTP_HOST") or cfg.SMTP_HOST
-    smtp_port_raw = os.getenv("EMAIL_SMTP_PORT") or str(cfg.SMTP_PORT)
-    smtp_port = int(smtp_port_raw or "587")
-    smtp_user = os.getenv("EMAIL_SMTP_USERNAME") or cfg.SMTP_USERNAME
-    smtp_pass = os.getenv("EMAIL_SMTP_PASSWORD") or cfg.SMTP_PASSWORD
-    email_from = os.getenv("EMAIL_FROM_ADDRESS") or cfg.EMAIL_FROM or smtp_user
-    use_tls = _bool_env(os.getenv("EMAIL_USE_TLS")) if os.getenv("EMAIL_USE_TLS") is not None else cfg.SMTP_USE_TLS
+    smtp_host = cfg.SMTP_HOST
+    smtp_port = int(cfg.SMTP_PORT or 587)
+    smtp_user = cfg.SMTP_USERNAME
+    smtp_pass = cfg.SMTP_PASSWORD
+    email_from = cfg.EMAIL_FROM or smtp_user
+    use_tls = bool(cfg.SMTP_USE_TLS)
 
     missing = [name for name, val in [
         ("SMTP host", smtp_host),
@@ -66,28 +63,26 @@ def send_email(to: str, subject: str, body: str, settings: Optional[Settings] = 
 
     _log.info("Sending email to %s (subject=%r)", to, subject)
     try:
-        if use_tls:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as s:
-                s.ehlo()
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as s:
+            s.ehlo()
+            if use_tls:
                 try:
                     s.starttls()
                     s.ehlo()
                 except Exception as tls_err:
-                    _log.warning("TLS negotiation failed: %s", tls_err)
-                if smtp_user:
-                    try:
-                        s.login(smtp_user, smtp_pass or "")
-                    except Exception as auth_err:
-                        raise RuntimeError(f"SMTP auth failed: {auth_err}") from auth_err
+                    _log.error("STARTTLS failed: %s", tls_err, exc_info=True)
+                    raise RuntimeError(f"STARTTLS failed: {tls_err}") from tls_err
+            if smtp_user:
+                try:
+                    s.login(smtp_user, smtp_pass or "")
+                except Exception as auth_err:
+                    _log.error("SMTP auth failed: %s", auth_err, exc_info=True)
+                    raise RuntimeError(f"SMTP auth failed: {auth_err}") from auth_err
+            try:
                 s.send_message(msg)
-        else:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as s:
-                if smtp_user:
-                    try:
-                        s.login(smtp_user, smtp_pass or "")
-                    except Exception as auth_err:
-                        raise RuntimeError(f"SMTP auth failed: {auth_err}") from auth_err
-                s.send_message(msg)
+            except Exception as send_err:
+                _log.error("SMTP send failed: %s", send_err, exc_info=True)
+                raise RuntimeError(f"SMTP send failed: {send_err}") from send_err
     except RuntimeError:
         # Re-raise explicit config/auth errors so callers can handle.
         _log.error("Email send failed (runtime error) to %s", to, exc_info=True)

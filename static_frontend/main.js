@@ -1,4 +1,43 @@
 (function () {
+  // Dashboard / verification banner logic
+  try {
+    const path = window.location.pathname;
+    if (path === '/dashboard' || path.endsWith('/dashboard')) {
+      const token = sessionStorage.getItem('userToken') || localStorage.getItem('access_token');
+      if (token) {
+        fetch('/auth/me', { headers: { 'Authorization': 'Bearer ' + token } })
+          .then(r => r.ok ? r.json() : Promise.reject(r))
+          .then(me => {
+            if (!me || me.email_verified === 1) return; // already verified
+            const container = document.querySelector('.container') || document.body;
+            const banner = document.createElement('div');
+            banner.className = 'verification-banner';
+            banner.id = 'verification-banner';
+            banner.innerHTML = `\n              <p style="margin:0;flex:1;">🔔 Please verify your email to unlock full conversations. We’ve sent a link to <strong>${me.email || 'your address'}</strong>.</p>\n              <div style="display:flex;align-items:center;gap:0.5rem;">\n                <button id="resend-verification-btn" type="button">Resend verification email</button>\n                <span id="resend-status" style="font-size:0.8rem;color:#fffbeb;"></span>\n              </div>\n            `;
+            container.insertBefore(banner, container.firstChild);
+            const resendBtn = banner.querySelector('#resend-verification-btn');
+            const statusEl = banner.querySelector('#resend-status');
+            resendBtn.addEventListener('click', () => {
+              statusEl.textContent = 'Sending…';
+              fetch('/auth/resend-verification', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })
+                .then(r => r.json().then(j => ({ ok: r.ok, data: j })))
+                .then(res => {
+                  if (res.ok) {
+                    statusEl.textContent = 'Verification email sent.';
+                  } else if (res.data && res.data.detail === 'Email already verified') {
+                    statusEl.textContent = 'Already verified.';
+                    setTimeout(() => banner.remove(), 2000);
+                  } else {
+                    statusEl.textContent = res.data && res.data.detail ? res.data.detail : 'Failed to resend.';
+                  }
+                })
+                .catch(() => { statusEl.textContent = 'Network error.'; });
+            });
+          })
+          .catch(() => { /* ignore */ });
+      }
+    }
+  } catch (e) { /* ignore dashboard banner errors */ }
   // Support both login and register pages. The login page uses id="login-form",
   // while the register page uses id="register-form" and may use 'username' input.
   const form = document.getElementById("login-form") || document.getElementById("register-form");

@@ -167,6 +167,29 @@ def _load_settings() -> Settings:
     allowed_raw = os.getenv("ALLOWED_ORIGINS", "")
     allowed = [o.strip() for o in allowed_raw.split(",") if o.strip()] or _default_allowed_origins()
 
+    # Flexible environment variable precedence for SMTP configuration.
+    smtp_host = (
+        os.getenv("SMTP_HOST")
+        or os.getenv("EMAIL_SMTP_HOST")
+        or os.getenv("EMAIL_HOST")
+    )
+    smtp_port_raw = (
+        os.getenv("SMTP_PORT")
+        or os.getenv("EMAIL_SMTP_PORT")
+        or os.getenv("EMAIL_PORT")
+        or "587"
+    )
+    smtp_username = (
+        os.getenv("SMTP_USERNAME")
+        or os.getenv("EMAIL_SMTP_USERNAME")
+        or os.getenv("EMAIL_USERNAME")
+    )
+    smtp_password = (
+        os.getenv("SMTP_PASSWORD")
+        or os.getenv("EMAIL_SMTP_PASSWORD")
+        or os.getenv("EMAIL_PASSWORD")
+    )
+    email_from = os.getenv("EMAIL_FROM") or smtp_username
     settings = Settings(
         access_token_expire_minutes=access_token_expire,
         secret_key=os.getenv("SECRET_KEY", ""),
@@ -183,12 +206,12 @@ def _load_settings() -> Settings:
         safety_enabled=_to_bool(os.getenv("SAFETY_ENABLED")),
         enable_figure_ingest=_to_bool(os.getenv("ENABLE_FIGURE_INGEST", "true")),
         REQUIRE_VERIFIED_EMAIL_FOR_LOGIN=_to_bool(os.getenv("REQUIRE_VERIFIED_EMAIL_FOR_LOGIN")),
-        EMAIL_FROM=os.getenv("EMAIL_FROM"),
+        EMAIL_FROM=email_from,
         EMAIL_VERIFICATION_SECRET=os.getenv("EMAIL_VERIFICATION_SECRET", "changeme-email-secret"),
-        SMTP_HOST=os.getenv("SMTP_HOST"),
-        SMTP_PORT=int(os.getenv("SMTP_PORT", "587") or "587"),
-        SMTP_USERNAME=os.getenv("SMTP_USERNAME"),
-        SMTP_PASSWORD=os.getenv("SMTP_PASSWORD"),
+        SMTP_HOST=smtp_host,
+        SMTP_PORT=int(smtp_port_raw or "587"),
+        SMTP_USERNAME=smtp_username,
+        SMTP_PASSWORD=smtp_password,
         SMTP_USE_TLS=_to_bool(os.getenv("SMTP_USE_TLS", "true")),
         EMAIL_ENABLED=_to_bool(os.getenv("EMAIL_ENABLED")),
         FRONTEND_BASE_URL=os.getenv("FRONTEND_BASE_URL") or os.getenv("PUBLIC_BASE_URL"),

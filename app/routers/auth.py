@@ -8,6 +8,7 @@ import re
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
+import logging
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
@@ -25,6 +26,7 @@ from app.utils.security import (
 )
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+_log = logging.getLogger("auth")
 
 _settings = get_settings()
 
@@ -144,29 +146,40 @@ async def register_user(
     db.commit()
 
     # Issue verification token and send email (tests may monkeypatch send_email)
+    token = None
+    verify_url = None
     try:
         token = create_email_verification_token(user.id, str(payload.email), _settings)
-        verify_url = f"/auth/verify-email?token={token}"
+        base = (_settings.FRONTEND_BASE_URL or "https://places-in-time-history-chat.onrender.com").rstrip("/")
+        verify_url = f"{base}/auth/verify-email?token={token}"
         email_body = (
             "Welcome to Places in Time!\n\n"
-            "Please verify your email by visiting: " + verify_url + "\n\n"
-            "If you did not sign up, please ignore this email."
+            f"Please verify your email by clicking this link: {verify_url}\n\n"
+            "If you did not sign up, you can safely ignore this email."
         )
         try:
             send_email(str(payload.email), "Verify your Places in Time account", email_body, settings=_settings)
-        except RuntimeError:
-            # Missing SMTP configuration in dev/test; still proceed
-            pass
-    except Exception:
-        # Do not fail registration if email fails; users can retry
-        token = None
+        except RuntimeError as e:
+            _log.warning("Verification email failed for %s: %s", payload.email, e)
+    except Exception as e:
+        _log.error("Unexpected failure preparing verification email for %s", payload.email, exc_info=True)
+        # Surface a 500 so we do not hide systemic errors (token/signing issues)
+        raise HTTPException(status_code=500, detail="Failed to prepare verification email")
 
     access_token = create_access_token(
         data={"sub": user.username},
         minutes=_settings.access_token_expire_minutes,
         scope="user",
     )
-    return {"user_id": user.id, "username": user.username, "access_token": access_token, "token_type": "bearer", "email_verification_sent": True, "verification_token": token}
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "access_token": access_token,
+        "token_type": "bearer",
+        "email_verification_sent": bool(token),
+        "verification_token": token,
+        "verification_url": verify_url,
+    }
 
 
 
@@ -226,17 +239,44 @@ async def admin_login(
 
 
 @router.get("/me")
-async def auth_me(current_user: models.User = Depends(get_current_user)) -> dict:
+async def auth_me(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db_chat)) -> dict:
     """Return the current authenticated user's basic profile.
 
     This leverages the standard user-scoped bearer token produced by /auth/login or /auth/register.
     Response kept intentionally slim for dashboard header display.
     """
+    profile = db.query(models.UserProfile).filter(models.UserProfile.user_id == current_user.id).first()
+    email = getattr(profile, "email", None)
+    email_verified = int(getattr(profile, "email_verified", 0)) if profile else 0
     return {
         "user_id": current_user.id,
         "username": current_user.username,
         "role": getattr(current_user, "role", None),
+        "email": email,
+        "email_verified": email_verified,
     }
+
+@router.post("/resend-verification")
+async def resend_verification(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db_chat)) -> dict:
+    profile = db.query(models.UserProfile).filter(models.UserProfile.user_id == current_user.id).first()
+    if not profile or not getattr(profile, "email", None):
+        raise HTTPException(status_code=400, detail="No email on profile")
+    if int(getattr(profile, "email_verified", 0)) == 1:
+        raise HTTPException(status_code=400, detail="Email already verified")
+    try:
+        token = create_email_verification_token(current_user.id, profile.email, _settings)
+        base = (_settings.FRONTEND_BASE_URL or "https://places-in-time-history-chat.onrender.com").rstrip("/")
+        verify_url = f"{base}/auth/verify-email?token={token}"
+        body = (
+            "Resend verification for Places in Time\n\n"
+            f"Click to verify your email: {verify_url}\n\n"
+            "If you did not request this, you can ignore it."
+        )
+        send_email(profile.email, "Resend: verify your Places in Time account", body, settings=_settings)
+    except RuntimeError as e:
+        _log.error("Resend verification failed for %s: %s", profile.email, e)
+        raise HTTPException(status_code=500, detail="Failed to send verification email")
+    return {"detail": "Verification email sent"}
 
 
 @router.get("/verify-email")

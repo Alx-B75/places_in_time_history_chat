@@ -176,3 +176,29 @@ a:hover{text-decoration:underline}
   font-size:0.9rem;
   line-height:1.35;
 }
+
+/* Email verification banner */
+.verification-banner {
+  background:#78350f;
+  color:#fffbeb;
+  padding:0.75rem 1rem;
+  border-radius:0.5rem;
+  margin-bottom:1rem;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:1rem;
+  font-size:0.95rem;
+}
+.verification-banner button {
+  cursor:pointer;
+  background:var(--accent,#2563eb);
+  color:#fff;
+  border:none;
+  padding:0.5rem 0.9rem;
+  border-radius:0.4rem;
+  font-weight:600;
+}
+.verification-banner button:hover {
+  background:var(--accent-hover,#1d4ed8);
+}

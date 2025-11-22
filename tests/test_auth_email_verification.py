@@ -37,6 +37,12 @@ def test_register_with_email_creates_profile_and_sends_email(monkeypatch):
     assert r.status_code == 200, r.text
     data = r.json()
     assert data.get("email_verification_sent") is True
+    # New: ensure verification_url is absolute and contains token
+    verify_url = data.get("verification_url")
+    token = data.get("verification_token")
+    assert verify_url and verify_url.startswith("http")
+    if token:
+        assert f"/auth/verify-email?token={token}" in verify_url
     # token may be included for dev; not strictly required
     # ensure our fake sender captured call
     assert sent.get("to") == payload["email"]
